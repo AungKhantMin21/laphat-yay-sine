@@ -1,0 +1,11 @@
+{
+  "nodesPerTick": 1000,
+  "pathSlots": 128,
+  "maxPathLen": 512,
+  "floorCost": {
+    "road": 14,
+    "pavement": 10,
+    "shopTile": 10,
+    "dirt": 12
+  }
+}

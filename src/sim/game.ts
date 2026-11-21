@@ -9,11 +9,15 @@ import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
 import { SimWorld } from './world';
 import { ShopDay } from './day/shop-day';
+import { WalkGrid } from './path/walk-grid';
+import { PathFinder } from './path/pathfinder';
 import { SAVE_SCHEMA, type SaveData, type SavedObject } from './save/format';
 
 export class Game {
   /** Events for the main thread, drained by the worker after each step or action. */
   readonly events: SimEvent[] = [];
+  readonly walk: WalkGrid;
+  readonly paths: PathFinder;
 
   constructor(
     readonly sim: Sim,
@@ -22,6 +26,17 @@ export class Game {
     readonly day: ShopDay = new ShopDay(),
   ) {
     day.update(sim.gameMinute, 0);
+    world.clearWalkDirty(); // the walk grid below starts from the current occupancy
+    this.walk = new WalkGrid(world.state.area, world.state.occ);
+    this.paths = new PathFinder(this.walk);
+  }
+
+  /** Rebuilds walk costs around build changes (searches in flight restart). */
+  syncWalk(): void {
+    const w = this.world;
+    if (!w.walkDirty) return;
+    this.walk.update(w.walkX0, w.walkY0, w.walkX1, w.walkY1);
+    w.clearWalkDirty();
   }
 
   /** Customers still in or heading to the shop (M2.4). */
@@ -177,6 +192,8 @@ export class Game {
 
   step(w: FrameWriter): void {
     const day = this.day;
+    this.syncWalk();
+    this.paths.tick();
     day.update(this.sim.gameMinute, this.customers());
     this.sim.step(w, !day.holds);
     day.update(this.sim.gameMinute, this.customers());

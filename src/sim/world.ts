@@ -1,4 +1,5 @@
 // The worker's world: shared WorldState plus change tracking for the 10 Hz frame diffs.
+import { CATALOG, LAYER, footH, footW } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import { IndexQueue } from '../shared/ids';
 import { TILE_LAYER } from '../shared/layout';
@@ -27,6 +28,11 @@ export class SimWorld {
   private readonly upserts: IndexQueue;
   private readonly removed: Uint32Array;
   private removedCount = 0;
+  /** Tiles whose floor-standing furniture changed (walk grid rebuild), inclusive-exclusive. */
+  walkX0 = 0;
+  walkY0 = 0;
+  walkX1 = 0;
+  walkY1 = 0;
 
   constructor(area: AreaGrids) {
     this.state = new WorldState(area);
@@ -63,6 +69,7 @@ export class SimWorld {
     markOccupancy(s, this.state.occ, i, i);
     this.grids.apply(f, 1);
     this.upserts.push(i);
+    this.touchWalk(i);
     return i;
   }
 
@@ -73,6 +80,7 @@ export class SimWorld {
 
   /** Clears an object's occupancy before a batch of moves (so moved items can't erase each other). */
   detach(i: number): void {
+    this.touchWalk(i);
     markOccupancy(this.state.objects, this.state.occ, i, 0);
     this.grids.apply(this.read(i), -1);
   }
@@ -83,15 +91,48 @@ export class SimWorld {
     markOccupancy(this.state.objects, this.state.occ, i, i);
     this.grids.apply(f, 1);
     this.upserts.push(i);
+    this.touchWalk(i);
   }
 
   remove(i: number): void {
     const s = this.state.objects;
     if (!s.live[i]) return;
+    this.touchWalk(i);
     markOccupancy(s, this.state.occ, i, 0);
     this.grids.apply(this.read(i), -1);
     this.removed[this.removedCount++] = s.handle(i);
     s.release(i);
+  }
+
+  get walkDirty(): boolean {
+    return this.walkX1 > this.walkX0 && this.walkY1 > this.walkY0;
+  }
+
+  clearWalkDirty(): void {
+    this.walkX0 = this.walkY0 = this.walkX1 = this.walkY1 = 0;
+  }
+
+  /** Extends the walk dirty rect by the footprint of object i if it stands on the floor and blocks walking. */
+  private touchWalk(i: number): void {
+    const s = this.state.objects;
+    if (s.layer[i] !== LAYER.furniture || s.parent[i] !== 0) return;
+    const def = CATALOG.defs[s.type[i]!];
+    if (!def) return;
+    const x0 = s.x[i]!;
+    const y0 = s.y[i]!;
+    const x1 = x0 + footW(def, s.rot[i]!);
+    const y1 = y0 + footH(def, s.rot[i]!);
+    if (!this.walkDirty) {
+      this.walkX0 = x0;
+      this.walkY0 = y0;
+      this.walkX1 = x1;
+      this.walkY1 = y1;
+      return;
+    }
+    if (x0 < this.walkX0) this.walkX0 = x0;
+    if (y0 < this.walkY0) this.walkY0 = y0;
+    if (x1 > this.walkX1) this.walkX1 = x1;
+    if (y1 > this.walkY1) this.walkY1 = y1;
   }
 
   read(i: number): ObjectFields {

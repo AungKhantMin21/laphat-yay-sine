@@ -8,7 +8,7 @@ Last updated 21 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | --- | --- | --- |
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
-| **M2 Shop day** | **in progress — M2.1–M2.2 done** | plan approved; docs/M2.md (steps + progress) |
+| **M2 Shop day** | **in progress — M2.1–M2.3 done** | plan approved; docs/M2.md (steps + progress) |
 | M3–M6 | not started | DESIGN.md §11 |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample).
@@ -37,7 +37,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 ## Code map (what exists now)
 
 - `src/shared/` — protocol (v5), shop day (`day.ts`, `shop.ts`, `drinks.ts`), binary frame codec (`diff.ts`), catalog (`objects.json` → defs), world state (area grids, object store with slots/generations/uids, occupancy), placement rules, RNG streams, IndexedDB helper, base64url, iso math.
-- `src/sim/` (worker) — `worker.ts` (timing, saving, messages), `game.ts` (Sim + world + builder, toSave/fromSave), `world.ts` (change tracking, grid streaming), `build/builder.ts` (commands + undo), `grids/property-grids.ts`, `save/` (format v1 + migrations, IDB store, save codes), `area.ts` (M1 street + shop), `catchup.ts`.
+- `src/sim/` (worker) — `worker.ts` (timing, saving, messages), `game.ts` (Sim + world + builder, toSave/fromSave), `world.ts` (change tracking, grid streaming), `build/builder.ts` (commands + undo), `day/shop-day.ts`, `path/` (walk grid + A*), `grids/property-grids.ts`, `save/` (format v1 + migrations, IDB store, save codes), `area.ts` (M1 street + shop), `catchup.ts`.
 - `src/game/` — `bridge.ts` (only Worker contact; promise acks), `view.ts` (mirror), `loop.ts`, `build-mode.ts` (build state machine + ghost logic).
 - `src/render/` — pixel stage, chunks (floors + back walls), objects (depth, picking), recolour atlas, ghost, heat overlay, camera, atlas loader, gl-stats.
 - `src/ui/` — i18n (Myanmar digits, `{args}`), build HUD, settings (save code), perf overlay, title card, music debug.
@@ -53,7 +53,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Multi-tile depth sorting may need sprite slicing once characters walk around (M2/M3).
 - BACKLOG.md holds deferred ideas.
 
-## Next step: M2 Shop day — continue at M2.3 (see docs/M2.md)
+## Next step: M2 Shop day — continue at M2.4 (see docs/M2.md)
 
 Decided 21 Nov 2026: day = shutters open 06:00 (clock waits until Open) → shop hours to 17:00 → last customers finish → evening waits for Sleep → next 06:00. Player pours every cup, with an auto-serve fallback (lower price, no tip). A* core built in M2. Ingredients unlimited and free until M3.
 

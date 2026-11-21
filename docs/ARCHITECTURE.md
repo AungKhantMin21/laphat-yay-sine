@@ -200,9 +200,11 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 - Worker: `x, y Float32` (tiles) · `area u8` · `lod u8` (near / far / abstract) · `state u8` · `stateT u16` · `def u16` · `sched u8` · needs `hunger, social, money, comfort` (4 × Uint8) · taste `sweet, strong, creamy` (3 × Int8) · `friendship u8` · `visits u16` · `seat u16` · `path u16` (pool slot) · `pathStep u16` · `dir u8` · `anim u8` · `gen u16`.
 - Main mirror (`game/view.ts`): `prevX, prevY, curX, curY Float32` · `dir, anim, look Uint8` · `sprite Int16` (pool index, −1 = none). Render caps visible animated NPCs at the tier limit (12 / 25 / 40).
 
-### Paths
+### Paths (`sim/path/`, M2.3)
 
-`pathPool: Uint16Array` of tile indices with per-slot `offset` / `len` (Uint16) and free-list allocation, cached by (from, to). Flow fields: `Uint8Array(W*H)` of direction codes, ≤ 8 common destinations per area (market, shop door, bus stop…).
+- `WalkGrid`: `cost: Uint8Array` per tile from the floor type (`src/data/walk.json`, min 10) or 255 when floor-standing furniture covers it, plus `moves: Uint8Array`, an 8-direction mask per tile (no wall on the edge, no corner cutting). `SimWorld` keeps a walk dirty rect from footprints of floor-standing furniture; `Game.syncWalk()` rebuilds only that rect (masks one tile further out) and bumps `version`. Walls change only on area load (the first full update covers them).
+- `PathFinder`: A* (octile heuristic, diagonal = 1.4×, binary heap on typed arrays with decrease-key). Requests queue FIFO; one search runs at a time within `nodesPerTick` expansions per tick (a node count, not a timer, so results are deterministic; 1,000 ≈ 0.3 ms on a desktop, ≈ 2 ms at 6× throttle). A search restarts if the walk grid changed mid-flight. Results go into a fixed pool (`pathSlots` × `maxPathLen` Uint16 tile indices) addressed by handles; paths exclude the start and end at the goal. A blocked goal (a seat) can be the destination but is never walked through. `canStep(a, b, goal)` re-checks a step against the current grid, so walkers notice furniture placed after their path was found.
+- No allocation after construction. Flow fields to common destinations wait for M3/M4.
 
 ### RNG
 
