@@ -145,8 +145,11 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
       return;
     case 'tier':
       return; // M4: LOD caps
-    case 'viewport':
     case 'subscribe':
+      game?.world.subscribe(msg.grids);
+      flushChanges();
+      return;
+    case 'viewport':
       return; // M3/M4
   }
 };

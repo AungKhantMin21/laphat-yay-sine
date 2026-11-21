@@ -2,7 +2,7 @@
 // build mode validates its ghost against the same WorldState the worker uses.
 import type { FrameHandler } from '../shared/diff';
 import { IndexQueue } from '../shared/ids';
-import { MAX_OBJECTS, TILE_LAYER } from '../shared/layout';
+import { MAX_OBJECTS, PROP_COUNT, TILE_LAYER } from '../shared/layout';
 import { AreaGrids, markOccupancy, WorldState } from '../shared/world-state';
 
 /** Inclusive-exclusive tile rect that changed since render last consumed it. */
@@ -46,6 +46,9 @@ export class WorldView implements FrameHandler {
   /** Handles removed since render last looked. */
   readonly objRemoved = new Uint32Array(MAX_OBJECTS);
   objRemovedCount = 0;
+  /** Property grid values streamed for the heat overlay (only subscribed ones are filled). */
+  grids: Uint8Array[] = [];
+  readonly gridsDirty = new DirtyRect();
   /** Set if more removals arrived than the buffer holds: render rebuilds everything. */
   objResync = false;
 
@@ -56,6 +59,8 @@ export class WorldView implements FrameHandler {
   /** Called when an area loads, before its snapshot is read. */
   setArea(id: number, w: number, h: number): void {
     this.state = new WorldState(new AreaGrids(id, w, h));
+    this.grids = [];
+    for (let p = 0; p < PROP_COUNT; p++) this.grids.push(new Uint8Array(w * h));
     this.tilesDirty.add(0, 0, w, h);
     this.objChanged.clear();
     this.objRemovedCount = 0;
@@ -107,5 +112,14 @@ export class WorldView implements FrameHandler {
   npcSpawn(): void {}
   npcDespawn(): void {}
   npcState(): void {}
-  gridPatch(): void {}
+  gridPatch(prop: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void {
+    const dst = this.grids[prop];
+    if (!dst) return;
+    const W = this.state.area.w;
+    for (let row = 0; row < h; row++) {
+      const s = offset + row * w;
+      dst.set(bytes.subarray(s, s + w), (y + row) * W + x);
+    }
+    this.gridsDirty.add(x, y, w, h);
+  }
 }

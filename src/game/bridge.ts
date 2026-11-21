@@ -59,6 +59,11 @@ export class SimBridge {
     return new Promise((resolve) => this.pending.set(seq, resolve));
   }
 
+  /** Stream these property grids (bitmask by PROP id) for the heat overlay. */
+  subscribeGrids(mask: number): void {
+    this.send({ t: 'subscribe', grids: mask });
+  }
+
   /** Debug: add items to the inventory. */
   give(type: number, qty: number): void {
     this.send({ t: 'give', type, qty });

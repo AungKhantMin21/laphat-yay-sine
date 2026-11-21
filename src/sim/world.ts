@@ -3,6 +3,7 @@ import type { FrameWriter } from '../shared/diff';
 import { IndexQueue } from '../shared/ids';
 import { TILE_LAYER } from '../shared/layout';
 import { markOccupancy, WorldState, type AreaGrids } from '../shared/world-state';
+import { PropertyGrids } from './grids/property-grids';
 
 export interface ObjectFields {
   type: number;
@@ -17,6 +18,11 @@ export interface ObjectFields {
 
 export class SimWorld {
   readonly state: WorldState;
+  readonly grids: PropertyGrids;
+  /** Property grids the main thread wants streamed (bitmask). */
+  subscribed = 0;
+  /** Newly subscribed grids that need a full send. */
+  private fullSend = 0;
   private nextUid = 1;
   private readonly upserts: IndexQueue;
   private readonly removed: Uint32Array;
@@ -24,6 +30,7 @@ export class SimWorld {
 
   constructor(area: AreaGrids) {
     this.state = new WorldState(area);
+    this.grids = new PropertyGrids(area);
     this.upserts = new IndexQueue(this.state.objects.capacity);
     this.removed = new Uint32Array(this.state.objects.capacity);
   }
@@ -46,6 +53,7 @@ export class SimWorld {
     if (!i) return 0;
     this.write(i, f);
     markOccupancy(s, this.state.occ, i, i);
+    this.grids.apply(f, 1);
     this.upserts.push(i);
     return i;
   }
@@ -58,12 +66,14 @@ export class SimWorld {
   /** Clears an object's occupancy before a batch of moves (so moved items can't erase each other). */
   detach(i: number): void {
     markOccupancy(this.state.objects, this.state.occ, i, 0);
+    this.grids.apply(this.read(i), -1);
   }
 
   /** Writes fields and marks occupancy for a detached object. */
   attach(i: number, f: ObjectFields): void {
     this.write(i, f);
     markOccupancy(this.state.objects, this.state.occ, i, i);
+    this.grids.apply(f, 1);
     this.upserts.push(i);
   }
 
@@ -71,6 +81,7 @@ export class SimWorld {
     const s = this.state.objects;
     if (!s.live[i]) return;
     markOccupancy(s, this.state.occ, i, 0);
+    this.grids.apply(this.read(i), -1);
     this.removed[this.removedCount++] = s.handle(i);
     s.release(i);
   }
@@ -90,6 +101,26 @@ export class SimWorld {
       if (this.state.objects.live[i]) this.writeUpsert(w, i);
     }
     q.clear();
+    this.writeGrids(w);
+  }
+
+  /** Main thread's heat overlay: which property grids to stream. */
+  subscribe(mask: number): void {
+    this.fullSend |= mask & ~this.subscribed;
+    this.subscribed = mask;
+  }
+
+  private writeGrids(w: FrameWriter): void {
+    const g = this.grids;
+    const a = this.state.area;
+    for (let p = 0; p < g.value.length; p++) {
+      const bit = 1 << p;
+      if (!(this.subscribed & bit)) continue;
+      if (this.fullSend & bit) w.gridPatch(p, 0, 0, a.w, a.h, g.value[p]!, a.w);
+      else if (g.dirtyMask & bit) w.gridPatch(p, g.dx0, g.dy0, g.dx1 - g.dx0, g.dy1 - g.dy0, g.value[p]!, a.w);
+    }
+    this.fullSend = 0;
+    g.clearDirty();
   }
 
   /** Full state for a new mirror: tiles, then every object (parents before children). */
