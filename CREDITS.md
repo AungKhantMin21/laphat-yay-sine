@@ -6,7 +6,7 @@
 
 ## Fonts
 
-Noto Sans Myanmar — © Google, SIL Open Font License 1.1. Subset for this project.
+Noto Sans Myanmar v2.107 — © Google, SIL Open Font License 1.1 (`art/fonts/OFL.txt`). Source: github.com/notofonts/myanmar. Subset to WOFF2 by `tools/subset-font.ts`.
 
 ## Art
 

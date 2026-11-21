@@ -18,6 +18,7 @@ import { loadTier, runBenchmark, saveTier, deviceHints, decideTier } from './pla
 import { BUDGETS, TIER_NAMES, TIER_SETTINGS } from './platform/tier-policy';
 import { DrawCallCounter, estimateTextureBytes } from './render/gl-stats';
 import { installPerfOverlay } from './ui/perf-overlay';
+import { showFontSample, showTitleCard } from './ui/title-card';
 
 translateDom();
 installTouchGuard();
@@ -34,6 +35,7 @@ const camera = new Camera();
 const view = new WorldView();
 const bridge = new SimBridge(view, {
   onReady: () => {
+    showTitleCard();
     chunks.setArea(view.floor, view.areaW, view.areaH);
     camera.setArea(view.areaW, view.areaH);
     camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
@@ -102,6 +104,7 @@ if (tierState.needsBench) {
 }
 
 if (debug) {
+  showFontSample();
   installPerfOverlay({
     stats: loop.stats,
     drawCalls: () => draws?.last ?? 0,
