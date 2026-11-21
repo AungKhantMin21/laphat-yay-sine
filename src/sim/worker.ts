@@ -122,7 +122,7 @@ function sendSnapshot(): void {
   writer.begin(new ArrayBuffer(FRAME_BYTES), game.sim.tick, game.sim.gameMinute);
   const area = game.world.state.area;
   writer.world(0, 0, game.sim.day);
-  game.world.writeSnapshot(writer);
+  game.writeSnapshot(writer);
   const snapshot = writer.finish();
   post({ t: 'ready', v: PROTOCOL_VERSION, area: area.id, w: area.w, h: area.h, snapshot }, [snapshot]);
   game.markChanged();

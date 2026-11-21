@@ -1,0 +1,7 @@
+{
+  "walkSpeed": 1.6,
+  "looks": 4,
+  "milkShift": [-0.06, 0.06],
+  "noiseTaste": [-1, 1],
+  "orders": { "pon_man": 4, "cho_seint": 3, "kya_seint": 2, "plain": 1 }
+}

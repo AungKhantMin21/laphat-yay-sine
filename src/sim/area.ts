@@ -4,6 +4,8 @@ import { AreaGrids } from '../shared/world-state';
 
 /** The tea shop's interior rect (inclusive-exclusive), shared with tests. */
 export const SHOP = { x0: 24, y0: 9, x1: 36, y1: 19 } as const;
+/** The pavement rows in front of the shop (inclusive-exclusive): customers come and go along these at x = 0 and x = w − 1. */
+export const STREET = { y0: 19, y1: 22 } as const;
 /** Owned pavement in front of the shop. */
 export const FRONTAGE = { x0: 24, y0: 19, x1: 36, y1: 22 } as const;
 

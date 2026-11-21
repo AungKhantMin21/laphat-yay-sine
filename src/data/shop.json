@@ -5,5 +5,26 @@
     "tipFrom": 0.5,
     "tipMax": 0.3,
     "autoFactor": 0.7
+  },
+  "arrivals": {
+    "perHour": [
+      { "from": "06:00", "rate": 9 },
+      { "from": "09:00", "rate": 5 },
+      { "from": "12:00", "rate": 7 },
+      { "from": "14:00", "rate": 5 }
+    ],
+    "appeal": { "base": 0.6, "perSeat": 0.06, "seatCap": 12, "comfort": 0.1, "beauty": 0.1, "min": 0.5, "max": 2 }
+  },
+  "service": { "orderDelay": 3, "autoServe": 45, "drink": 40, "pourHold": 300, "stuck": 120 },
+  "seat": {
+    "comfort": 1,
+    "light": 0.3,
+    "beauty": 0.5,
+    "shade": 0.3,
+    "warmth": -0.3,
+    "noise": 1,
+    "table": 1.5,
+    "distance": 0.05,
+    "jitter": 0.5
   }
 }

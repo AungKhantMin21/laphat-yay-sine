@@ -1,6 +1,7 @@
+import rawShop from '../src/data/shop.json';
 import { describe, expect, it } from 'vitest';
 import { DRINKS, REACTION, REACTION_NAMES, autoPrice, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, type RawDrinks } from '../src/shared/drinks';
-import { SHOP, buildShopRules, parseClock, toCoins } from '../src/shared/shop';
+import { SHOP, buildShopRules, parseClock, toCoins, type RawShop } from '../src/shared/shop';
 import rawDrinks from '../src/data/drinks.json';
 import my from '../src/ui/i18n/my.json';
 
@@ -129,8 +130,9 @@ describe('shop rules', () => {
   });
 
   it('rejects closing before opening and fractional coins', () => {
-    const pay = { coin: 50, tipFrom: 0.5, tipMax: 0.3, autoFactor: 0.7 };
-    expect(() => buildShopRules({ hours: { open: '17:00', close: '06:00' }, pay })).toThrow(/before close/);
-    expect(() => buildShopRules({ hours: { open: '06:00', close: '17:00' }, pay: { ...pay, coin: 0.5 } })).toThrow(/coin/);
+    const base = rawShop as RawShop;
+    const pay = base.pay;
+    expect(() => buildShopRules({ ...base, hours: { open: '17:00', close: '06:00' } })).toThrow(/before close/);
+    expect(() => buildShopRules({ ...base, pay: { ...pay, coin: 0.5 } })).toThrow(/coin/);
   });
 });

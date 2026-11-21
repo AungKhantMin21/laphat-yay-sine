@@ -17,6 +17,7 @@ function recorder(): FrameHandler & { log: unknown[] } {
     gridPatch: patch('grid'),
     tilePatch: patch('tile'),
     world: (...a) => log.push(['world', ...a]),
+    npcOrder: (...a) => log.push(['npcOrder', ...a]),
   };
 }
 
@@ -45,6 +46,7 @@ describe('frame diff', () => {
     w.tilePatch(1, 0, 0, 1, 1, grid, W);
     w.npcDespawn(0xffff0001);
     w.world(1, 2, 300);
+    w.npcOrder(0xfffe0003, 3, 2);
     const buf = w.finish();
 
     const r = recorder();
@@ -65,6 +67,7 @@ describe('frame diff', () => {
       ['tile', 1, 0, 0, 1, 1, rect(0, 0, 1, 1)],
       ['npcDespawn', 0xffff0001],
       ['world', 1, 2, 300],
+      ['npcOrder', 0xfffe0003, 3, 2],
     ]);
   });
 

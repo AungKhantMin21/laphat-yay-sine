@@ -15,11 +15,12 @@ export const SEC = {
   GRID_PATCH: 6,
   TILE_PATCH: 7,
   WORLD: 8,
+  NPC_ORDER: 9,
 } as const;
 type SectionKind = (typeof SEC)[keyof typeof SEC];
 
 /** Fixed item size per section kind (patches are variable). */
-const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4 };
+const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4, 9: 8 };
 
 /** Positions travel as 1/32 tile in i16. */
 export const POS_SCALE = 32;
@@ -38,6 +39,8 @@ export interface FrameHandler {
   gridPatch(prop: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void;
   tilePatch(layer: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void;
   world(weather: number, season: number, day: number): void;
+  /** A customer's order bubble: drink id and ORDER state (shared/npc.ts). */
+  npcOrder(handle: number, drink: number, state: number): void;
 }
 
 export class FrameWriter {
@@ -136,6 +139,15 @@ export class FrameWriter {
     this.dv.setUint8(o, weather);
     this.dv.setUint8(o + 1, season);
     this.dv.setUint16(o + 2, day, true);
+  }
+
+  npcOrder(handle: number, drink: number, state: number): void {
+    const o = this.item(SEC.NPC_ORDER);
+    const dv = this.dv;
+    dv.setUint32(o, handle, true);
+    dv.setUint8(o + 4, drink);
+    dv.setUint8(o + 5, state);
+    dv.setUint16(o + 6, 0, true);
   }
 
   /** Copies the w×h rect at (x, y) out of a W-wide grid. */
@@ -267,6 +279,9 @@ export function readFrame(buf: ArrayBuffer, h: FrameHandler): boolean {
         break;
       case SEC.WORLD:
         for (let i = 0; i < count; i++, p += 4) h.world(dv.getUint8(p), dv.getUint8(p + 1), dv.getUint16(p + 2, true));
+        break;
+      case SEC.NPC_ORDER:
+        for (let i = 0; i < count; i++, p += 8) h.npcOrder(dv.getUint32(p, true), dv.getUint8(p + 4), dv.getUint8(p + 5));
         break;
       default:
         break; // unknown section: skip by length

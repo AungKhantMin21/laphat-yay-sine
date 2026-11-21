@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -22,6 +22,11 @@ export type Action =
   | { k: 'openShop' }
   /** Evening: end the day; the clock jumps to the next opening time and the game saves. */
   | { k: 'sleep' }
+  /** The pour minigame opened for customer `id` (NPC handle): their auto-serve waits. */
+  | { k: 'startPour'; id: number }
+  | { k: 'cancelPour'; id: number }
+  /** Serve customer `id` a poured cup: tea and condensed milk as cup fractions. */
+  | { k: 'serve'; id: number; tea: number; milk: number }
   | { k: 'walkTo'; x: number; y: number }
   | { k: 'interact'; id: number }
   | { k: 'buy'; shop: number; item: number; qty: number };
@@ -46,7 +51,12 @@ export type SimEvent =
   | { k: 'money'; delta: number; total: number }
   | { k: 'text'; key: string; args?: Record<string, string | number> }
   /** The day that just ended (sent on sleep). */
-  | { k: 'dayEnd'; day: number; stats: DayStats };
+  | { k: 'dayEnd'; day: number; stats: DayStats }
+  /**
+   * Customer `id` (NPC handle) got drink `drink` and paid `price` + `tip` kyat.
+   * `poured` = the player poured it (else auto-served); `reaction` = shared/drinks.ts REACTION.
+   */
+  | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number };
 
 /** What happened in one shop day. */
 export interface DayStats {

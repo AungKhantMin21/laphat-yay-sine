@@ -4,7 +4,11 @@ import { CATALOG } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
-import { createM1Area } from './area';
+import { createM1Area, STREET } from './area';
+import { DRINKS, REACTION, autoPrice, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
+import { PHASE, minuteOfDay } from '../shared/day';
+import { SHOP } from '../shared/shop';
+import { Customers } from './npc/customers';
 import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
 import { SimWorld } from './world';
@@ -13,11 +17,16 @@ import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { SAVE_SCHEMA, type SaveData, type SavedObject } from './save/format';
 
+const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
+
 export class Game {
   /** Events for the main thread, drained by the worker after each step or action. */
   readonly events: SimEvent[] = [];
   readonly walk: WalkGrid;
   readonly paths: PathFinder;
+  readonly npcs: Customers;
+  /** Last game minute an arrival was rolled for (one roll per minute). */
+  private arrivalMinute = -1;
 
   constructor(
     readonly sim: Sim,
@@ -29,6 +38,31 @@ export class Game {
     world.clearWalkDirty(); // the walk grid below starts from the current occupancy
     this.walk = new WalkGrid(world.state.area, world.state.occ);
     this.paths = new PathFinder(this.walk);
+    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, STREET, (h, drink, poured, score) =>
+      this.pay(h, drink, poured, score),
+    );
+  }
+
+  /** A customer got a cup: money into the tin, today's stats, events for the main thread. */
+  private pay(id: number, drinkId: number, poured: boolean, score: number): void {
+    const drink = DRINKS.defs[drinkId]!;
+    const price = poured ? pouredPrice(drink) : autoPrice(drink);
+    const tip = poured ? tipFor(drink, score) : 0;
+    const b = this.builder;
+    b.money += price + tip;
+    b.changed = true;
+    const t = this.day.today;
+    t.served++;
+    if (poured) {
+      t.poured++;
+      t.best = Math.max(t.best, Math.round(score * 100));
+    }
+    t.earned += price + tip;
+    t.tips += tip;
+    this.day.changed = true;
+    const reaction = poured ? reactionFor(score) : REACTION.auto;
+    this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction });
+    this.events.push({ k: 'money', delta: price + tip, total: b.money });
   }
 
   /** Rebuilds walk costs around build changes (searches in flight restart). */
@@ -39,9 +73,9 @@ export class Game {
     w.clearWalkDirty();
   }
 
-  /** Customers still in or heading to the shop (M2.4). */
+  /** Customers still in or heading to the shop. */
   customers(): number {
-    return 0;
+    return this.npcs.inShop();
   }
 
   static create(seed: number): Game {
@@ -157,7 +191,18 @@ export class Game {
         const r = this.day.sleep(this.sim, this.customers());
         if (!r.ok) return r;
         if (r.ended) this.events.push({ k: 'dayEnd', day: r.ended.day, stats: r.ended.stats });
+        this.npcs.clear(); // the last passers-by go home too
         return { ok: true };
+      }
+      case 'startPour':
+        return res(this.npcs.startPour(a.id));
+      case 'cancelPour':
+        return res(this.npcs.cancelPour(a.id));
+      case 'serve': {
+        const i = this.npcs.indexOf(a.id);
+        if (!i || !Number.isFinite(a.tea) || !Number.isFinite(a.milk)) return { ok: false, reason: 'pour.err.gone' };
+        const score = pourScore(DRINKS.defs[this.npcs.drink[i]!]!, a.tea, a.milk, this.npcs.milkShift[i]!);
+        return res(this.npcs.servePoured(a.id, score));
       }
       default:
         return { ok: false, reason: 'error.notYet' };
@@ -196,7 +241,20 @@ export class Game {
     this.paths.tick();
     day.update(this.sim.gameMinute, this.customers());
     this.sim.step(w, !day.holds);
+    const minute = this.sim.gameMinute;
+    if (minute !== this.arrivalMinute) {
+      this.arrivalMinute = minute;
+      if (day.phase === PHASE.open && minuteOfDay(minute) < SHOP.close) this.npcs.arrivalRoll(minuteOfDay(minute));
+    }
+    this.npcs.tick();
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
+    this.npcs.writeChanges(w);
+  }
+
+  /** Full state for a new main-thread mirror. */
+  writeSnapshot(w: FrameWriter): void {
+    this.world.writeSnapshot(w);
+    this.npcs.writeSnapshot(w);
   }
 }

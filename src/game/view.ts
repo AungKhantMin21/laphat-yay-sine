@@ -115,6 +115,7 @@ export class WorldView implements FrameHandler {
   npcSpawn(): void {}
   npcDespawn(): void {}
   npcState(): void {}
+  npcOrder(): void {}
   gridPatch(prop: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void {
     const dst = this.grids[prop];
     if (!dst) return;

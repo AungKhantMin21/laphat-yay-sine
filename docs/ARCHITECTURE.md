@@ -82,7 +82,7 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
-The source of truth for message shapes is `src/shared/protocol.ts` (protocol v5 as of M2.2). Summary:
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol v6 as of M2.4: actions `startPour`/`cancelPour`/`serve`, events `served`/`money`, frame section NPC_ORDER). Summary:
 
 ### Main → Worker
 
@@ -137,6 +137,7 @@ kind 5 OBJ_REMOVE    4 B each: u32 handle
 kind 6 GRID_PATCH   8 B head: u8 prop | u8 _ | u8 x | u8 y | u8 w | u8 h | u16 _, then w*h bytes (subscribed grids only)
 kind 7 TILE_PATCH   same shape as GRID_PATCH; prop = 0 floor, 1 wall
 kind 8 WORLD         4 B: u8 weather | u8 season | u16 day
+kind 9 NPC_ORDER     8 B each: u32 handle | u8 drink | u8 order state (shared/npc.ts ORDER) | u16 pad   (changed only)
 ```
 
 Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick with no changes still sends the 16-byte header so the interpolation clock keeps moving.
@@ -198,6 +199,7 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 ### NPCs (capacity 256: ~40 named + passers-by)
 
 - Worker: `x, y Float32` (tiles) · `area u8` · `lod u8` (near / far / abstract) · `state u8` · `stateT u16` · `def u16` · `sched u8` · needs `hunger, social, money, comfort` (4 × Uint8) · taste `sweet, strong, creamy` (3 × Int8) · `friendship u8` · `visits u16` · `seat u16` · `path u16` (pool slot) · `pathStep u16` · `dir u8` · `anim u8` · `gen u16`.
+- **M2 customers** (`sim/npc/customers.ts`) use a subset: `x, y Float32` (tiles, centre = +0.5) · `tile, goal, seat, exit Int32` · `seatObj u32` (object handle, checked after build changes) · `path u32` (path handle) · `pathStep, stateT, walkT, pourT u16` · `state, drink, order, look, dir, anim u8` · `milkShift, noiseTaste Float32` · `gen u16`. A `seatRes` Uint16 grid holds which customer reserved each seat tile. States: toSeat → ordering → waiting → drinking → leaving (and straight to leaving when no free reachable seat). Seat choice scans seat tiles of floor-standing `seat > 0` furniture and scores property `value`s with the weights in `shop.json` (`seat`), plus table-adjacent, distance and jitter from `npcDecide`; a flood fill from the street (rebuilt only when the walk grid version changes) rules out walled-in seats. Arrivals: one `npcDecide` roll per game minute during shop hours, chance = hourly rate × shop appeal / 60. Customers are not saved; the customer is paid at serve time.
 - Main mirror (`game/view.ts`): `prevX, prevY, curX, curY Float32` · `dir, anim, look Uint8` · `sprite Int16` (pool index, −1 = none). Render caps visible animated NPCs at the tier limit (12 / 25 / 40).
 
 ### Paths (`sim/path/`, M2.3)
