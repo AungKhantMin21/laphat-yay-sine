@@ -1,0 +1,41 @@
+{
+  "note": "Set AudioBufferSourceNode.loop=true with loopStart/loopEnd from here; this skips any encoder padding so loops are gapless in every browser.",
+  "tracks": {
+    "morning": {
+      "files": [
+        "morning.ogg",
+        "morning.m4a"
+      ],
+      "loopStart": 0,
+      "loopEnd": 52.5003,
+      "loudnessLUFS": -20
+    },
+    "afternoon": {
+      "files": [
+        "afternoon.ogg",
+        "afternoon.m4a"
+      ],
+      "loopStart": 0,
+      "loopEnd": 46.347,
+      "loudnessLUFS": -20
+    },
+    "rain": {
+      "files": [
+        "rain.ogg",
+        "rain.m4a"
+      ],
+      "loopStart": 0,
+      "loopEnd": 50.4686,
+      "loudnessLUFS": -20
+    },
+    "night": {
+      "files": [
+        "night.ogg",
+        "night.m4a"
+      ],
+      "loopStart": 0,
+      "loopEnd": 56.4593,
+      "loudnessLUFS": -20
+    }
+  }
+}
