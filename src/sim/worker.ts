@@ -116,6 +116,8 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
     case 'save':
       post({ t: 'saved', reason: msg.reason, ok: false }); // M1
       return;
+    case 'tier':
+      return; // M4: LOD caps
     case 'viewport':
     case 'subscribe':
       return; // M3/M4

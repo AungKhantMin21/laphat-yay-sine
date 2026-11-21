@@ -13,6 +13,9 @@ import { FrameLoop } from './game/loop';
 import { WorldView } from './game/view';
 import { SimBridge } from './game/bridge';
 import { isoX, isoY } from './shared/iso';
+import type { Tier } from './shared/protocol';
+import { loadTier, runBenchmark, saveTier, deviceHints, decideTier } from './platform/tier';
+import { TIER_SETTINGS } from './platform/tier-policy';
 
 translateDom();
 installTouchGuard();
@@ -34,8 +37,9 @@ const bridge = new SimBridge(view, {
     camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
   },
 });
+const tierState = await loadTier();
 const seed = crypto.getRandomValues(new Uint32Array(1))[0]!; // M1: from the save
-bridge.init(seed, 1);
+bridge.init(seed, tierState.tier);
 
 installGestures(stageEl, {
   pan: (dx, dy) => {
@@ -66,4 +70,28 @@ const loop = new FrameLoop({
 });
 loop.start();
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks } });
+const device = { tier: tierState.tier, source: tierState.source as string, bench: tierState.record?.bench ?? null };
+
+function applyTier(t: Tier): void {
+  const s = TIER_SETTINGS[t];
+  loop.setMaxFps(s.maxFps);
+  stage.setRenderScale(Math.min(1, s.maxDevPerCss / (window.devicePixelRatio || 1)));
+  chunks.setMaxLive(s.chunkTextures);
+  bridge.setTier(t);
+  device.tier = t;
+}
+applyTier(tierState.tier);
+
+if (tierState.needsBench) {
+  // Let loading settle, then measure while the street is on screen.
+  setTimeout(async () => {
+    const bench = await runBenchmark();
+    const t = decideTier(deviceHints(), bench);
+    await saveTier(t, bench, null);
+    device.source = 'benchmark';
+    device.bench = bench;
+    applyTier(t);
+  }, 1000);
+}
+
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device } });

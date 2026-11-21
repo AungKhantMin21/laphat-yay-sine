@@ -39,7 +39,7 @@ export class FloorChunks {
     private readonly renderer: Renderer,
     private readonly tiles: Texture[],
     /** Max chunk textures alive at once (each 256×192 RGBA ≈ 192 KB). */
-    private readonly maxLive = 48,
+    private maxLive = 48,
   ) {
     for (let i = 0; i < CHUNK * CHUNK; i++) {
       const s = new Sprite();
@@ -111,6 +111,19 @@ export class FloorChunks {
     }
   }
 
+  /** Device tier budget. Excess textures are evicted as chunks leave the view. */
+  setMaxLive(n: number): void {
+    this.maxLive = n;
+    while (this.live > n && this.evictOldest()) {
+      /* evict until within budget */
+    }
+  }
+
+  /** Approximate GPU memory held by chunk textures, in bytes. */
+  get textureBytes(): number {
+    return (this.live + this.pool.length) * CHUNK_W * CHUNK_H * 4;
+  }
+
   get liveTextures(): number {
     return this.live;
   }
@@ -141,15 +154,19 @@ export class FloorChunks {
     return this.pool.pop() ?? RenderTexture.create({ width: CHUNK_W, height: CHUNK_H, scaleMode: 'nearest', resolution: 1, antialias: false });
   }
 
-  private evictOldest(): void {
+  private evictOldest(): boolean {
     let oldest: Chunk | null = null;
     for (const c of this.chunks) if (c.rt && c.lastSeen < this.frame && (!oldest || c.lastSeen < oldest.lastSeen)) oldest = c;
-    if (oldest) this.release(oldest);
+    if (!oldest) return false;
+    this.release(oldest);
+    return true;
   }
 
   private release(c: Chunk): void {
     if (!c.rt) return;
-    this.pool.push(c.rt);
+    // Keep a few spare textures for reuse; destroy the rest so memory really drops.
+    if (this.pool.length < 4) this.pool.push(c.rt);
+    else c.rt.destroy(true);
     c.rt = null;
     c.sprite.visible = false;
     c.dirty = true;

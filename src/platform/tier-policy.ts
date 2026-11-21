@@ -1,0 +1,68 @@
+// Pure tier decision + per-tier settings (no DOM), tested in test/tier.test.ts.
+import type { Tier } from '../shared/protocol';
+
+export const TIER = { low: 0, mid: 1, high: 2 } as const;
+export const TIER_NAMES = ['low', 'mid', 'high'] as const;
+
+/** Bump when the benchmark or thresholds change, so stored results are re-measured. */
+export const BENCH_VERSION = 1;
+
+export interface TierSettings {
+  maxFps: number;
+  /** Fraction of devicePixelRatio to render at (CSS upscales the rest, pixelated). */
+  maxDevPerCss: number;
+  maxAnimatedNpcs: number;
+  particles: boolean;
+  weatherFx: boolean;
+  lighting: boolean;
+  /** Floor chunk textures kept alive (each ≈ 192 KB). */
+  chunkTextures: number;
+  /** Music decode sample rate (null = device default). */
+  audioSampleRate: number | null;
+}
+
+export const TIER_SETTINGS: Record<Tier, TierSettings> = {
+  0: { maxFps: 30, maxDevPerCss: 2, maxAnimatedNpcs: 12, particles: false, weatherFx: false, lighting: false, chunkTextures: 32, audioSampleRate: 22050 },
+  1: { maxFps: 60, maxDevPerCss: 3, maxAnimatedNpcs: 25, particles: true, weatherFx: true, lighting: false, chunkTextures: 48, audioSampleRate: null },
+  2: { maxFps: 60, maxDevPerCss: 4, maxAnimatedNpcs: 40, particles: true, weatherFx: true, lighting: true, chunkTextures: 64, audioSampleRate: null },
+};
+
+export interface DeviceHints {
+  /** navigator.deviceMemory in GB (Chrome/Android only; rounded down, capped at 8). */
+  memoryGb?: number;
+  cores?: number;
+}
+
+export interface BenchResult {
+  /** Work units per ms of the CPU workload (higher is faster). */
+  cpuScore: number;
+  /** 90th-percentile frame interval (ms) while rendering under the benchmark load. */
+  p90FrameMs: number;
+}
+
+/**
+ * Calibrated 21 Nov 2026 in Chrome on an Apple-silicon laptop: cpuScore ≈ 71 600 at 1×,
+ * 16 900 at 4× and 11 000 at 6× DevTools CPU throttling. 6× must land on Low.
+ * Retune on the real device matrix (docs/M0.md) — the perf overlay shows the measured score.
+ */
+export const THRESHOLDS = { cpuLow: 15000, cpuHigh: 30000, frameLow: 30, frameHigh: 18 };
+
+/** Before the first benchmark every device starts Low, then upgrades silently (docs/RISKS.md). */
+export const FIRST_RUN_TIER: Tier = 0;
+
+export function decideTier(h: DeviceHints, b: BenchResult): Tier {
+  const t = THRESHOLDS;
+  if (h.memoryGb !== undefined && h.memoryGb <= 2) return 0;
+  if (b.cpuScore < t.cpuLow || b.p90FrameMs > t.frameLow) return 0;
+  const lowMemory = h.memoryGb !== undefined && h.memoryGb < 6;
+  const fewCores = h.cores !== undefined && h.cores < 6;
+  if (b.cpuScore >= t.cpuHigh && b.p90FrameMs <= t.frameHigh && !lowMemory && !fewCores) return 2;
+  return 1;
+}
+
+/** p90 of the first `count` values of a ring buffer. */
+export function p90(values: Float32Array, count: number): number {
+  if (count === 0) return 0;
+  const a = Array.from(values.subarray(0, count)).sort((x, y) => x - y);
+  return a[Math.min(a.length - 1, Math.floor(a.length * 0.9))]!;
+}

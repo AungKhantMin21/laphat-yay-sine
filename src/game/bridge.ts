@@ -37,6 +37,10 @@ export class SimBridge {
     this.send({ t: 'clock', running, nowMs: Date.now() });
   }
 
+  setTier(tier: Tier): void {
+    this.send({ t: 'tier', tier });
+  }
+
   act(a: Action): number {
     const seq = ++this.seq;
     this.send({ t: 'act', seq, a });

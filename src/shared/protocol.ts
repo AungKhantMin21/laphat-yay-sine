@@ -1,6 +1,6 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -23,6 +23,7 @@ export type Action =
 export type ToSim =
   | { t: 'init'; v: number; seed: number; tier: Tier; nowMs: number; saveSlot: number; shareCode?: string }
   | { t: 'clock'; running: boolean; nowMs: number }
+  | { t: 'tier'; tier: Tier }
   | { t: 'viewport'; area: number; x0: number; y0: number; x1: number; y1: number }
   | { t: 'subscribe'; grids: number }
   | { t: 'act'; seq: number; a: Action }
