@@ -28,6 +28,8 @@ export interface BuildDeps {
   centreTile(): [number, number];
   /** Called after the first successful build action (storage persistence request). */
   onFirstBuild?(): void;
+  /** Heat overlay switched (−1 = off). */
+  onHeat?(prop: number): void;
 }
 
 export class BuildController {
@@ -45,6 +47,11 @@ export class BuildController {
   message = '';
   messageAt = 0;
   readonly check = newPlaceResult();
+  /** Heat overlay property (PROP id) or −1. */
+  heat = -1;
+  /** Last tile under the pointer (heat readout). */
+  pointTx = -1;
+  pointTy = -1;
   private readonly listeners = new Set<() => void>();
   private built = false;
   private busy = false;
@@ -65,6 +72,7 @@ export class BuildController {
   }
 
   close(): void {
+    this.setHeat(-1);
     this.deselect();
     this.d.ghost.hide();
     this.setMode('off');
@@ -86,6 +94,7 @@ export class BuildController {
   }
 
   tap(x: number, y: number, pointerType: string): void {
+    if (this.heat >= 0) this.point(x, y);
     if (this.mode === 'place' || this.mode === 'move') {
       this.aim(x, y);
       if (pointerType === 'mouse') void this.confirm();
@@ -104,6 +113,36 @@ export class BuildController {
 
   hover(x: number, y: number): void {
     if (this.mode === 'place' || this.mode === 'move') this.aim(x, y);
+    else if (this.heat >= 0) this.point(x, y);
+  }
+
+  /** Show a property grid (−1 = off). The worker only streams grids someone is looking at. */
+  setHeat(prop: number): void {
+    if (prop === this.heat) return;
+    this.heat = prop;
+    this.d.bridge.subscribeGrids(prop >= 0 ? 1 << prop : 0);
+    this.d.onHeat?.(prop);
+    this.emit();
+  }
+
+  /** Grid value (design levels) at the pointer tile for the heat readout, or −1. */
+  heatLevel(): number {
+    const grid = this.heat >= 0 ? this.d.view.grids[this.heat] : undefined;
+    const a = this.d.view.area;
+    const x = this.mode === 'place' || this.mode === 'move' ? this.tx : this.pointTx;
+    const y = this.mode === 'place' || this.mode === 'move' ? this.ty : this.pointTy;
+    if (!grid || x < 0 || y < 0 || x >= a.w || y >= a.h) return -1;
+    return grid[y * a.w + x]! / 16;
+  }
+
+  private point(x: number, y: number): void {
+    const [wx, wy] = this.d.toWorld(x, y);
+    const tx = tileAtX(wx, wy);
+    const ty = tileAtY(wx, wy);
+    if (tx === this.pointTx && ty === this.pointTy) return;
+    this.pointTx = tx;
+    this.pointTy = ty;
+    this.emit();
   }
 
   /** A drag that starts on the ghost's footprint moves the ghost instead of the camera. */

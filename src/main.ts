@@ -11,6 +11,7 @@ import { ObjectLayer } from './render/objects';
 import { Recolourer } from './render/recolour';
 import { Texture } from 'pixi.js';
 import { Ghost } from './render/ghost';
+import { HeatLayer } from './render/heat';
 import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys } from './input/keyboard';
@@ -51,7 +52,8 @@ const camera = new Camera();
 const view = new WorldView();
 const objects = new ObjectLayer(view, atlas, new Recolourer(atlas));
 const ghost = new Ghost(objects, objects.layer);
-stage.world.addChild(objects.floorLayer, ghost.marks, objects.layer);
+const heat = new HeatLayer(view);
+stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
 let musicPinned: TrackId | null = null;
@@ -87,6 +89,7 @@ const build = new BuildController({
   toWorld,
   centreTile: () => [tileAtX(camera.x, camera.y), tileAtY(camera.x, camera.y)],
   onFirstBuild: () => void requestPersistentStorage(),
+  onHeat: (prop) => heat.show(prop),
 });
 const buildUi = installBuildUi(
   build,
@@ -127,6 +130,7 @@ const loop = new FrameLoop({
     }
     // The world changed under the ghost (or the selected object moved): re-validate.
     if (objects.sync() && build.open) build.refresh();
+    heat.update();
     camera.apply(stage.world, stage.size);
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);

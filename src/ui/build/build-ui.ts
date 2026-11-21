@@ -15,6 +15,7 @@ export interface IconInfo {
 }
 
 const ICON_BOX = 48;
+const PROPS = ['comfort', 'light', 'noise', 'warmth', 'shade', 'beauty', 'smell', 'cover'] as const;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -41,7 +42,15 @@ export function installBuildUi(ctl: BuildController, getPlayer: () => PlayerStat
   drawer.append(el('h2', '', t('build.inventory')), list);
   const actions = el('div', 'actions');
   const toast = el('div', 'toast hidden');
-  ui.append(money, drawer, actions, toggle, toast);
+  const heat = el('div', 'heat');
+  const heatSelect = el('select');
+  const heatReadout = el('span', 'readout');
+  heatSelect.setAttribute('aria-label', t('heat.title'));
+  heatSelect.appendChild(new Option(`${t('heat.title')}: ${t('heat.off')}`, '-1'));
+  PROPS.forEach((name, i) => heatSelect.appendChild(new Option(t(`prop.${name}`), String(i))));
+  heatSelect.addEventListener('change', () => ctl.setHeat(Number(heatSelect.value)));
+  heat.append(heatSelect, heatReadout);
+  ui.append(money, drawer, actions, heat, toggle, toast);
 
   toggle.addEventListener('click', () => ctl.toggle());
   let lastInv = '';
@@ -144,6 +153,10 @@ export function installBuildUi(ctl: BuildController, getPlayer: () => PlayerStat
     toggle.replaceChildren(el('span', 'sym', open ? '✓' : '⚒'), document.createTextNode(open ? t('build.close') : t('build.open')));
     drawer.style.display = open ? '' : 'none';
     actions.style.display = open ? '' : 'none';
+    heat.style.display = open ? '' : 'none';
+    heatSelect.value = String(ctl.heat);
+    const lvl = ctl.heatLevel();
+    heatReadout.textContent = lvl >= 0 ? t('heat.level', { name: t(`prop.${PROPS[ctl.heat]!}`), n: Math.round(lvl * 10) / 10 }) : '';
     if (open) {
       renderDrawer(p);
       renderActions(p);

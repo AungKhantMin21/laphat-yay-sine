@@ -45,5 +45,16 @@
   "build.err.nothingToUndo": "နောက်ပြန်စရာ မရှိပါ",
   "build.err.nothingToRedo": "ပြန်လုပ်စရာ မရှိပါ",
   "build.err.unknown": "မသိတဲ့ ပစ္စည်း",
-  "error.notYet": "ဒါက နောက်မှ ရပါမယ်"
+  "error.notYet": "ဒါက နောက်မှ ရပါမယ်",
+  "heat.title": "နေရာ အခြေအနေ",
+  "heat.off": "ပိတ်",
+  "prop.comfort": "သက်သောင့်သက်သာ",
+  "prop.light": "အလင်း",
+  "prop.noise": "ဆူညံသံ",
+  "prop.warmth": "အပူ",
+  "prop.shade": "အရိပ်",
+  "prop.beauty": "လှပမှု",
+  "prop.smell": "အနံ့",
+  "prop.cover": "အမိုးအကာ",
+  "heat.level": "{name} {n}"
 }
