@@ -1,0 +1,194 @@
+# Architecture
+
+How Laphat Yay Sine is built. What we build is in DESIGN.md; working rules are in CLAUDE.md.
+
+## 1. Folder structure
+
+```
+laphat-yay-sine/
+  CLAUDE.md  DESIGN.md  CREDITS.md  BACKLOG.md
+  docs/                 ARCHITECTURE.md, M0.md, RISKS.md, ART_STYLE.md
+  index.html            viewport-fit=cover, landscape shell, font preload
+  vite.config.ts        base '/games/laphat-yay-sine/', worker.format 'es', vitest config
+  tsconfig.json         references the per-layer configs
+  .github/workflows/deploy.yml
+  assets/
+    music/              loops + music.json, imported with ?url → hashed filenames
+    fonts/              subset NotoSansMyanmar.woff2 (generated)
+    atlas/              generated atlas-0.{webp,png,json}
+  art/                  source .aseprite/.png, palette.hex — not shipped
+  tools/                node scripts: pack-atlas, subset-font, check-size
+  src/
+    main.ts             boot only: platform checks → start loop → spawn worker
+    shared/             pure TS: no DOM, no Pixi, no Worker globals
+      protocol.ts       message types, PROTOCOL_VERSION
+      diff.ts           binary frame encoder/decoder (one pair, used by both sides)
+      layout.ts         capacities, SoA field specs, grid constants
+      ids.ts            index+generation handles
+      iso.ts            tile ↔ screen math
+      rng.ts            mulberry32 + named streams
+      rules/            placement validation (worker AND build-mode ghost)
+    sim/                the Worker; imports only shared/
+      worker.ts         entry, onmessage, tick scheduler
+      world.ts          owns all SoA stores
+      grids/ npc/ market/ path/ economy/ story/
+      catchup.ts        abstract-LOD fast simulation
+      save/             IndexedDB, schema version, migrations/
+    game/               main-thread orchestration
+      loop.ts           rAF, fixed step, interpolation, pacing, stop when hidden
+      bridge.ts         the ONLY code that talks to the Worker
+      view.ts           main-thread mirror of sim state (typed arrays)
+    render/             PixiJS; reads game/view.ts, never writes it
+      stage.ts          ~480×270 RenderTexture → integer upscale pass
+      camera.ts chunks.ts sprites.ts (pools) cull.ts (spatial hash)
+      depth.ts          insertion sort on key x + y + layer
+      grade.ts          time-of-day / weather shader (mediump)
+    ui/                 DOM overlay, all text; i18n/my.json
+      hud/ perf-overlay.ts rotate-screen.ts
+    input/              Pointer Events, gestures, keyboard → actions
+    audio/              music.ts (M0), ambience/ (M6)
+    platform/           tier.ts orientation.ts fullscreen.ts persist.ts sw.ts
+    data/               JSON content: objects, prices, npcs, dialogue (Myanmar first)
+  test/                 Vitest; sim + shared only (headless)
+```
+
+### Module boundaries (enforced)
+
+- `shared/` imports nothing outside `shared/`.
+- `sim/` imports only `shared/`. Its tsconfig uses `lib: ["ES2022", "WebWorker"]` (no DOM), so `document`/`window` fail typecheck. ESLint `no-restricted-imports` bans `pixi.js` and `render|ui|audio|game|input|platform`.
+- `render/ ui/ audio/ input/ platform/` never import `sim/`. They read `game/view.ts` and send actions through `game/bridge.ts`.
+- Burmese strings never cross the worker boundary: the sim emits text **keys + args**, `ui/` resolves them.
+- Pixi objects exist only in `render/`. DOM exists only in `ui/`, `input/`, `platform/` (and `main.ts`).
+
+```
+            input/ ──actions──▶ game/bridge.ts ══postMessage══▶ sim/worker.ts
+                                     ▲                                │
+   ui/ ◀── events ───────────────────┤◀═════ frames (binary) ════════┘
+   render/ ◀── game/view.ts ◀────────┘   (decoded by shared/diff.ts)
+```
+
+## 2. Worker message protocol
+
+Two channels:
+
+- **Commands and events**: small structured-clone objects, low frequency.
+- **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
+
+### Main → Worker
+
+```ts
+type ToSim =
+  | { t: 'init'; v: number; seed: number; tier: 0 | 1 | 2; nowMs: number; saveSlot: number; shareCode?: string }
+  | { t: 'clock'; running: boolean; nowMs: number }   // menus / hidden tab pause; resume checks for catch-up
+  | { t: 'viewport'; area: number; x0: number; y0: number; x1: number; y1: number } // Near vs Far LOD
+  | { t: 'subscribe'; grids: number }                 // bitmask of property grids to stream (build overlay)
+  | { t: 'act'; seq: number; a: Action }
+  | { t: 'save'; reason: 'auto' | 'hidden' | 'manual' }
+  | { t: 'recycle'; buf: ArrayBuffer };               // transferred back
+
+type Action =
+  | { k: 'place'; type: number; x: number; y: number; rot: number; colour: number; parent: number }
+  | { k: 'move'; id: number; x: number; y: number; rot: number; parent: number }
+  | { k: 'rotate'; id: number; rot: number }
+  | { k: 'recolour'; id: number; colour: number }
+  | { k: 'sell'; id: number }
+  | { k: 'undo' } | { k: 'redo' }
+  | { k: 'walkTo'; x: number; y: number }
+  | { k: 'interact'; id: number }
+  | { k: 'buy'; shop: number; item: number; qty: number }; // M3+
+```
+
+### Worker → Main
+
+```ts
+type FromSim =
+  | { t: 'ready'; v: number; area: number; w: number; h: number; snapshot: ArrayBuffer } // full mirror, once per area load
+  | { t: 'frame'; buf: ArrayBuffer }                   // transferred, 10 Hz
+  | { t: 'ack'; seq: number; ok: boolean; reason?: string; id?: number } // reason is a text key
+  | { t: 'events'; list: SimEvent[] }                  // money, gossip key, listing, dayEnd, teaser
+  | { t: 'catchup'; done: number; total: number }
+  | { t: 'away'; summary: AwaySummary }
+  | { t: 'saved'; reason: string; ok: boolean }
+  | { t: 'error'; msg: string };
+```
+
+### Frame buffer layout (`shared/diff.ts`, little-endian, 4-byte aligned)
+
+```
+Header   16 B: u16 version | u16 flags | u32 tick | u32 gameMinute | u16 sectionCount | u16 _
+Section   8 B: u8 kind | u8 _ | u16 count | u32 payloadBytes, then payload (padded to 4)
+
+kind 1 NPC_SPAWN    12 B each: u32 handle | u16 def | u8 area | u8 look | i16 x | i16 y
+kind 2 NPC_DESPAWN   4 B each: u32 handle
+kind 3 NPC_STATE     8 B each: u16 slot | i16 x | i16 y | u8 dir | u8 anim   (changed, Near LOD only)
+kind 4 OBJ_UPSERT   16 B each: u32 handle | u16 type | u8 x | u8 y | u8 rot | u8 layer | u8 colour | u8 flags | u32 parent
+kind 5 OBJ_REMOVE    4 B each: u32 handle
+kind 6 GRID_PATCH   8 B head: u8 prop | u8 _ | u8 x | u8 y | u8 w | u8 h | u16 _, then w*h bytes (subscribed grids only)
+kind 7 TILE_PATCH   same shape as GRID_PATCH; prop = 0 floor, 1 wall
+kind 8 WORLD         4 B: u8 weather | u8 season | u16 day
+```
+
+Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick with no changes still sends the 16-byte header so the interpolation clock keeps moving.
+
+### Protocol rules
+
+- The worker is the only authority on world state; the main thread holds a mirror.
+- Build mode is optimistic: main runs `shared/rules` against its mirror to show the placement ghost instantly; on `ack ok:false` it reverts and shows the reason.
+- Main renders about one tick behind and interpolates NPC x/y between the last two frames.
+- Undo/redo history lives in the worker (stack of inverse operations).
+- Hidden tab: main sends `clock running:false` and `save reason:'hidden'`, then stops rAF. On return, the worker compares wall-clock time; more than 10 real minutes away → catch-up (at most 7 game days, abstract LOD, yields after every game day, posts `catchup` progress, then `away`).
+- `PROTOCOL_VERSION` mismatch (stale service-worker cache) → main forces a reload.
+
+## 3. Data layout (typed arrays, struct of arrays)
+
+**Rule of thumb:** struct of arrays for anything iterated every tick or frame (NPCs, objects, grids, paths). Plain objects are fine for small, rarely touched tables (< 64 rows: properties, shops, recipes). Strings live in side `Map<handle, string>` tables, never in typed arrays.
+
+### Handles (`shared/ids.ts`)
+
+`u32 = generation (16 bits) << 16 | index (16 bits)`. Index 0 is reserved for "none". A stale handle (for example an object acked after it was removed) fails the generation check instead of hitting a reused slot.
+
+### Tile grids (per area, W×H ≤ 128×96, index = y * W + x)
+
+| Grid | Type | Notes |
+| --- | --- | --- |
+| `floor` | Uint8 | floor tile type |
+| `wall` | Uint8 | bits N/E/S/W + door/window flags |
+| `occupancy` | Uint16 | object index on the furniture layer, 0 = free |
+| `walkCost` | Uint8 | derived, 255 = blocked; rebuilt locally on change |
+| `zone` | Uint8 | shop interior, pavement, player-owned bits |
+
+### Property grids
+
+Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
+
+- Worker keeps `accum[p]: Int16Array(W*H)` (exact sums, so removing an object subtracts precisely) and `value[p]: Uint8Array(W*H)` = clamp(accum, 0, 255). Rules, NPCs and the main thread read `value`.
+- Units: **16 per design level**. DESIGN's "noise < 2" means `value < 32`. Max ≈ 15.9 levels.
+- Each object type has a precomputed **stamp** per property: an Int8 kernel, radius ≤ 4 (9×9), distance falloff baked in when data loads. Place = add stamp; remove = subtract; then re-clamp only the dirty rect.
+- Need checks run over the dirty rect + radius only, never the whole grid.
+- Memory at 128×96: 8 × (24 KB + 12 KB) ≈ 300 KB per area.
+
+### Objects (capacity 4096)
+
+`type u16 · x u8 · y u8 · rot u8 · layer u8 (floor / furniture / wall / ceiling) · colour u8 (palette index) · flags u8 · parent u16 (stacked-on index) · gen u16`, plus a free list (Uint16 stack). Footprint (1×1 to 3×2) comes from type data, rotated.
+
+### NPCs (capacity 256: ~40 named + passers-by)
+
+- Worker: `x, y Float32` (tiles) · `area u8` · `lod u8` (near / far / abstract) · `state u8` · `stateT u16` · `def u16` · `sched u8` · needs `hunger, social, money, comfort` (4 × Uint8) · taste `sweet, strong, creamy` (3 × Int8) · `friendship u8` · `visits u16` · `seat u16` · `path u16` (pool slot) · `pathStep u16` · `dir u8` · `anim u8` · `gen u16`.
+- Main mirror (`game/view.ts`): `prevX, prevY, curX, curY Float32` · `dir, anim, look Uint8` · `sprite Int16` (pool index, −1 = none). Render caps visible animated NPCs at the tier limit (12 / 25 / 40).
+
+### Paths
+
+`pathPool: Uint16Array` of tile indices with per-slot `offset` / `len` (Uint16) and free-list allocation, cached by (from, to). Flow fields: `Uint8Array(W*H)` of direction codes, ≤ 8 common destinations per area (market, shop door, bus stop…).
+
+### RNG
+
+One save seed → independent mulberry32 **streams** per subsystem: `market`, `npcDecide`, `events`, `cosmetic`. Near-LOD cosmetic randomness uses only `cosmetic`, so where the camera is never changes simulation outcomes, and catch-up stays equivalent to live play.
+
+### Save (worker-owned, IndexedDB)
+
+Database `laphat`:
+
+- `saves`: slot → `{ schema, seed, realTime, gameMinute, rng: number[], blobs: { floor, wall, objects…: ArrayBuffer (sliced to live count) }, tables: { …plain JSON } }`
+- `meta`: settings and device tier (written by the main thread)
+
+Property grids are **not saved**; they are rebuilt from objects on load. `schema` is a number with ordered migrations in `sim/save/migrations/`.
