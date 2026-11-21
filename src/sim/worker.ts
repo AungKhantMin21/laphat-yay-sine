@@ -1,8 +1,8 @@
 // Worker entry: messaging and timing only. The simulation itself lives in sim.ts.
 import { FrameWriter } from '../shared/diff';
 import { PROTOCOL_VERSION, TICK_MS, type FromSim, type ToSim } from '../shared/protocol';
-import { TILE_LAYER } from '../shared/layout';
-import { createM0Area, type Area } from './area';
+import { createM1Area } from './area';
+import { SimWorld } from './world';
 import { Sim } from './sim';
 import { catchupDays } from './catchup';
 
@@ -16,7 +16,7 @@ const MAX_STEPS = 5;
 const writer = new FrameWriter();
 const pool: ArrayBuffer[] = [];
 let sim: Sim | null = null;
-let area: Area | null = null;
+let world: SimWorld | null = null;
 let running = false;
 let timer: ReturnType<typeof setTimeout> | 0 = 0;
 let nextAt = 0;
@@ -40,6 +40,7 @@ function wake(): void {
   writer.begin(takeBuffer(), sim.tick, sim.gameMinute);
   while (t0 >= nextAt && steps < MAX_STEPS) {
     sim.step(writer);
+    world?.writeChanges(writer);
     nextAt += TICK_MS;
     steps++;
   }
@@ -81,9 +82,10 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
       sim = new Sim(msg.seed);
       for (let i = pool.length; i < 4; i++) pool.push(new ArrayBuffer(FRAME_BYTES));
       writer.begin(new ArrayBuffer(FRAME_BYTES), sim.tick, sim.gameMinute);
-      area = createM0Area();
+      world = new SimWorld(createM1Area());
+      const area = world.state.area;
       writer.world(0, 0, sim.day);
-      writer.tilePatch(TILE_LAYER.floor, 0, 0, area.w, area.h, area.floor, area.w);
+      world.writeSnapshot(writer);
       const snapshot = writer.finish();
       post({ t: 'ready', v: PROTOCOL_VERSION, area: area.id, w: area.w, h: area.h, snapshot }, [snapshot]);
       start();

@@ -1,7 +1,9 @@
-// Main-thread mirror of the simulation, filled from worker frames. render/ and ui/ read it.
-// NPC/object/grid stores arrive with M1–M4 (docs/ARCHITECTURE.md §3).
+// Main-thread mirror of the simulation, filled from worker frames. render/ and ui/ read it;
+// build mode validates its ghost against the same WorldState the worker uses.
 import type { FrameHandler } from '../shared/diff';
-import { TILE_LAYER } from '../shared/layout';
+import { IndexQueue } from '../shared/ids';
+import { MAX_OBJECTS, TILE_LAYER } from '../shared/layout';
+import { AreaGrids, markOccupancy, WorldState } from '../shared/world-state';
 
 /** Inclusive-exclusive tile rect that changed since render last consumed it. */
 export class DirtyRect {
@@ -36,21 +38,27 @@ export class WorldView implements FrameHandler {
   day = 0;
   /** Worker time spent on the last frame's ticks (ms). */
   simWorkMs = 0;
-  area = 0;
-  areaW = 0;
-  areaH = 0;
-  floor: Uint8Array = new Uint8Array(0);
-  wall: Uint8Array = new Uint8Array(0);
-  readonly floorDirty = new DirtyRect();
+  state: WorldState = new WorldState(new AreaGrids(0, 1, 1));
+  /** Tiles whose floor or walls changed (chunks redraw). */
+  readonly tilesDirty = new DirtyRect();
+  /** Objects added or changed since render last looked (slot indices). */
+  readonly objChanged = new IndexQueue(MAX_OBJECTS);
+  /** Handles removed since render last looked. */
+  readonly objRemoved = new Uint32Array(MAX_OBJECTS);
+  objRemovedCount = 0;
+  /** Set if more removals arrived than the buffer holds: render rebuilds everything. */
+  objResync = false;
+
+  get area(): AreaGrids {
+    return this.state.area;
+  }
 
   /** Called when an area loads, before its snapshot is read. */
   setArea(id: number, w: number, h: number): void {
-    this.area = id;
-    this.areaW = w;
-    this.areaH = h;
-    this.floor = new Uint8Array(w * h);
-    this.wall = new Uint8Array(w * h);
-    this.floorDirty.add(0, 0, w, h);
+    this.state = new WorldState(new AreaGrids(id, w, h));
+    this.tilesDirty.add(0, 0, w, h);
+    this.objChanged.clear();
+    this.objRemovedCount = 0;
   }
 
   header(tick: number, gameMinute: number, workCentiMs: number): void {
@@ -62,18 +70,42 @@ export class WorldView implements FrameHandler {
     this.day = day;
   }
   tilePatch(layer: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void {
-    const dst = layer === TILE_LAYER.floor ? this.floor : this.wall;
-    const W = this.areaW;
+    const a = this.state.area;
+    const dst = layer === TILE_LAYER.floor ? a.floor : layer === TILE_LAYER.wall ? a.wall : a.zone;
     for (let row = 0; row < h; row++) {
       const s = offset + row * w;
-      dst.set(bytes.subarray(s, s + w), (y + row) * W + x);
+      dst.set(bytes.subarray(s, s + w), (y + row) * a.w + x);
     }
-    this.floorDirty.add(x, y, w, h);
+    if (layer !== TILE_LAYER.zone) this.tilesDirty.add(x, y, w, h);
+  }
+  objUpsert(handle: number, type: number, x: number, y: number, rot: number, layer: number, colour: number, flags: number, parent: number): void {
+    const { objects: s, occ } = this.state;
+    const existing = s.indexOf(handle);
+    if (existing) markOccupancy(s, occ, existing, 0);
+    const i = existing || s.claimHandle(handle, handle);
+    if (!i) return;
+    s.type[i] = type;
+    s.x[i] = x;
+    s.y[i] = y;
+    s.rot[i] = rot;
+    s.layer[i] = layer;
+    s.colour[i] = colour;
+    s.flags[i] = flags;
+    s.parent[i] = parent ? s.indexOf(parent) : 0;
+    markOccupancy(s, occ, i, i);
+    this.objChanged.push(i);
+  }
+  objRemove(handle: number): void {
+    const { objects: s, occ } = this.state;
+    const i = s.indexOf(handle);
+    if (!i) return;
+    markOccupancy(s, occ, i, 0);
+    s.release(i);
+    if (this.objRemovedCount < this.objRemoved.length) this.objRemoved[this.objRemovedCount++] = handle;
+    else this.objResync = true;
   }
   npcSpawn(): void {}
   npcDespawn(): void {}
   npcState(): void {}
-  objUpsert(): void {}
-  objRemove(): void {}
   gridPatch(): void {}
 }

@@ -66,3 +66,26 @@ export class SlotAllocator {
     return this.alive[index] === 1 && this.gen[index] === handleGen(h);
   }
 }
+
+/** Set of slot indices without allocation: a flag array plus a list. */
+export class IndexQueue {
+  private readonly flags: Uint8Array;
+  readonly list: Uint16Array;
+  length = 0;
+
+  constructor(capacity: number) {
+    this.flags = new Uint8Array(capacity);
+    this.list = new Uint16Array(capacity);
+  }
+
+  push(i: number): void {
+    if (this.flags[i]) return;
+    this.flags[i] = 1;
+    this.list[this.length++] = i;
+  }
+
+  clear(): void {
+    for (let k = 0; k < this.length; k++) this.flags[this.list[k]!] = 0;
+    this.length = 0;
+  }
+}

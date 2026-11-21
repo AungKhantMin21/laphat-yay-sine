@@ -30,4 +30,10 @@ export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4 } as 
 export const FLOOR_TYPES = 5;
 
 /** TILE_PATCH layer ids. */
-export const TILE_LAYER = { floor: 0, wall: 1 } as const;
+export const TILE_LAYER = { floor: 0, wall: 1, zone: 2 } as const;
+
+/** `wall` grid bits: a back wall on the tile's north-east edge (−y side) or north-west edge (−x side). */
+export const WALL = { n: 1, w: 2 } as const;
+
+/** `zone` grid bits. */
+export const ZONE = { owned: 1, roof: 2 } as const;

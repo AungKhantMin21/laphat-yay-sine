@@ -48,8 +48,8 @@ const bridge = new SimBridge(view, {
       pickMusic();
       setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
     });
-    chunks.setArea(view.floor, view.areaW, view.areaH);
-    camera.setArea(view.areaW, view.areaH);
+    chunks.setArea(view.area.floor, view.area.w, view.area.h);
+    camera.setArea(view.area.w, view.area.h);
     camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
   },
 });
@@ -73,9 +73,9 @@ const loop = new FrameLoop({
   render: () => {
     if (!bridge.isReady) return;
     draws?.beginFrame();
-    if (!view.floorDirty.empty) {
-      chunks.markDirty(view.floorDirty);
-      view.floorDirty.clear();
+    if (!view.tilesDirty.empty) {
+      chunks.markDirty(view.tilesDirty);
+      view.tilesDirty.clear();
     }
     camera.apply(stage.world, stage.size);
     const v = camera.view;
