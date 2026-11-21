@@ -19,6 +19,9 @@ import { BUDGETS, TIER_NAMES, TIER_SETTINGS } from './platform/tier-policy';
 import { DrawCallCounter, estimateTextureBytes } from './render/gl-stats';
 import { installPerfOverlay } from './ui/perf-overlay';
 import { showFontSample, showTitleCard } from './ui/title-card';
+import { MusicPlayer } from './audio/music';
+import { trackFor, type TrackId } from './audio/music-policy';
+import { installMusicDebug } from './ui/music-debug';
 
 translateDom();
 installTouchGuard();
@@ -33,9 +36,18 @@ stage.onContextRestored(() => chunks.invalidateAll());
 const camera = new Camera();
 
 const view = new WorldView();
+// Music starts after the first frame and the first tap; the sample rate follows the tier then.
+const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
+let musicPinned: TrackId | null = null;
+const pickMusic = (): void => music.play(musicPinned ?? trackFor(Math.floor(view.gameMinute / 60) % 24, false));
+
 const bridge = new SimBridge(view, {
   onReady: () => {
     showTitleCard();
+    requestAnimationFrame(() => {
+      pickMusic();
+      setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
+    });
     chunks.setArea(view.floor, view.areaW, view.areaH);
     camera.setArea(view.areaW, view.areaH);
     camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
@@ -105,6 +117,10 @@ if (tierState.needsBench) {
 
 if (debug) {
   showFontSample();
+  installMusicDebug(music, (id) => {
+    musicPinned = id;
+    pickMusic();
+  });
   installPerfOverlay({
     stats: loop.stats,
     drawCalls: () => draws?.last ?? 0,
@@ -121,4 +137,4 @@ if (debug) {
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music } });
