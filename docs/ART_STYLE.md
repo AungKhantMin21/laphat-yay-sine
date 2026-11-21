@@ -8,7 +8,8 @@ Locked in M0 so every asset matches. Change it only on purpose, and repack the a
 | --- | --- | --- |
 | Floor tile | 32×16 px diamond (rows 2, 6, …, 30, 30, …, 2 px wide) | top-left of the 32×16 box |
 | Character | about 16×24 px | bottom centre (feet) |
-| Object | footprint 1×1 to 3×2 tiles; height as needed | bottom vertex of its footprint diamond |
+| Object | footprint 1×1 to 3×2 tiles; image (w+h)·16 px wide, footprint diamond at the bottom | top vertex of the footprint diamond at x = h·16 |
+| Back wall | 32 × (16 + 40) px, one per tile edge (`wall/n`, `wall/w`) | like a floor tile, 40 px headroom |
 | World view | 480×270 world pixels (wider screens see a bit more) | — |
 
 One world pixel is always a whole number of screen pixels. Never scale, rotate or sub-pixel-position sprites.
@@ -26,6 +27,13 @@ One world pixel is always a whole number of screen pixels. Never scale, rotate o
 - No black outlines. Outlines, where needed, are a darker shade of the sprite's own colour.
 - Time of day and weather are done by one colour-grade shader over the whole frame. Do not paint night versions.
 
+## Objects
+
+- One frame per distinct orientation: `obj/<key>_r0` … `_r3` (`rots` in objects.json is 1, 2 or 4). Odd rotations swap the footprint.
+- Wall items: `_r0` hangs on the west (−x) wall, `_r1` on the north (−y) wall. Ceiling items hang from about 44–58 px up.
+- **Recolourable parts are painted in the key ramp** (ramp 0 in `src/data/objects.json`: `e98a5e`, `c85a44`, `9a3a30`, light → dark). The game swaps those three colours for the chosen ramp, so never use them for parts that must not change colour.
+- Small items that stand on surfaces are drawn at floor level; the game lifts them by the surface height.
+
 ## Files
 
 - Sources (`.aseprite`, `.png`) live in `art/`. Only the generated atlas ships.
@@ -40,4 +48,4 @@ Any CC0 or other pack must be listed in CREDITS.md with its source URL and licen
 
 ## Current state
 
-`art/sprites/floor/*` are generated placeholders (`node tools/make-placeholders.ts`). Replace them with hand-made tiles; keep the names.
+Everything in `art/sprites/` is a generated placeholder (`node tools/make-placeholders.ts`, shapes in `tools/placeholder-objects.ts`). Replace sprites with hand-made art; keep the names and sizes.
