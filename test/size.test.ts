@@ -3,7 +3,7 @@ import { BASE_H, computeSize } from '../src/render/size';
 
 describe('computeSize', () => {
   it('1080p desktop is exactly 480×270 at ×4', () => {
-    expect(computeSize(1920, 1080, 1)).toEqual({ w: 480, h: 270, scale: 4, devW: 1920, devH: 1080 });
+    expect(computeSize(1920, 1080, 1)).toEqual({ w: 480, h: 270, scale: 4, devW: 1920, devH: 1080, devPerCss: 1, zoom: 0 });
   });
 
   it('a 20:9 phone in landscape sees more street, not bars', () => {
@@ -22,6 +22,14 @@ describe('computeSize', () => {
       expect(s.scale).toBeGreaterThanOrEqual(1);
       expect((s.w - 1) * s.scale).toBeLessThan(s.devW);
     }
+  });
+
+  it('zoom changes the whole-number scale within range, never below ×1', () => {
+    expect(computeSize(1920, 1080, 1, 1, 1).scale).toBe(5);
+    expect(computeSize(1920, 1080, 1, 1, -1).scale).toBe(3);
+    expect(computeSize(1920, 1080, 1, 1, -5).scale).toBe(3); // clamped to one step out
+    expect(computeSize(1920, 1080, 1, 1, 9).scale).toBe(6); // clamped to two steps in
+    expect(computeSize(480, 270, 1, 1, -1).scale).toBe(1);
   });
 
   it('render scale lowers device pixels for low-tier phones', () => {

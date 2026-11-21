@@ -71,9 +71,7 @@ export class SimBridge {
         this.send({ t: 'recycle', buf: msg.buf }, [msg.buf]);
         return;
       case 'ready':
-        this.view.area = msg.area;
-        this.view.areaW = msg.w;
-        this.view.areaH = msg.h;
+        this.view.setArea(msg.area, msg.w, msg.h);
         readFrame(msg.snapshot, this.view);
         this.ready = true;
         this.handlers.onReady?.();

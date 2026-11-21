@@ -24,3 +24,10 @@ export const START_MINUTE = 6 * 60;
 /** M0 placeholder street size until area data exists. */
 export const M0_AREA_W = 64;
 export const M0_AREA_H = 48;
+
+/** Floor tile types (grid values in the `floor` layer). */
+export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4 } as const;
+export const FLOOR_TYPES = 5;
+
+/** TILE_PATCH layer ids. */
+export const TILE_LAYER = { floor: 0, wall: 1 } as const;

@@ -21,6 +21,8 @@ export interface PixelStage {
   onContextRestored(cb: () => void): void;
   /** Device tiers: < 1 renders fewer device pixels and lets CSS upscale (pixelated). */
   setRenderScale(s: number): void;
+  /** Whole-scale zoom offset; clamped. Returns the applied value. */
+  setZoom(z: number): number;
 }
 
 function viewportCss(): { w: number; h: number } {
@@ -50,21 +52,23 @@ export async function createPixelStage(parent: HTMLElement, background = 0x1b141
 
   const world = new Container();
   const screen = new Container();
-  const target = RenderTexture.create({ width: BASE_H, height: BASE_H, scaleMode: 'nearest', resolution: 1, antialias: false });
+  // dynamic: the upscaled sprite must follow the texture when zoom or resize changes its size.
+  const target = RenderTexture.create({ width: BASE_H, height: BASE_H, scaleMode: 'nearest', resolution: 1, antialias: false, dynamic: true });
   const view = new Sprite(target);
   view.roundPixels = true;
   screen.addChild(view);
 
-  const size: StageSize = { w: 1, h: 1, scale: 1, devW: 1, devH: 1 };
+  const size: StageSize = { w: 1, h: 1, scale: 1, devW: 1, devH: 1, devPerCss: 1, zoom: 0 };
   const resizeCbs: Array<(s: StageSize) => void> = [];
   const restoreCbs: Array<() => void> = [];
   let lost = false;
   let renderScale = 1;
+  let zoom = 0;
 
   function resize(): void {
     const css = viewportCss();
     const dpr = window.devicePixelRatio || 1;
-    const next = computeSize(css.w, css.h, dpr, renderScale);
+    const next = computeSize(css.w, css.h, dpr, renderScale, zoom);
     Object.assign(size, next);
     renderer.resize(size.devW, size.devH, 1);
     // CSS size derived from the backing size so the ratio is exact.
@@ -119,6 +123,12 @@ export async function createPixelStage(parent: HTMLElement, background = 0x1b141
     setRenderScale(s: number): void {
       renderScale = s;
       resize();
+    },
+    setZoom(z: number): number {
+      zoom = z;
+      resize();
+      zoom = size.zoom;
+      return zoom;
     },
   };
 }
