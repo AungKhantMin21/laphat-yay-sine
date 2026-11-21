@@ -1,2 +1,8 @@
-// Boot: platform checks → start loop → spawn worker. Filled in during M0.
-export {};
+import './ui/style.css';
+import { translateDom } from './ui/i18n';
+import { installTouchGuard } from './platform/touch-guard';
+import { installLandscapeLock } from './platform/orientation';
+
+translateDom();
+installTouchGuard();
+installLandscapeLock();
