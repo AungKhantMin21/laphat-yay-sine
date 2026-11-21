@@ -5,7 +5,7 @@ export const TIER = { low: 0, mid: 1, high: 2 } as const;
 export const TIER_NAMES = ['low', 'mid', 'high'] as const;
 
 /** Bump when the benchmark or thresholds change, so stored results are re-measured. */
-export const BENCH_VERSION = 1;
+export const BENCH_VERSION = 2;
 
 export interface TierSettings {
   maxFps: number;
@@ -41,8 +41,8 @@ export interface BenchResult {
 }
 
 /**
- * Calibrated 21 Nov 2026 in Chrome on an Apple-silicon laptop: cpuScore ≈ 71 600 at 1×,
- * 16 900 at 4× and 11 000 at 6× DevTools CPU throttling. 6× must land on Low.
+ * Calibrated 21 Nov 2026 (bench v2) in Chrome on an Apple-silicon laptop: cpuScore ≈ 74 000 at 1×,
+ * 17 700 at 4× and 11 800 at 6× DevTools CPU throttling. 6× must land on Low.
  * Retune on the real device matrix (docs/M0.md) — the perf overlay shows the measured score.
  */
 export const THRESHOLDS = { cpuLow: 15000, cpuHigh: 30000, frameLow: 30, frameHigh: 18 };
@@ -60,11 +60,15 @@ export function decideTier(h: DeviceHints, b: BenchResult): Tier {
   return 1;
 }
 
-/** p90 of the first `count` values of a ring buffer. */
-export function p90(values: Float32Array, count: number): number {
+/** Percentile (0–1) of the first `count` values of a buffer. */
+export function percentile(values: Float32Array, count: number, p: number): number {
   if (count === 0) return 0;
   const a = Array.from(values.subarray(0, count)).sort((x, y) => x - y);
-  return a[Math.min(a.length - 1, Math.floor(a.length * 0.9))]!;
+  return a[Math.min(a.length - 1, Math.floor(a.length * p))]!;
+}
+
+export function p90(values: Float32Array, count: number): number {
+  return percentile(values, count, 0.9);
 }
 
 /** DESIGN.md §10 budgets. Low uses the low-end column; Mid and High use the mid/high column. */

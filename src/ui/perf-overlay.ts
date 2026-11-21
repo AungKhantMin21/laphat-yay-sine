@@ -56,8 +56,10 @@ export function installPerfOverlay(src: PerfSource): void {
     }
   });
 
+  // Sim rate is measured over 2 s windows: at 10 Hz a 250 ms window would read 8 or 12.
   let lastSimFrames = src.simFramesReceived();
   let lastT = performance.now();
+  let simHz = 0;
   const mark = (ok: boolean, s: string): string => (ok ? s : `${s} ✗`);
 
   setInterval(() => {
@@ -75,10 +77,12 @@ export function installPerfOverlay(src: PerfSource): void {
     const mem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
     const heap = mem ? mem.usedJSHeapSize / MB : -1;
     const now = performance.now();
-    const simFrames = src.simFramesReceived();
-    const simHz = ((simFrames - lastSimFrames) * 1000) / (now - lastT);
-    lastSimFrames = simFrames;
-    lastT = now;
+    if (now - lastT >= 2000) {
+      const simFrames = src.simFramesReceived();
+      simHz = ((simFrames - lastSimFrames) * 1000) / (now - lastT);
+      lastSimFrames = simFrames;
+      lastT = now;
+    }
 
     el.textContent = [
       mark(fps >= b.fps * 0.95, `fps     ${fps.toFixed(1)} (p95 ${p95Interval.toFixed(1)} ms)`),

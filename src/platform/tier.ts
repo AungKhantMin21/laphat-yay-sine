@@ -2,7 +2,7 @@
 // `?tier=low|mid|high` forces a tier for testing; a settings override is stored in meta.
 import type { Tier } from '../shared/protocol';
 import { STORE, dbGet, dbPut, safe } from '../shared/db';
-import { BENCH_VERSION, FIRST_RUN_TIER, TIER_NAMES, decideTier, p90, type BenchResult, type DeviceHints } from './tier-policy';
+import { BENCH_VERSION, FIRST_RUN_TIER, TIER_NAMES, decideTier, p90, percentile, type BenchResult, type DeviceHints } from './tier-policy';
 
 export interface DeviceRecord {
   tier: Tier;
@@ -51,7 +51,9 @@ export async function saveTier(tier: Tier, bench: BenchResult | null, override: 
 
 // --- Benchmark ---------------------------------------------------------------------------
 // Each frame adds a 6 ms slice of sim-like typed-array work while the game renders normally.
-// cpuScore = work units per ms; p90FrameMs = frame intervals under that extra load.
+// cpuScore = p75 of per-slice work rates (units per second of slice time) after warm-up, so a
+// few slices on an efficiency core or before JIT optimisation don't drag the score down.
+// p90FrameMs = frame intervals under that extra load.
 
 const SLICE_MS = 6;
 const N = 4096;
@@ -70,12 +72,16 @@ function workUnit(seed: number): number {
   return acc;
 }
 
+/** Frames ignored at the start while the JIT warms up the workload. */
+const WARMUP_FRAMES = 10;
+
 export function runBenchmark(durationMs = 2000): Promise<BenchResult> {
   return new Promise((resolve) => {
     const intervals = new Float32Array(600);
+    const rates = new Float32Array(600);
     let n = 0;
-    let units = 0;
-    let workMs = 0;
+    let r = 0;
+    let frames = 0;
     let start = 0;
     let last = 0;
     let seed = 1;
@@ -85,14 +91,15 @@ export function runBenchmark(durationMs = 2000): Promise<BenchResult> {
       last = now;
       const t0 = performance.now();
       let t = t0;
+      let units = 0;
       while (t - t0 < SLICE_MS) {
         seed = workUnit(seed);
         units++;
         t = performance.now();
       }
-      workMs += t - t0;
+      if (++frames > WARMUP_FRAMES && r < rates.length) rates[r++] = (units * 1000) / (t - t0);
       if (now - start < durationMs) requestAnimationFrame(frame);
-      else resolve({ cpuScore: Math.round((units * 1000) / Math.max(1, workMs)), p90FrameMs: Math.round(p90(intervals, n) * 10) / 10 });
+      else resolve({ cpuScore: Math.round(percentile(rates, r, 0.75)), p90FrameMs: Math.round(p90(intervals, n) * 10) / 10 });
     };
     requestAnimationFrame(frame);
   });
