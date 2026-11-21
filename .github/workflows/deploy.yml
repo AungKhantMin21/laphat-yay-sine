@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time: two runs pushing to the site repo would race.
+concurrency:
+  group: deploy-laphat-yay-sine
+  cancel-in-progress: false
+
+env:
+  SITE_REPO: AungKhantMin21/aungkhantmin21.github.io
+  SITE_BRANCH: master
+  TARGET_DIR: games/laphat-yay-sine
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - run: node tools/check-size.ts dist
+
+      - name: Check out site repo
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.SITE_REPO }}
+          ref: ${{ env.SITE_BRANCH }}
+          token: ${{ secrets.DEPLOY_TOKEN }}
+          path: site
+          fetch-depth: 1
+
+      # --delete is scoped to the game's own folder; nothing else in the site repo is touched.
+      - name: Copy build into games/laphat-yay-sine
+        run: |
+          mkdir -p "site/$TARGET_DIR"
+          rsync -a --delete dist/ "site/$TARGET_DIR/"
+
+      - name: Commit and push (only the game folder)
+        working-directory: site
+        run: |
+          git config user.name "laphat-yay-sine deploy"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- "$TARGET_DIR"
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+            exit 0
+          fi
+          # Refuse to push if anything outside the game folder is staged.
+          if git diff --cached --name-only | grep -v "^$TARGET_DIR/"; then
+            echo "Refusing: changes outside $TARGET_DIR" >&2
+            exit 1
+          fi
+          git commit -m "Deploy laphat-yay-sine ${GITHUB_SHA::7}"
+          for i in 1 2 3; do
+            git push origin "HEAD:$SITE_BRANCH" && exit 0
+            git pull --rebase origin "$SITE_BRANCH"
+          done
+          exit 1
