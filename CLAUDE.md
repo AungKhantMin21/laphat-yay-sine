@@ -1,5 +1,8 @@
 # Laphat Yay Sine — working rules
 
+**New session? Read docs/STATUS.md first** — current milestone, decisions made with the user, how to run checks.
+Update docs/STATUS.md at the end of every milestone (and before the user clears context).
+
 DESIGN.md is the source of truth for **what** we build. docs/ARCHITECTURE.md is the source of truth for **how**.
 Read both before planning a milestone. docs/RISKS.md lists known device pitfalls. New ideas go to BACKLOG.md, not into code.
 
