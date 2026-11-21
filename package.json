@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json",
+    "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json && tsc -p tsconfig.test.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "check": "npm run typecheck && npm run lint && npm test",

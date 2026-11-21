@@ -1,8 +1,14 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022", "WebWorker"],
+    "lib": [
+      "ES2022",
+      "WebWorker"
+    ],
     "types": []
   },
-  "include": ["src/sim/**/*.ts", "src/shared/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/sim/**/*.ts",
+    "src/shared/**/*.ts"
+  ]
 }

@@ -1,5 +1,20 @@
 {
   "game.title": "လက်ဖက်ရည်ဆိုင်",
   "rotate.prompt": "ဖုန်းကို အလျားလိုက် လှည့်ထားပေးပါ",
-  "debug.fontSample": "မင်္ဂလာပါ · သတ္တဝါ · ကျွန်ုပ် · ဗုဒ္ဓ · ပြည်ထောင်စု · ꩠꩡꩢ ꧠꧡ"
+  "debug.fontSample": "မင်္ဂလာပါ · သတ္တဝါ · ကျွန်ုပ် · ဗုဒ္ဓ · ပြည်ထောင်စု · ꩠꩡꩢ ꧠꧡ",
+  "obj.stool": "ခုံပု",
+  "obj.chair": "ကုလားထိုင်",
+  "obj.bench": "ခုံရှည်",
+  "obj.table": "စားပွဲပု",
+  "obj.table_long": "စားပွဲရှည်",
+  "obj.counter": "ကောင်တာ",
+  "obj.shelf": "စင်",
+  "obj.rug": "ကော်ဇော",
+  "obj.radio": "ရေဒီယို",
+  "obj.pot_plant": "အပင်အိုး",
+  "obj.teapot": "ရေနွေးကရား",
+  "obj.wall_clock": "နံရံကပ်နာရီ",
+  "obj.poster": "ပိုစတာ",
+  "obj.ceiling_fan": "မျက်နှာကြက်ပန်ကာ",
+  "obj.hanging_lamp": "ဆွဲမီး"
 }

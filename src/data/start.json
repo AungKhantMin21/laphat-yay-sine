@@ -1,0 +1,20 @@
+{
+  "money": 20000,
+  "inventory": {
+    "stool": 8,
+    "chair": 2,
+    "bench": 1,
+    "table": 3,
+    "table_long": 1,
+    "counter": 1,
+    "shelf": 1,
+    "rug": 1,
+    "radio": 1,
+    "pot_plant": 2,
+    "teapot": 2,
+    "wall_clock": 1,
+    "poster": 1,
+    "ceiling_fan": 1,
+    "hanging_lamp": 2
+  }
+}

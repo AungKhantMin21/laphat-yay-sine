@@ -1,0 +1,33 @@
+{
+  "ramps": [
+    ["e98a5e", "c85a44", "9a3a30"],
+    ["f0c060", "d9a05b", "a98258"],
+    ["94b37a", "6b8f5a", "46573a"],
+    ["5e9a8e", "3c6e6a", "2c3440"],
+    ["9aa6ae", "6a7884", "44505c"],
+    ["fff8ea", "ecd3a5", "c8a46e"],
+    ["a98258", "8a6644", "6e4e36"],
+    ["6a7884", "4a3a5a", "2a1d18"]
+  ],
+  "zoneBase": {
+    "roof": { "cover": 4, "shade": 3, "light": 1 },
+    "open": { "light": 4 }
+  },
+  "objects": [
+    { "key": "stool", "w": 1, "h": 1, "layer": "furniture", "price": 3000, "rots": 1, "seat": 1, "recolour": true, "props": { "comfort": [1, 0] } },
+    { "key": "chair", "w": 1, "h": 1, "layer": "furniture", "price": 5000, "rots": 4, "seat": 1, "recolour": true, "props": { "comfort": [2, 0] } },
+    { "key": "bench", "w": 2, "h": 1, "layer": "furniture", "price": 8000, "rots": 2, "seat": 2, "recolour": true, "props": { "comfort": [2, 0] } },
+    { "key": "table", "w": 1, "h": 1, "layer": "furniture", "price": 6000, "rots": 1, "surface": 8, "recolour": true, "props": {} },
+    { "key": "table_long", "w": 2, "h": 1, "layer": "furniture", "price": 10000, "rots": 2, "surface": 10, "recolour": true, "props": {} },
+    { "key": "counter", "w": 2, "h": 1, "layer": "furniture", "price": 20000, "rots": 4, "surface": 14, "recolour": true, "props": { "smell": [1, 2] } },
+    { "key": "shelf", "w": 1, "h": 1, "layer": "furniture", "price": 9000, "rots": 4, "recolour": true, "props": { "beauty": [1, 1] } },
+    { "key": "rug", "w": 2, "h": 2, "layer": "floor", "price": 7000, "rots": 2, "recolour": true, "props": { "comfort": [1, 0], "beauty": [1, 1] } },
+    { "key": "radio", "w": 1, "h": 1, "layer": "furniture", "price": 15000, "rots": 4, "small": true, "props": { "noise": [3, 3] } },
+    { "key": "pot_plant", "w": 1, "h": 1, "layer": "furniture", "price": 4000, "rots": 1, "small": true, "recolour": true, "props": { "beauty": [2, 2], "smell": [1, 1], "noise": [-1, 1] } },
+    { "key": "teapot", "w": 1, "h": 1, "layer": "furniture", "price": 2500, "rots": 2, "small": true, "recolour": true, "props": { "smell": [2, 1], "warmth": [1, 0] } },
+    { "key": "wall_clock", "w": 1, "h": 1, "layer": "wall", "price": 6000, "rots": 2, "props": { "beauty": [1, 1] } },
+    { "key": "poster", "w": 1, "h": 1, "layer": "wall", "price": 2000, "rots": 2, "recolour": true, "props": { "beauty": [2, 1] } },
+    { "key": "ceiling_fan", "w": 1, "h": 1, "layer": "ceiling", "price": 25000, "rots": 1, "props": { "warmth": [-3, 2], "comfort": [1, 1], "noise": [1, 1] } },
+    { "key": "hanging_lamp", "w": 1, "h": 1, "layer": "ceiling", "price": 8000, "rots": 1, "recolour": true, "props": { "light": [4, 3], "warmth": [1, 1] } }
+  ]
+}
