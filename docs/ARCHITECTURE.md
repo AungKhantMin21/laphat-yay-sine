@@ -123,7 +123,7 @@ type FromSim =
 ### Frame buffer layout (`shared/diff.ts`, little-endian, 4-byte aligned)
 
 ```
-Header   16 B: u16 version | u16 flags | u32 tick | u32 gameMinute | u16 sectionCount | u16 _
+Header   16 B: u16 version | u16 flags | u32 tick | u32 gameMinute | u16 sectionCount | u16 workCentiMs (sim time for this frame, 1/100 ms)
 Section   8 B: u8 kind | u8 _ | u16 count | u32 payloadBytes, then payload (padded to 4)
 
 kind 1 NPC_SPAWN    12 B each: u32 handle | u16 def | u8 area | u8 look | i16 x | i16 y
