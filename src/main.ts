@@ -10,6 +10,13 @@ import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
 import { Recolourer } from './render/recolour';
 import { Texture } from 'pixi.js';
+import { Ghost } from './render/ghost';
+import { BuildController } from './game/build-mode';
+import { installBuildUi } from './ui/build/build-ui';
+import { installBuildKeys } from './input/keyboard';
+import { requestPersistentStorage } from './platform/persist';
+import { CATALOG, spriteFrame } from './shared/catalog';
+import { tileAtX, tileAtY } from './shared/iso';
 import { Camera } from './render/camera';
 import { installGestures } from './input/pointer';
 import { FrameLoop } from './game/loop';
@@ -43,13 +50,15 @@ const camera = new Camera();
 
 const view = new WorldView();
 const objects = new ObjectLayer(view, atlas, new Recolourer(atlas));
-stage.world.addChild(objects.floorLayer, objects.layer);
+const ghost = new Ghost(objects, objects.layer);
+stage.world.addChild(objects.floorLayer, ghost.marks, objects.layer);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
 let musicPinned: TrackId | null = null;
 const pickMusic = (): void => music.play(musicPinned ?? trackFor(Math.floor(view.gameMinute / 60) % 24, false));
 
-const bridge = new SimBridge(view, {
+const bridge: SimBridge = new SimBridge(view, {
+  onState: () => buildUi.refresh(),
   onReady: () => {
     showTitleCard();
     requestAnimationFrame(() => {
@@ -64,12 +73,44 @@ const bridge = new SimBridge(view, {
 const tierState = await loadTier();
 bridge.init(tierState.tier);
 
+/** CSS point → world pixels (the canvas fills the viewport from 0,0). */
+const toWorld = (x: number, y: number): [number, number] => {
+  const k = stage.size.devPerCss / stage.size.scale;
+  return [x * k - stage.world.x, y * k - stage.world.y];
+};
+
+const build = new BuildController({
+  view,
+  bridge,
+  objects,
+  ghost,
+  toWorld,
+  centreTile: () => [tileAtX(camera.x, camera.y), tileAtY(camera.x, camera.y)],
+  onFirstBuild: () => void requestPersistentStorage(),
+});
+const buildUi = installBuildUi(
+  build,
+  () => bridge.player,
+  (type) => {
+    const def = CATALOG.defs[type];
+    const f = def && atlas.frames.get(spriteFrame(def, 0));
+    return f ? { url: atlas.url, x: f[0], y: f[1], w: f[2], h: f[3] } : null;
+  },
+);
+installBuildKeys(build);
+
 installGestures(stageEl, {
   pan: (dx, dy) => {
     const k = stage.size.devPerCss / stage.size.scale; // world px per CSS px
     camera.pan(-dx * k, -dy * k);
   },
   zoomStep: (dir) => stage.setZoom(stage.size.zoom + dir),
+  tap: (x, y, type) => {
+    if (build.open) build.tap(x, y, type);
+  },
+  hover: (x, y) => build.hover(x, y),
+  dragStart: (x, y) => build.dragStart(x, y),
+  dragMove: (x, y) => build.dragMove(x, y),
 });
 
 const debug = new URLSearchParams(location.search).has('debug');
@@ -84,7 +125,8 @@ const loop = new FrameLoop({
       chunks.markDirty(view.tilesDirty);
       view.tilesDirty.clear();
     }
-    objects.sync();
+    // The world changed under the ghost (or the selected object moved): re-validate.
+    if (objects.sync() && build.open) build.refresh();
     camera.apply(stage.world, stage.size);
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
@@ -145,4 +187,4 @@ if (debug) {
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, build } });

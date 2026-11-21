@@ -11,6 +11,8 @@ export interface Atlas {
   frames: Map<string, [number, number, number, number]>;
   /** CPU copy of the atlas pixels (recolouring and pixel-accurate picking). */
   pixels: ImageData;
+  /** URL of the loaded atlas image (UI icons use it as a CSS sprite). */
+  url: string;
   get(name: string): Texture | undefined;
 }
 
@@ -37,10 +39,12 @@ async function supportsWebp(): Promise<boolean> {
 
 export async function loadAtlas(): Promise<Atlas> {
   let img: HTMLImageElement;
+  let url = (await supportsWebp()) ? webpUrl : pngUrl;
   try {
-    img = await loadImage((await supportsWebp()) ? webpUrl : pngUrl);
+    img = await loadImage(url);
   } catch {
-    img = await loadImage(pngUrl);
+    url = pngUrl;
+    img = await loadImage(url);
   }
   const base = Texture.from(img);
   base.source.scaleMode = 'nearest';
@@ -58,7 +62,7 @@ export async function loadAtlas(): Promise<Atlas> {
   const g = c.getContext('2d', { willReadFrequently: true })!;
   g.drawImage(img, 0, 0);
   const pixels = g.getImageData(0, 0, img.width, img.height);
-  return { textures, frames, pixels, get: (name) => textures.get(name) };
+  return { textures, frames, pixels, url, get: (name) => textures.get(name) };
 }
 
 /** Floor textures indexed by FLOOR type, from src/data/floors.json. Missing frames → EMPTY. */

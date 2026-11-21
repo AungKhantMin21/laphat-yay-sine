@@ -40,9 +40,11 @@ export class ObjectLayer {
     this.floorLayer.sortableChildren = true;
   }
 
-  /** Apply the view's object changes since the last frame. */
-  sync(): void {
+  /** Apply the view's object changes since the last frame. Returns true if anything changed. */
+  sync(): boolean {
     const v = this.view;
+    const changed = v.objResync || v.objRemovedCount > 0 || v.objChanged.length > 0;
+    if (!changed) return false;
     if (v.objResync) {
       v.objResync = false;
       for (let i = 0; i < this.sprites.length; i++) this.drop(i);
@@ -50,7 +52,7 @@ export class ObjectLayer {
       for (let i = 1; i < s.capacity; i++) if (s.live[i]) this.update(i);
       v.objRemovedCount = 0;
       v.objChanged.clear();
-      return;
+      return true;
     }
     for (let k = 0; k < v.objRemovedCount; k++) {
       const i = handleIndex(v.objRemoved[k]!);
@@ -60,6 +62,7 @@ export class ObjectLayer {
     const q = v.objChanged;
     for (let k = 0; k < q.length; k++) this.update(q.list[k]!);
     q.clear();
+    return true;
   }
 
   /** Topmost object slot under a world-pixel point (pixel-accurate), or 0. */
