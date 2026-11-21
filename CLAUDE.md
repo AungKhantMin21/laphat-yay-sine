@@ -81,6 +81,12 @@ Daily check: Chrome DevTools with 6× CPU throttling and the perf overlay (`?deb
 - All randomness comes from `shared/rng.ts` streams seeded by the save. Never `Math.random()` in `sim/`.
 - Calm rules are hard constraints: no failure state, no debt or bankruptcy, nothing lost, no punishing timers or streaks.
 
+## World, build and saves
+- Placement rules live only in `shared/rules/placement.ts` (worker and ghost both use it). Don't duplicate them.
+- Wire ids are handles, arrays use slots, history and saves use uids. Never store a slot or handle anywhere durable.
+- Saves store object keys, never type ids. Changing the save layout = new parser + migration; never edit old ones.
+- Anything a player made must never be lost: unreadable saves are moved aside, not overwritten.
+
 ## Workflow
 
 - One feature per session; plan mode first; commit after each working step.

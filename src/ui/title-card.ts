@@ -17,7 +17,7 @@ export function showFontSample(): void {
   const ui = document.getElementById('ui');
   if (!ui) return;
   const el = document.createElement('p');
-  el.className = 'font-sample';
+  el.className = 'font-sample debug-only';
   el.textContent = t('debug.fontSample');
   ui.appendChild(el);
 }

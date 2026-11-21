@@ -6,6 +6,7 @@ export function installMusicDebug(music: MusicPlayer, onPick: (id: TrackId) => v
   const ui = document.getElementById('ui');
   if (!ui) return;
   const box = document.createElement('div');
+  box.className = 'debug-only';
   box.style.cssText =
     'position:absolute;right:calc(var(--safe-r) + 6px);top:calc(var(--safe-t) + 6px);display:flex;flex-direction:column;gap:4px;font:11px/1 ui-monospace,Menlo,monospace';
   const status = document.createElement('div');

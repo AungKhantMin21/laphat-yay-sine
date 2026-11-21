@@ -82,42 +82,44 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol v4 as of M1). Summary:
+
 ### Main → Worker
 
 ```ts
 type ToSim =
-  | { t: 'init'; v: number; seed: number; tier: 0 | 1 | 2; nowMs: number; saveSlot: number; shareCode?: string }
-  | { t: 'clock'; running: boolean; nowMs: number }   // menus / hidden tab pause; resume checks for catch-up
-  | { t: 'viewport'; area: number; x0: number; y0: number; x1: number; y1: number } // Near vs Far LOD
-  | { t: 'subscribe'; grids: number }                 // bitmask of property grids to stream (build overlay)
-  | { t: 'act'; seq: number; a: Action }
+  | { t: 'init'; v; tier; nowMs; saveSlot; seed?; shareCode? } // worker loads the slot or starts a new game
+  | { t: 'clock'; running; nowMs }       // menus / hidden tab pause; resume checks for catch-up
+  | { t: 'tier'; tier }
+  | { t: 'viewport'; area; x0; y0; x1; y1 } // Near vs Far LOD (M4)
+  | { t: 'subscribe'; grids }            // bitmask of property grids to stream (heat overlay)
+  | { t: 'act'; seq; a: Action }
   | { t: 'save'; reason: 'auto' | 'hidden' | 'manual' }
-  | { t: 'recycle'; buf: ArrayBuffer };               // transferred back
+  | { t: 'exportSave' } | { t: 'importSave'; code }
+  | { t: 'give'; type; qty }             // debug
+  | { t: 'recycle'; buf: ArrayBuffer };  // transferred back
 
 type Action =
-  | { k: 'place'; type: number; x: number; y: number; rot: number; colour: number; parent: number }
-  | { k: 'move'; id: number; x: number; y: number; rot: number; parent: number }
-  | { k: 'rotate'; id: number; rot: number }
-  | { k: 'recolour'; id: number; colour: number }
-  | { k: 'sell'; id: number }
-  | { k: 'undo' } | { k: 'redo' }
-  | { k: 'walkTo'; x: number; y: number }
-  | { k: 'interact'; id: number }
-  | { k: 'buy'; shop: number; item: number; qty: number }; // M3+
+  | { k: 'place'; type; x; y; rot; colour } // the worker works out the surface (parent) itself
+  | { k: 'move'; id; x; y; rot } | { k: 'rotate'; id; rot } | { k: 'recolour'; id; colour }
+  | { k: 'pickup'; id } | { k: 'sell'; id } | { k: 'undo' } | { k: 'redo' }
+  | { k: 'walkTo'; x; y } | { k: 'interact'; id } | { k: 'buy'; shop; item; qty }; // M2+
+// ids on the wire are object handles (index + generation).
 ```
 
 ### Worker → Main
 
 ```ts
 type FromSim =
-  | { t: 'ready'; v: number; area: number; w: number; h: number; snapshot: ArrayBuffer } // full mirror, once per area load
-  | { t: 'frame'; buf: ArrayBuffer }                   // transferred, 10 Hz
-  | { t: 'ack'; seq: number; ok: boolean; reason?: string; id?: number } // reason is a text key
-  | { t: 'events'; list: SimEvent[] }                  // money, gossip key, listing, dayEnd, teaser
-  | { t: 'catchup'; done: number; total: number }
-  | { t: 'away'; summary: AwaySummary }
-  | { t: 'saved'; reason: string; ok: boolean }
-  | { t: 'error'; msg: string };
+  | { t: 'ready'; v; area; w; h; snapshot: ArrayBuffer } // full mirror: boot and after a save code import
+  | { t: 'frame'; buf: ArrayBuffer }       // transferred, 10 Hz (plus one right after a build action)
+  | { t: 'ack'; seq; ok; reason?; id? }    // reason = i18n key; id = handle of the placed/moved object
+  | { t: 'state'; state: PlayerState }     // money, inventory, canUndo, canRedo — on change
+  | { t: 'loaded'; fresh; awayDays; skipped }
+  | { t: 'exported'; code } | { t: 'imported'; ok; reason? }
+  | { t: 'events'; list: SimEvent[] }      // money, gossip key, listing, dayEnd, teaser (M2+)
+  | { t: 'catchup'; done; total } | { t: 'away'; summary }
+  | { t: 'saved'; reason; ok } | { t: 'error'; msg; fatal? };
 ```
 
 ### Frame buffer layout (`shared/diff.ts`, little-endian, 4-byte aligned)
@@ -162,10 +164,12 @@ Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick wi
 | Grid | Type | Notes |
 | --- | --- | --- |
 | `floor` | Uint8 | floor tile type |
-| `wall` | Uint8 | bits N/E/S/W + door/window flags |
-| `occupancy` | Uint16 | object index on the furniture layer, 0 = free |
-| `walkCost` | Uint8 | derived, 255 = blocked; rebuilt locally on change |
-| `zone` | Uint8 | shop interior, pavement, player-owned bits |
+| `wall` | Uint8 | `WALL.n` / `WALL.w`: back wall on the tile's −y / −x edge (cutaway view) |
+| `zone` | Uint8 | `ZONE.owned`, `ZONE.roof` |
+| occupancy × 6 | Uint16 | object slot per tile (0 = free): `floor`, `furniture`, `ceiling`, `stack` (small item on a surface), `wallN`, `wallW` |
+| `walkCost` | Uint8 | derived, 255 = blocked (M3) |
+
+Area grids, the object store and occupancy live in `shared/world-state.ts` and are used by both threads: the worker's `sim/world.ts` (authority, change tracking) and the main thread's `game/view.ts` (mirror, filled from frames). Because handles carry the slot index, mirror slots equal worker slots.
 
 ### Property grids
 
@@ -173,13 +177,18 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 
 - Worker keeps `accum[p]: Int16Array(W*H)` (exact sums, so removing an object subtracts precisely) and `value[p]: Uint8Array(W*H)` = clamp(accum, 0, 255). Rules, NPCs and the main thread read `value`.
 - Units: **16 per design level**. DESIGN's "noise < 2" means `value < 32`. Max ≈ 15.9 levels.
-- Each object type has a precomputed **stamp** per property: an Int8 kernel, radius ≤ 4 (9×9), distance falloff baked in when data loads. Place = add stamp; remove = subtract; then re-clamp only the dirty rect.
+- Each object adds `falloff(level·16, radius, d)` per property, where d is the distance to its nearest footprint tile (full on the footprint, linear to 0 just past the radius ≤ 4). Place = add; remove = subtract; then re-clamp only the dirty rect (`sim/grids/property-grids.ts`).
+- Area base: roofed tiles get `zoneBase.roof`, open tiles `zoneBase.open` (objects.json).
 - Need checks run over the dirty rect + radius only, never the whole grid.
 - Memory at 128×96: 8 × (24 KB + 12 KB) ≈ 300 KB per area.
 
 ### Objects (capacity 4096)
 
-`type u16 · x u8 · y u8 · rot u8 · layer u8 (floor / furniture / wall / ceiling) · colour u8 (palette index) · flags u8 · parent u16 (stacked-on index) · gen u16`, plus a free list (Uint16 stack). Footprint (1×1 to 3×2) comes from type data, rotated.
+`live u8 · gen u16 · uid u32 · type u16 · x u8 · y u8 · rot u8 · layer u8 (floor / furniture / wall / ceiling) · colour u8 (recolour ramp) · flags u8 · parent u16 (slot of the surface below)`, plus a free list. Footprint (1×1 to 3×2) comes from `objects.json`, rotated (odd rotations swap w/h).
+
+- **uid** is a stable id that is never reused (saved, and restored by undo/redo). History and saves refer to uids; the wire uses handles; arrays use slots.
+- Placement rules: `shared/rules/placement.ts`, one allocation-free function used by the worker (authority) and the build ghost.
+- Build commands: `sim/build/builder.ts`. Every command is a record of objects before/after plus inventory and money deltas; undo runs it backwards (100 steps). A surface carries the items standing on it.
 
 ### NPCs (capacity 256: ~40 named + passers-by)
 
@@ -198,7 +207,11 @@ One save seed → independent mulberry32 **streams** per subsystem: `market`, `n
 
 Database `laphat`:
 
-- `saves`: slot → `{ schema, seed, realTime, gameMinute, rng: number[], blobs: { floor, wall, objects…: ArrayBuffer (sliced to live count) }, tables: { …plain JSON } }`
-- `meta`: settings and device tier (written by the main thread)
+- `saves`: `slot0` → binary save (`sim/save/format.ts`). An unreadable save is moved to `slot0.broken.<time>`, never overwritten.
+- `meta`: device tier and settings (main thread).
 
-Property grids are **not saved**; they are rebuilt from objects on load. `schema` is a number with ordered migrations in `sim/save/migrations/`.
+Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
+
+- To change the format: add `PARSERS[n]` and `MIGRATIONS[n-1]`; never edit old ones.
+- Autosave every game hour, 5 s after building, on `visibilitychange: hidden` and `pagehide`.
+- Save code = `LYS1.` + base64url of the binary save (≈ 24 bytes per object). Share links (M6) need compression to meet DESIGN's 2,000-character target.

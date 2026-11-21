@@ -270,3 +270,8 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Debug widgets step aside while building, so they don't cover the HUD on phones. */
+body.building .debug-only {
+  display: none !important;
+}

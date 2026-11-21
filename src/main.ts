@@ -117,7 +117,10 @@ const settings = installSettings({
   importSave: (code) => bridge.importSave(code),
   hidden: () => build.open,
 });
-build.onChange(() => settings.refresh());
+build.onChange(() => {
+  settings.refresh();
+  document.body.classList.toggle('building', build.open);
+});
 
 installGestures(stageEl, {
   pan: (dx, dy) => {
@@ -198,7 +201,8 @@ if (debug) {
     stats: loop.stats,
     drawCalls: () => draws?.last ?? 0,
     textureBytes: () =>
-      estimateTextureBytes({ atlasPx: 1024 * 1024, worldW: stage.size.w, worldH: stage.size.h, devW: stage.size.devW, devH: stage.size.devH, chunkBytes: chunks.textureBytes }),
+      estimateTextureBytes({ atlasPx: 2 * 1024 * 1024, // sprite atlas + recolour atlas
+        worldW: stage.size.w, worldH: stage.size.h, devW: stage.size.devW, devH: stage.size.devH, chunkBytes: chunks.textureBytes }),
     simWorkMs: () => view.simWorkMs,
     simFramesReceived: () => bridge.framesReceived,
     budget: () => BUDGETS[device.tier],
