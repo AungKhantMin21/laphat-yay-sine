@@ -5,7 +5,14 @@ import atlasJson from '../../assets/atlas/atlas-0.json';
 import webpUrl from '../../assets/atlas/atlas-0.webp?url';
 import pngUrl from '../../assets/atlas/atlas-0.png?url';
 
-export type Atlas = Map<string, Texture>;
+export interface Atlas {
+  textures: Map<string, Texture>;
+  /** Frame rects in atlas pixels. */
+  frames: Map<string, [number, number, number, number]>;
+  /** CPU copy of the atlas pixels (recolouring and pixel-accurate picking). */
+  pixels: ImageData;
+  get(name: string): Texture | undefined;
+}
 
 // 1×1 lossless WebP.
 const WEBP_PROBE = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==';
@@ -38,12 +45,20 @@ export async function loadAtlas(): Promise<Atlas> {
   const base = Texture.from(img);
   base.source.scaleMode = 'nearest';
   base.source.autoGenerateMipmaps = false;
-  const out: Atlas = new Map();
+  const textures = new Map<string, Texture>();
+  const frames = new Map<string, [number, number, number, number]>();
   for (const [name, f] of Object.entries(atlasJson.frames as Record<string, number[]>)) {
     const [x = 0, y = 0, w = 0, h = 0] = f;
-    out.set(name, new Texture({ source: base.source, frame: new Rectangle(x, y, w, h) }));
+    textures.set(name, new Texture({ source: base.source, frame: new Rectangle(x, y, w, h) }));
+    frames.set(name, [x, y, w, h]);
   }
-  return out;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0);
+  const pixels = g.getImageData(0, 0, img.width, img.height);
+  return { textures, frames, pixels, get: (name) => textures.get(name) };
 }
 
 /** Floor textures indexed by FLOOR type, from src/data/floors.json. Missing frames → EMPTY. */

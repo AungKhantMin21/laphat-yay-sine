@@ -2,6 +2,7 @@
 // Only chunks near the view hold a render texture; the rest go back to a small pool.
 import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { HALF_H, HALF_W, isoX, isoY } from '../shared/iso';
+import { WALL } from '../shared/layout';
 import { SpatialHash } from './cull';
 import type { DirtyRect } from '../game/view';
 
@@ -10,6 +11,8 @@ export const CHUNK = 8;
 export const PAD_TOP = 64;
 const CHUNK_W = CHUNK * 2 * HALF_W; // 256
 const CHUNK_H = CHUNK * 2 * HALF_H + PAD_TOP; // 192
+/** Back-wall sprite headroom (art/ART_STYLE.md). */
+export const WALL_H = 40;
 
 interface Chunk {
   sprite: Sprite;
@@ -31,13 +34,17 @@ export class FloorChunks {
   // One scratch container of CHUNK² sprites reused to draw every chunk.
   private readonly scratch = new Container();
   private readonly scratchTiles: Sprite[] = [];
+  private readonly scratchWalls: Sprite[] = [];
   private floor: Uint8Array = new Uint8Array(0);
+  private wall: Uint8Array = new Uint8Array(0);
   private areaW = 0;
   private areaH = 0;
 
   constructor(
     private readonly renderer: Renderer,
     private readonly tiles: Texture[],
+    /** Back-wall textures: [north edge, west edge]. */
+    private readonly walls: [Texture, Texture],
     /** Max chunk textures alive at once (each 256×192 RGBA ≈ 192 KB). */
     private maxLive = 48,
   ) {
@@ -47,10 +54,17 @@ export class FloorChunks {
       this.scratchTiles.push(s);
       this.scratch.addChild(s);
     }
+    for (let i = 0; i < CHUNK * CHUNK * 2; i++) {
+      const s = new Sprite();
+      s.roundPixels = true;
+      this.scratchWalls.push(s);
+      this.scratch.addChild(s);
+    }
   }
 
   /** Call when a new area loads. */
-  setArea(floor: Uint8Array, w: number, h: number): void {
+  setArea(floor: Uint8Array, wall: Uint8Array, w: number, h: number): void {
+    this.wall = wall;
     for (const c of this.chunks) this.release(c);
     this.layer.removeChildren().forEach((c) => c.destroy());
     this.floor = floor;
@@ -145,6 +159,23 @@ export class FloorChunks {
         s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H);
       }
     }
+    // Back walls after all floors: west edges, then north edges, back to front.
+    let wk = 0;
+    for (let j = 0; j < CHUNK; j++) {
+      for (let i = 0; i < CHUNK; i++) {
+        const tx = cx * CHUNK + i;
+        const ty = cy * CHUNK + j;
+        const bits = tx < W && ty < this.areaH ? this.wall[ty * W + tx]! : 0;
+        for (let side = 0; side < 2; side++) {
+          if (!(bits & (side === 0 ? WALL.w : WALL.n))) continue;
+          const s = this.scratchWalls[wk++]!;
+          s.texture = this.walls[side === 0 ? 1 : 0];
+          s.visible = true;
+          s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - WALL_H);
+        }
+      }
+    }
+    for (let k = wk; k < this.scratchWalls.length; k++) this.scratchWalls[k]!.visible = false;
     this.renderer.render({ container: this.scratch, target: rt, clear: true, clearColor: [0, 0, 0, 0] });
   }
 

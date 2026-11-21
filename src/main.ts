@@ -7,6 +7,9 @@ import { floorTextures, loadAtlas } from './render/atlas';
 import floorFrames from './data/floors.json';
 import { FLOOR_TYPES } from './shared/layout';
 import { FloorChunks } from './render/chunks';
+import { ObjectLayer } from './render/objects';
+import { Recolourer } from './render/recolour';
+import { Texture } from 'pixi.js';
 import { Camera } from './render/camera';
 import { installGestures } from './input/pointer';
 import { FrameLoop } from './game/loop';
@@ -30,12 +33,17 @@ installLandscapeLock();
 const stageEl = document.getElementById('stage')!;
 const stage = await createPixelStage(stageEl);
 const atlas = await loadAtlas();
-const chunks = new FloorChunks(stage.renderer, floorTextures(atlas, floorFrames, FLOOR_TYPES));
+const chunks = new FloorChunks(stage.renderer, floorTextures(atlas, floorFrames, FLOOR_TYPES), [
+  atlas.get('wall/n') ?? Texture.EMPTY,
+  atlas.get('wall/w') ?? Texture.EMPTY,
+]);
 stage.world.addChild(chunks.layer);
 stage.onContextRestored(() => chunks.invalidateAll());
 const camera = new Camera();
 
 const view = new WorldView();
+const objects = new ObjectLayer(view, atlas, new Recolourer(atlas));
+stage.world.addChild(objects.floorLayer, objects.layer);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
 let musicPinned: TrackId | null = null;
@@ -48,7 +56,7 @@ const bridge = new SimBridge(view, {
       pickMusic();
       setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
     });
-    chunks.setArea(view.area.floor, view.area.w, view.area.h);
+    chunks.setArea(view.area.floor, view.area.wall, view.area.w, view.area.h);
     camera.setArea(view.area.w, view.area.h);
     camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
   },
@@ -76,6 +84,7 @@ const loop = new FrameLoop({
       chunks.markDirty(view.tilesDirty);
       view.tilesDirty.clear();
     }
+    objects.sync();
     camera.apply(stage.world, stage.size);
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
@@ -136,4 +145,4 @@ if (debug) {
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects } });
