@@ -58,7 +58,9 @@ Vite `build.target` is set to match. Anything newer than these (e.g. `dvh` units
 
 ## Performance budgets
 
-A milestone is not done until the low tier meets these on a real low-end phone.
+A milestone is not done until the Low tier meets these under Chrome DevTools 6× CPU throttling with the perf overlay.
+Real-device checks (2 GB Android, mid Android, iPhone, tablet, desktop browsers) are batched into the M6
+device-matrix pass (decided 21 Nov 2026), so keep docs/RISKS.md in mind while building.
 
 | Metric                        | Low-end phone | Mid / high device |
 | ----------------------------- | ------------- | ----------------- |
