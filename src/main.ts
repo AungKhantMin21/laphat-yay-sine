@@ -15,7 +15,9 @@ import { SimBridge } from './game/bridge';
 import { isoX, isoY } from './shared/iso';
 import type { Tier } from './shared/protocol';
 import { loadTier, runBenchmark, saveTier, deviceHints, decideTier } from './platform/tier';
-import { TIER_SETTINGS } from './platform/tier-policy';
+import { BUDGETS, TIER_NAMES, TIER_SETTINGS } from './platform/tier-policy';
+import { DrawCallCounter, estimateTextureBytes } from './render/gl-stats';
+import { installPerfOverlay } from './ui/perf-overlay';
 
 translateDom();
 installTouchGuard();
@@ -49,10 +51,14 @@ installGestures(stageEl, {
   zoomStep: (dir) => stage.setZoom(stage.size.zoom + dir),
 });
 
+const debug = new URLSearchParams(location.search).has('debug');
+const draws = debug ? new DrawCallCounter(stage.renderer) : null;
+
 const loop = new FrameLoop({
   update: () => undefined,
   render: () => {
     if (!bridge.isReady) return;
+    draws?.beginFrame();
     if (!view.floorDirty.empty) {
       chunks.markDirty(view.floorDirty);
       view.floorDirty.clear();
@@ -61,6 +67,7 @@ const loop = new FrameLoop({
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
     stage.render();
+    draws?.endFrame();
   },
   onHidden: () => {
     bridge.setRunning(false);
@@ -92,6 +99,23 @@ if (tierState.needsBench) {
     device.bench = bench;
     applyTier(t);
   }, 1000);
+}
+
+if (debug) {
+  installPerfOverlay({
+    stats: loop.stats,
+    drawCalls: () => draws?.last ?? 0,
+    textureBytes: () =>
+      estimateTextureBytes({ atlasPx: 1024 * 1024, worldW: stage.size.w, worldH: stage.size.h, devW: stage.size.devW, devH: stage.size.devH, chunkBytes: chunks.textureBytes }),
+    simWorkMs: () => view.simWorkMs,
+    simFramesReceived: () => bridge.framesReceived,
+    budget: () => BUDGETS[device.tier],
+    info: () => [
+      `tier    ${TIER_NAMES[device.tier]} (${device.source}${device.bench ? `, cpu ${device.bench.cpuScore}, p90 ${device.bench.p90FrameMs} ms` : ''})`,
+      `view    ${stage.size.w}×${stage.size.h} ×${stage.size.scale} (zoom ${stage.size.zoom}), dpr ${stage.size.devPerCss.toFixed(2)}`,
+      `chunks  ${chunks.liveTextures} live · day ${view.day} ${String(Math.floor(view.gameMinute / 60) % 24).padStart(2, '0')}:${String(view.gameMinute % 60).padStart(2, '0')}`,
+    ],
+  });
 }
 
 if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device } });

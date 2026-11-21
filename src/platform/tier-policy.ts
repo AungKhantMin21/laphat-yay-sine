@@ -66,3 +66,17 @@ export function p90(values: Float32Array, count: number): number {
   const a = Array.from(values.subarray(0, count)).sort((x, y) => x - y);
   return a[Math.min(a.length - 1, Math.floor(a.length * 0.9))]!;
 }
+
+/** DESIGN.md §10 budgets. Low uses the low-end column; Mid and High use the mid/high column. */
+export interface Budget {
+  fps: number;
+  frameMs: number;
+  drawCalls: number;
+  textureMB: number;
+  heapMB: number;
+}
+export const BUDGETS: Record<Tier, Budget> = {
+  0: { fps: 30, frameMs: 25, drawCalls: 40, textureMB: 48, heapMB: 100 },
+  1: { fps: 60, frameMs: 12, drawCalls: 80, textureMB: 96, heapMB: 150 },
+  2: { fps: 60, frameMs: 12, drawCalls: 80, textureMB: 96, heapMB: 150 },
+};
