@@ -54,8 +54,7 @@ const bridge = new SimBridge(view, {
   },
 });
 const tierState = await loadTier();
-const seed = crypto.getRandomValues(new Uint32Array(1))[0]!; // M1: from the save
-bridge.init(seed, tierState.tier);
+bridge.init(tierState.tier);
 
 installGestures(stageEl, {
   pan: (dx, dy) => {

@@ -1,9 +1,7 @@
 // Worker entry: messaging and timing only. The simulation itself lives in sim.ts.
 import { FrameWriter } from '../shared/diff';
 import { PROTOCOL_VERSION, TICK_MS, type FromSim, type ToSim } from '../shared/protocol';
-import { createM1Area } from './area';
-import { SimWorld } from './world';
-import { Sim } from './sim';
+import { Game } from './game';
 import { catchupDays } from './catchup';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -15,8 +13,7 @@ const MAX_STEPS = 5;
 
 const writer = new FrameWriter();
 const pool: ArrayBuffer[] = [];
-let sim: Sim | null = null;
-let world: SimWorld | null = null;
+let game: Game | null = null;
 let running = false;
 let timer: ReturnType<typeof setTimeout> | 0 = 0;
 let nextAt = 0;
@@ -34,13 +31,13 @@ function takeBuffer(): ArrayBuffer {
 
 function wake(): void {
   timer = 0;
-  if (!running || !sim) return;
+  if (!running || !game) return;
+  const sim = game.sim;
   const t0 = performance.now();
   let steps = 0;
   writer.begin(takeBuffer(), sim.tick, sim.gameMinute);
   while (t0 >= nextAt && steps < MAX_STEPS) {
-    sim.step(writer);
-    world?.writeChanges(writer);
+    game.step(writer);
     nextAt += TICK_MS;
     steps++;
   }
@@ -51,6 +48,25 @@ function wake(): void {
     post({ t: 'frame', buf }, [buf]);
   }
   schedule();
+}
+
+/** Sends object changes right away (after a build action) instead of waiting for the next tick. */
+function flushChanges(): void {
+  if (!game) return;
+  writer.begin(takeBuffer(), game.sim.tick, game.sim.gameMinute);
+  game.world.writeChanges(writer);
+  const buf = writer.finish();
+  post({ t: 'frame', buf }, [buf]);
+}
+
+function postStateIfChanged(): void {
+  if (!game || !game.builder.changed) return;
+  game.builder.changed = false;
+  post({ t: 'state', state: game.playerState() });
+}
+
+function newSeed(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]!;
 }
 
 function schedule(): void {
@@ -79,15 +95,15 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
         post({ t: 'error', msg: `protocol ${msg.v} != worker ${PROTOCOL_VERSION}`, fatal: true });
         return;
       }
-      sim = new Sim(msg.seed);
+      game = Game.create(msg.seed ?? newSeed()); // M1.10: load the save in msg.saveSlot first
       for (let i = pool.length; i < 4; i++) pool.push(new ArrayBuffer(FRAME_BYTES));
-      writer.begin(new ArrayBuffer(FRAME_BYTES), sim.tick, sim.gameMinute);
-      world = new SimWorld(createM1Area());
-      const area = world.state.area;
-      writer.world(0, 0, sim.day);
-      world.writeSnapshot(writer);
+      writer.begin(new ArrayBuffer(FRAME_BYTES), game.sim.tick, game.sim.gameMinute);
+      const area = game.world.state.area;
+      writer.world(0, 0, game.sim.day);
+      game.world.writeSnapshot(writer);
       const snapshot = writer.finish();
       post({ t: 'ready', v: PROTOCOL_VERSION, area: area.id, w: area.w, h: area.h, snapshot }, [snapshot]);
+      postStateIfChanged();
       start();
       return;
     }
@@ -112,8 +128,17 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
     case 'recycle':
       if (pool.length < POOL_MAX && msg.buf.byteLength >= FRAME_BYTES) pool.push(msg.buf);
       return;
-    case 'act':
-      post({ t: 'ack', seq: msg.seq, ok: false, reason: 'error.notYet' });
+    case 'act': {
+      if (!game) return;
+      const r = game.act(msg.a);
+      if (r.ok) flushChanges();
+      post({ t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason, id: r.index ? game.world.objects.handle(r.index) : undefined });
+      postStateIfChanged();
+      return;
+    }
+    case 'give':
+      game?.builder.give(msg.type, msg.qty);
+      postStateIfChanged();
       return;
     case 'save':
       post({ t: 'saved', reason: msg.reason, ok: false }); // M1

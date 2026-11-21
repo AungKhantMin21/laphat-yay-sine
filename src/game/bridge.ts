@@ -1,6 +1,6 @@
 // The only code that talks to the simulation Worker.
 import { readFrame } from '../shared/diff';
-import { PROTOCOL_VERSION, TICK_MS, type Action, type AwaySummary, type FromSim, type SimEvent, type Tier, type ToSim } from '../shared/protocol';
+import { PROTOCOL_VERSION, TICK_MS, type Action, type AwaySummary, type FromSim, type PlayerState, type SimEvent, type Tier, type ToSim } from '../shared/protocol';
 import type { WorldView } from './view';
 
 export interface BridgeHandlers {
@@ -8,12 +8,23 @@ export interface BridgeHandlers {
   onEvents?(list: SimEvent[]): void;
   onAway?(summary: AwaySummary): void;
   onCatchup?(done: number, total: number): void;
-  onAck?(seq: number, ok: boolean, reason?: string, id?: number): void;
+  onState?(state: PlayerState): void;
+}
+
+export interface AckResult {
+  ok: boolean;
+  /** i18n key when refused. */
+  reason?: string;
+  /** Handle of the placed/moved object. */
+  id?: number;
 }
 
 export class SimBridge {
   private readonly worker: Worker;
   private seq = 0;
+  private readonly pending = new Map<number, (r: AckResult) => void>();
+  /** Latest money / inventory / undo state from the worker. */
+  player: PlayerState | null = null;
   /** performance.now() when the latest frame arrived; drives interpolation. */
   private frameAt = 0;
   private ready = false;
@@ -28,8 +39,8 @@ export class SimBridge {
     this.worker.onerror = (e) => console.error('sim worker error', e.message);
   }
 
-  init(seed: number, tier: Tier): void {
-    this.send({ t: 'init', v: PROTOCOL_VERSION, seed, tier, nowMs: Date.now(), saveSlot: 0 });
+  init(tier: Tier, seed?: number): void {
+    this.send({ t: 'init', v: PROTOCOL_VERSION, tier, nowMs: Date.now(), saveSlot: 0, seed });
   }
 
   /** Pause (menus, hidden tab) or resume. Resuming may trigger offline catch-up. */
@@ -41,10 +52,16 @@ export class SimBridge {
     this.send({ t: 'tier', tier });
   }
 
-  act(a: Action): number {
+  /** Sends a player action; resolves when the worker accepts or refuses it. */
+  act(a: Action): Promise<AckResult> {
     const seq = ++this.seq;
     this.send({ t: 'act', seq, a });
-    return seq;
+    return new Promise((resolve) => this.pending.set(seq, resolve));
+  }
+
+  /** Debug: add items to the inventory. */
+  give(type: number, qty: number): void {
+    this.send({ t: 'give', type, qty });
   }
 
   save(reason: 'auto' | 'hidden' | 'manual'): void {
@@ -89,8 +106,15 @@ export class SimBridge {
       case 'away':
         this.handlers.onAway?.(msg.summary);
         return;
-      case 'ack':
-        this.handlers.onAck?.(msg.seq, msg.ok, msg.reason, msg.id);
+      case 'ack': {
+        const done = this.pending.get(msg.seq);
+        this.pending.delete(msg.seq);
+        done?.({ ok: msg.ok, reason: msg.reason, id: msg.id });
+        return;
+      }
+      case 'state':
+        this.player = msg.state;
+        this.handlers.onState?.(msg.state);
         return;
       case 'saved':
         return;

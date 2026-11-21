@@ -28,6 +28,11 @@ export class SimWorld {
     this.removed = new Uint32Array(this.state.objects.capacity);
   }
 
+  /** A fresh uid for an object about to be created. */
+  reserveUid(): number {
+    return this.nextUid++;
+  }
+
   get objects(): WorldState['objects'] {
     return this.state.objects;
   }
@@ -46,10 +51,19 @@ export class SimWorld {
   }
 
   update(i: number, f: ObjectFields): void {
-    const s = this.state.objects;
-    markOccupancy(s, this.state.occ, i, 0);
+    this.detach(i);
+    this.attach(i, f);
+  }
+
+  /** Clears an object's occupancy before a batch of moves (so moved items can't erase each other). */
+  detach(i: number): void {
+    markOccupancy(this.state.objects, this.state.occ, i, 0);
+  }
+
+  /** Writes fields and marks occupancy for a detached object. */
+  attach(i: number, f: ObjectFields): void {
     this.write(i, f);
-    markOccupancy(s, this.state.occ, i, i);
+    markOccupancy(this.state.objects, this.state.occ, i, i);
     this.upserts.push(i);
   }
 
