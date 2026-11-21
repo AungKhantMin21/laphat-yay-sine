@@ -56,5 +56,18 @@
   "prop.beauty": "လှပမှု",
   "prop.smell": "အနံ့",
   "prop.cover": "အမိုးအကာ",
-  "heat.level": "{name} {n}"
+  "heat.level": "{name} {n}",
+  "settings.open": "ဆက်တင်",
+  "settings.title": "ဆက်တင်",
+  "settings.close": "ပိတ်",
+  "settings.saveCode": "သိမ်းဆည်းကုဒ်",
+  "settings.saveCodeHelp": "ဒီကုဒ်ကို သိမ်းထားရင် ဖုန်းအသစ်မှာ (ဒါမှမဟုတ် ဒေတာပျက်သွားရင်) ဆိုင်ကို ပြန်ဖွင့်လို့ရပါတယ်။",
+  "settings.export": "ကုဒ် ထုတ်ယူ",
+  "settings.copy": "ကူးယူ",
+  "settings.copied": "ကူးယူပြီးပါပြီ",
+  "settings.import": "ကုဒ်ဖြင့် ပြန်ဖွင့်",
+  "settings.importPlaceholder": "သိမ်းဆည်းကုဒ်ကို ဒီမှာ ထည့်ပါ",
+  "settings.importWarn": "လက်ရှိဆိုင်ကို ဒီကုဒ်ထဲက ဆိုင်နဲ့ အစားထိုးပါမယ်။ သေချာပါသလား",
+  "settings.importOk": "ဆိုင်ကို ပြန်ဖွင့်ပြီးပါပြီ",
+  "settings.importBad": "ကုဒ် မမှန်ပါ"
 }

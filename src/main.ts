@@ -15,6 +15,7 @@ import { HeatLayer } from './render/heat';
 import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys } from './input/keyboard';
+import { installSettings } from './ui/settings';
 import { requestPersistentStorage } from './platform/persist';
 import { CATALOG, spriteFrame } from './shared/catalog';
 import { tileAtX, tileAtY } from './shared/iso';
@@ -59,17 +60,27 @@ const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].aud
 let musicPinned: TrackId | null = null;
 const pickMusic = (): void => music.play(musicPinned ?? trackFor(Math.floor(view.gameMinute / 60) % 24, false));
 
+let booted = false;
 const bridge: SimBridge = new SimBridge(view, {
-  onState: () => buildUi.refresh(),
+  onState: () => {
+    buildUi.refresh();
+    settings.refresh();
+  },
   onReady: () => {
-    showTitleCard();
-    requestAnimationFrame(() => {
-      pickMusic();
-      setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
-    });
     chunks.setArea(view.area.floor, view.area.wall, view.area.w, view.area.h);
     camera.setArea(view.area.w, view.area.h);
-    camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
+    if (!booted) {
+      booted = true;
+      showTitleCard();
+      camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
+      requestAnimationFrame(() => {
+        pickMusic();
+        setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
+      });
+    } else {
+      // A save code was loaded: the whole world was replaced.
+      build.close();
+    }
   },
 });
 const tierState = await loadTier();
@@ -101,6 +112,12 @@ const buildUi = installBuildUi(
   },
 );
 installBuildKeys(build);
+const settings = installSettings({
+  exportSave: () => bridge.exportSave(),
+  importSave: (code) => bridge.importSave(code),
+  hidden: () => build.open,
+});
+build.onChange(() => settings.refresh());
 
 installGestures(stageEl, {
   pan: (dx, dy) => {
@@ -144,6 +161,8 @@ const loop = new FrameLoop({
   onVisible: () => bridge.setRunning(true),
 });
 loop.start();
+// iOS may kill a backgrounded tab without another visibilitychange: save on pagehide too.
+window.addEventListener('pagehide', () => bridge.save('hidden'));
 
 const device = { tier: tierState.tier, source: tierState.source as string, bench: tierState.record?.bench ?? null };
 

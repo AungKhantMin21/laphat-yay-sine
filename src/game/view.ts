@@ -64,6 +64,9 @@ export class WorldView implements FrameHandler {
     this.tilesDirty.add(0, 0, w, h);
     this.objChanged.clear();
     this.objRemovedCount = 0;
+    // A new area or a loaded game: renderers drop everything they had and rebuild.
+    this.objResync = true;
+    this.gridsDirty.add(0, 0, w, h);
   }
 
   header(tick: number, gameMinute: number, workCentiMs: number): void {

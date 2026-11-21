@@ -35,6 +35,14 @@ export class SimWorld {
     this.removed = new Uint32Array(this.state.objects.capacity);
   }
 
+  /** Next uid to hand out (saved, so uids are never reused across sessions). */
+  get uidCounter(): number {
+    return this.nextUid;
+  }
+  set uidCounter(n: number) {
+    this.nextUid = Math.max(this.nextUid, n);
+  }
+
   /** A fresh uid for an object about to be created. */
   reserveUid(): number {
     return this.nextUid++;

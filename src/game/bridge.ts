@@ -9,6 +9,8 @@ export interface BridgeHandlers {
   onAway?(summary: AwaySummary): void;
   onCatchup?(done: number, total: number): void;
   onState?(state: PlayerState): void;
+  onLoaded?(fresh: boolean, awayDays: number, skipped: number): void;
+  onSaved?(reason: string, ok: boolean): void;
 }
 
 export interface AckResult {
@@ -23,6 +25,8 @@ export class SimBridge {
   private readonly worker: Worker;
   private seq = 0;
   private readonly pending = new Map<number, (r: AckResult) => void>();
+  private exportWaiters: Array<(code: string) => void> = [];
+  private importWaiters: Array<(r: AckResult) => void> = [];
   /** Latest money / inventory / undo state from the worker. */
   player: PlayerState | null = null;
   /** performance.now() when the latest frame arrived; drives interpolation. */
@@ -62,6 +66,18 @@ export class SimBridge {
   /** Stream these property grids (bitmask by PROP id) for the heat overlay. */
   subscribeGrids(mask: number): void {
     this.send({ t: 'subscribe', grids: mask });
+  }
+
+  /** The current game as a save code (LYS1.…). */
+  exportSave(): Promise<string> {
+    this.send({ t: 'exportSave' });
+    return new Promise((resolve) => this.exportWaiters.push(resolve));
+  }
+
+  /** Replace the current game with a save code. */
+  importSave(code: string): Promise<AckResult> {
+    this.send({ t: 'importSave', code });
+    return new Promise((resolve) => this.importWaiters.push(resolve));
   }
 
   /** Debug: add items to the inventory. */
@@ -122,6 +138,18 @@ export class SimBridge {
         this.handlers.onState?.(msg.state);
         return;
       case 'saved':
+        if (!msg.ok) console.warn('save failed:', msg.reason);
+        this.handlers.onSaved?.(msg.reason, msg.ok);
+        return;
+      case 'loaded':
+        if (msg.skipped) console.warn(`save: ${msg.skipped} objects no longer exist and were skipped`);
+        this.handlers.onLoaded?.(msg.fresh, msg.awayDays, msg.skipped);
+        return;
+      case 'exported':
+        this.exportWaiters.shift()?.(msg.code);
+        return;
+      case 'imported':
+        this.importWaiters.shift()?.({ ok: msg.ok, reason: msg.reason });
         return;
       case 'error':
         console.error('sim:', msg.msg);

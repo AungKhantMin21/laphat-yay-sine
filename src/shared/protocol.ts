@@ -1,6 +1,6 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -32,7 +32,9 @@ export type ToSim =
   | { t: 'save'; reason: 'auto' | 'hidden' | 'manual' }
   | { t: 'recycle'; buf: ArrayBuffer }
   /** Debug: add items to the inventory. */
-  | { t: 'give'; type: number; qty: number };
+  | { t: 'give'; type: number; qty: number }
+  | { t: 'exportSave' }
+  | { t: 'importSave'; code: string };
 
 /** Events carry text keys + args, never display strings. */
 export type SimEvent =
@@ -60,6 +62,11 @@ export type FromSim =
   /** id = handle of the placed/moved object; reason = i18n key when refused. */
   | { t: 'ack'; seq: number; ok: boolean; reason?: string; id?: number }
   | { t: 'state'; state: PlayerState }
+  /** After init: whether this is a new game, and game days caught up after being away. */
+  | { t: 'loaded'; fresh: boolean; awayDays: number; skipped: number }
+  | { t: 'exported'; code: string }
+  /** reason = i18n key when the code was refused. */
+  | { t: 'imported'; ok: boolean; reason?: string }
   | { t: 'events'; list: SimEvent[] }
   | { t: 'catchup'; done: number; total: number }
   | { t: 'away'; summary: AwaySummary }
