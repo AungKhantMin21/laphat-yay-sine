@@ -10,4 +10,6 @@ Noto Sans Myanmar — © Google, SIL Open Font License 1.1. Subset for this proj
 
 ## Art
 
-None yet. Every third-party pixel pack must be listed here with its licence and source URL.
+Placeholder floor tiles in `art/sprites/floor/` are generated for this project by `tools/make-placeholders.ts`.
+
+Every third-party pixel pack must be listed here with its licence and source URL.

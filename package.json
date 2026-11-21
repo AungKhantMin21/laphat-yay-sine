@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "atlas": "node tools/pack-atlas.ts"
   },
   "dependencies": {
     "pixi.js": "^8.23.0"
@@ -19,6 +20,7 @@
     "@types/node": "^26.6.6",
     "eslint": "^10.15.0",
     "playwright-core": "^1.65.1",
+    "sharp": "^0.35.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.73.0",
     "vite": "^8.3.8",
