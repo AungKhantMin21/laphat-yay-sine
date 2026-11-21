@@ -1,0 +1,9 @@
+{
+  "hours": { "open": "06:00", "close": "17:00" },
+  "pay": {
+    "coin": 50,
+    "tipFrom": 0.5,
+    "tipMax": 0.3,
+    "autoFactor": 0.7
+  }
+}

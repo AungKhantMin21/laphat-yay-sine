@@ -8,7 +8,7 @@ Last updated 21 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | --- | --- | --- |
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
-| **M2 Shop day** | **next — not started** | write a plan first, get approval |
+| **M2 Shop day** | **in progress — M2.1 done** | plan approved; docs/M2.md (steps + progress) |
 | M3–M6 | not started | DESIGN.md §11 |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample).
@@ -53,7 +53,11 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Multi-tile depth sorting may need sprite slicing once characters walk around (M2/M3).
 - BACKLOG.md holds deferred ideas.
 
-## Next step: M2 Shop day (DESIGN §2, §6, §8, §11)
+## Next step: M2 Shop day — continue at M2.2 (see docs/M2.md)
+
+Decided 21 Nov 2026: day = shutters open 06:00 (clock waits until Open) → shop hours to 17:00 → last customers finish → evening waits for Sleep → next 06:00. Player pours every cup, with an auto-serve fallback (lower price, no tip). A* core built in M2. Ingredients unlimited and free until M3.
+
+### Original M2 brief
 
 Done when: customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser.
 Start in plan mode: read DESIGN §2, §6, §8; reuse property grids (`value` arrays), object `seat` counts in objects.json, RNG streams, the NPC SoA layout in ARCHITECTURE §3, and the NPC_* frame sections already defined in `shared/diff.ts`.

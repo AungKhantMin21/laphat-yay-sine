@@ -69,5 +69,13 @@
   "settings.importPlaceholder": "သိမ်းဆည်းကုဒ်ကို ဒီမှာ ထည့်ပါ",
   "settings.importWarn": "လက်ရှိဆိုင်ကို ဒီကုဒ်ထဲက ဆိုင်နဲ့ အစားထိုးပါမယ်။ သေချာပါသလား",
   "settings.importOk": "ဆိုင်ကို ပြန်ဖွင့်ပြီးပါပြီ",
-  "settings.importBad": "ကုဒ် မမှန်ပါ"
+  "settings.importBad": "ကုဒ် မမှန်ပါ",
+  "drink.pon_man": "ပုံမှန်",
+  "drink.cho_seint": "ချိုဆိမ့်",
+  "drink.kya_seint": "ကျဆိမ့်",
+  "drink.plain": "လက်ဖက်ရည်ကြမ်း",
+  "react.great": "အရမ်းကောင်းတယ်",
+  "react.good": "ကောင်းတယ်",
+  "react.ok": "ရပါတယ်",
+  "react.auto": "ကျေးဇူးပါ"
 }
