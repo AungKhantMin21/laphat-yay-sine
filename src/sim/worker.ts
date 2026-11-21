@@ -54,6 +54,8 @@ function wake(): void {
     writer.setClock(sim.tick, sim.gameMinute); // header carries the clock after stepping
     const buf = writer.finish((performance.now() - t0) * 100);
     post({ t: 'frame', buf }, [buf]);
+    postEvents();
+    postStateIfChanged();
   }
   // Autosave: every game hour, and a few seconds after building.
   const hour = Math.floor(sim.gameMinute / 60);
@@ -91,9 +93,14 @@ function flushChanges(): void {
 }
 
 function postStateIfChanged(): void {
-  if (!game || !game.builder.changed) return;
-  game.builder.changed = false;
+  if (!game || !game.takeChanged()) return;
   post({ t: 'state', state: game.playerState() });
+}
+
+/** Sends queued sim events (day end, money…). */
+function postEvents(): void {
+  if (!game || game.events.length === 0) return;
+  post({ t: 'events', list: game.events.splice(0) });
 }
 
 /** Saves are queued so two never overlap. Failures are reported, never thrown. */
@@ -118,7 +125,7 @@ function sendSnapshot(): void {
   game.world.writeSnapshot(writer);
   const snapshot = writer.finish();
   post({ t: 'ready', v: PROTOCOL_VERSION, area: area.id, w: area.w, h: area.h, snapshot }, [snapshot]);
-  game.builder.changed = true;
+  game.markChanged();
   postStateIfChanged();
 }
 
@@ -201,7 +208,10 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
         dirtyAt ||= performance.now();
       }
       post({ t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason, id: r.index ? game.world.objects.handle(r.index) : undefined });
+      postEvents();
       postStateIfChanged();
+      // A finished day is a natural stopping point: save it now.
+      if (r.ok && msg.a.k === 'sleep') save('sleep');
       return;
     }
     case 'give':

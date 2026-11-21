@@ -82,7 +82,7 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
-The source of truth for message shapes is `src/shared/protocol.ts` (protocol v4 as of M1). Summary:
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol v5 as of M2.2). Summary:
 
 ### Main → Worker
 
@@ -103,6 +103,7 @@ type Action =
   | { k: 'place'; type; x; y; rot; colour } // the worker works out the surface (parent) itself
   | { k: 'move'; id; x; y; rot } | { k: 'rotate'; id; rot } | { k: 'recolour'; id; colour }
   | { k: 'pickup'; id } | { k: 'sell'; id } | { k: 'undo' } | { k: 'redo' }
+  | { k: 'openShop' } | { k: 'sleep' }                       // shop day (M2)
   | { k: 'walkTo'; x; y } | { k: 'interact'; id } | { k: 'buy'; shop; item; qty }; // M2+
 // ids on the wire are object handles (index + generation).
 ```
@@ -114,10 +115,10 @@ type FromSim =
   | { t: 'ready'; v; area; w; h; snapshot: ArrayBuffer } // full mirror: boot and after a save code import
   | { t: 'frame'; buf: ArrayBuffer }       // transferred, 10 Hz (plus one right after a build action)
   | { t: 'ack'; seq; ok; reason?; id? }    // reason = i18n key; id = handle of the placed/moved object
-  | { t: 'state'; state: PlayerState }     // money, inventory, canUndo, canRedo — on change
+  | { t: 'state'; state: PlayerState }     // money, inventory, canUndo, canRedo, day phase, day, today's stats — on change
   | { t: 'loaded'; fresh; awayDays; skipped }
   | { t: 'exported'; code } | { t: 'imported'; ok; reason? }
-  | { t: 'events'; list: SimEvent[] }      // money, gossip key, listing, dayEnd, teaser (M2+)
+  | { t: 'events'; list: SimEvent[] }      // dayEnd {day, stats} (M2.2); money, served, teaser (M2+)
   | { t: 'catchup'; done; total } | { t: 'away'; summary }
   | { t: 'saved'; reason; ok } | { t: 'error'; msg; fatal? };
 ```
@@ -139,6 +140,10 @@ kind 8 WORLD         4 B: u8 weather | u8 season | u16 day
 ```
 
 Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick with no changes still sends the 16-byte header so the interpolation clock keeps moving.
+
+### Game clock and the shop day (M2)
+
+`Sim.tick` counts every step; `Sim.clock` is game time in ticks and **stands still** while the shop day holds it: in the morning until `openShop`, and in the evening (after closing time, once the shop is empty) until `sleep`, which jumps it to the next opening time (`shared/day.ts`, hours in `src/data/shop.json`). The frame header carries the game minute, so the main thread sees the hold.
 
 ### Protocol rules
 
@@ -210,7 +215,7 @@ Database `laphat`:
 - `saves`: `slot0` → binary save (`sim/save/format.ts`). An unreadable save is moved to `slot0.broken.<time>`, never overwritten.
 - `meta`: device tier and settings (main thread).
 
-Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
+Binary save v2 = the v1 layout plus a shop-day block (game clock, shutters, today's stats, tomorrow's teaser); v1 saves migrate with clock = tick and the shutters open. Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 
 - To change the format: add `PARSERS[n]` and `MIGRATIONS[n-1]`; never edit old ones.
 - Autosave every game hour, 5 s after building, on `visibilitychange: hidden` and `pagehide`.

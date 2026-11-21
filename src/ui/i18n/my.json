@@ -77,5 +77,9 @@
   "react.great": "အရမ်းကောင်းတယ်",
   "react.good": "ကောင်းတယ်",
   "react.ok": "ရပါတယ်",
-  "react.auto": "ကျေးဇူးပါ"
+  "react.auto": "ကျေးဇူးပါ",
+  "day.open": "ဆိုင်ဖွင့်မယ်",
+  "day.sleep": "အိပ်မယ်",
+  "day.clock": "နေ့ {day} · {time}",
+  "day.err.notNow": "ဒီအချိန်မှာ မလုပ်နိုင်သေးပါ"
 }

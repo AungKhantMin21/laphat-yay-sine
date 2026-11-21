@@ -16,6 +16,7 @@ import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys } from './input/keyboard';
 import { installSettings } from './ui/settings';
+import { installDayHud } from './ui/hud/day-hud';
 import { requestPersistentStorage } from './platform/persist';
 import { CATALOG, spriteFrame } from './shared/catalog';
 import { tileAtX, tileAtY } from './shared/iso';
@@ -65,6 +66,11 @@ const bridge: SimBridge = new SimBridge(view, {
   onState: () => {
     buildUi.refresh();
     settings.refresh();
+    dayHud.refresh();
+  },
+  onEvents: (list) => {
+    // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
+    for (const e of list) if (e.k === 'dayEnd' && import.meta.env.DEV) console.info('day end', e.day, e.stats);
   },
   onReady: () => {
     chunks.setArea(view.area.floor, view.area.wall, view.area.w, view.area.h);
@@ -117,6 +123,12 @@ const settings = installSettings({
   importSave: (code) => bridge.importSave(code),
   hidden: () => build.open,
 });
+const dayHud = installDayHud({
+  player: () => bridge.player,
+  gameMinute: () => view.gameMinute,
+  open: async () => (await bridge.act({ k: 'openShop' })).ok,
+  sleep: async () => (await bridge.act({ k: 'sleep' })).ok,
+});
 build.onChange(() => {
   settings.refresh();
   document.body.classList.toggle('building', build.open);
@@ -143,6 +155,7 @@ const loop = new FrameLoop({
   update: () => undefined,
   render: () => {
     if (!bridge.isReady) return;
+    dayHud.tick();
     draws?.beginFrame();
     if (!view.tilesDirty.empty) {
       chunks.markDirty(view.tilesDirty);

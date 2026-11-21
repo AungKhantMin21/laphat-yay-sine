@@ -2,20 +2,32 @@
 // worker.ts only adds messaging and timing around it.
 import { CATALOG } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
-import type { Action, PlayerState } from '../shared/protocol';
+import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
 import { createM1Area } from './area';
 import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
 import { SimWorld } from './world';
+import { ShopDay } from './day/shop-day';
 import { SAVE_SCHEMA, type SaveData, type SavedObject } from './save/format';
 
 export class Game {
+  /** Events for the main thread, drained by the worker after each step or action. */
+  readonly events: SimEvent[] = [];
+
   constructor(
     readonly sim: Sim,
     readonly world: SimWorld,
     readonly builder: Builder,
-  ) {}
+    readonly day: ShopDay = new ShopDay(),
+  ) {
+    day.update(sim.gameMinute, 0);
+  }
+
+  /** Customers still in or heading to the shop (M2.4). */
+  customers(): number {
+    return 0;
+  }
 
   static create(seed: number): Game {
     const inv = new Uint16Array(CATALOG.defs.length);
@@ -51,11 +63,16 @@ export class Game {
       if (n > 0) inventory[CATALOG.defs[id]!.key] = n;
     });
     const r = this.sim.rng;
+    const day = this.day;
     return {
       schema: SAVE_SCHEMA,
       seed: this.sim.seed,
       savedAt: nowMs,
       tick: this.sim.tick,
+      clock: this.sim.clock,
+      shuttersOpen: day.shuttersOpen,
+      today: { ...day.today },
+      teaser: { ...day.teaser },
       rng: [r.market.state >>> 0, r.npcDecide.state >>> 0, r.events.state >>> 0, r.cosmetic.state >>> 0],
       money: this.builder.money,
       nextUid: this.world.uidCounter,
@@ -71,6 +88,7 @@ export class Game {
   static fromSave(d: SaveData): { game: Game; skipped: number } {
     const sim = new Sim(d.seed);
     sim.tick = d.tick;
+    sim.clock = d.clock;
     [sim.rng.market.state, sim.rng.npcDecide.state, sim.rng.events.state, sim.rng.cosmetic.state] = d.rng;
     const world = new SimWorld(createM1Area());
     const inv = new Uint16Array(CATALOG.defs.length);
@@ -90,7 +108,11 @@ export class Game {
       world.add({ type: def.id, x: o.x, y: o.y, rot: o.rot & 3, layer: def.layer, colour: o.colour, parent }, o.uid);
     }
     world.uidCounter = d.nextUid;
-    return { game: new Game(sim, world, new Builder(world, d.money, inv)), skipped };
+    const day = new ShopDay();
+    day.shuttersOpen = d.shuttersOpen;
+    day.today = { ...d.today };
+    day.teaser = { ...d.teaser };
+    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped };
   }
 
   /** Runs a player action. Object ids on the wire are handles; stale handles are refused. */
@@ -114,6 +136,14 @@ export class Game {
         return b.undo();
       case 'redo':
         return b.redo();
+      case 'openShop':
+        return this.day.open(this.sim, this.customers());
+      case 'sleep': {
+        const r = this.day.sleep(this.sim, this.customers());
+        if (!r.ok) return r;
+        if (r.ended) this.events.push({ k: 'dayEnd', day: r.ended.day, stats: r.ended.stats });
+        return { ok: true };
+      }
       default:
         return { ok: false, reason: 'error.notYet' };
     }
@@ -121,11 +151,35 @@ export class Game {
 
   playerState(): PlayerState {
     const b = this.builder;
-    return { money: b.money, inventory: Array.from(b.inventory), canUndo: b.canUndo, canRedo: b.canRedo };
+    const d = this.day;
+    return {
+      money: b.money,
+      inventory: Array.from(b.inventory),
+      canUndo: b.canUndo,
+      canRedo: b.canRedo,
+      phase: d.phase,
+      day: this.sim.day,
+      today: { ...d.today },
+    };
+  }
+
+  /** True once after anything in the player state changed. */
+  takeChanged(): boolean {
+    const c = this.builder.changed || this.day.changed;
+    this.builder.changed = this.day.changed = false;
+    return c;
+  }
+
+  /** Forces the next takeChanged() (after a snapshot). */
+  markChanged(): void {
+    this.day.changed = true;
   }
 
   step(w: FrameWriter): void {
-    this.sim.step(w);
+    const day = this.day;
+    day.update(this.sim.gameMinute, this.customers());
+    this.sim.step(w, !day.holds);
+    day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
   }
 }

@@ -1,6 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
-export const PROTOCOL_VERSION = 4;
+import type { Phase } from './day';
+export const PROTOCOL_VERSION = 5;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -17,6 +18,10 @@ export type Action =
   | { k: 'pickup'; id: number }
   | { k: 'undo' }
   | { k: 'redo' }
+  /** Morning: open the shutters; the clock starts and customers may come. */
+  | { k: 'openShop' }
+  /** Evening: end the day; the clock jumps to the next opening time and the game saves. */
+  | { k: 'sleep' }
   | { k: 'walkTo'; x: number; y: number }
   | { k: 'interact'; id: number }
   | { k: 'buy'; shop: number; item: number; qty: number };
@@ -39,7 +44,26 @@ export type ToSim =
 /** Events carry text keys + args, never display strings. */
 export type SimEvent =
   | { k: 'money'; delta: number; total: number }
-  | { k: 'text'; key: string; args?: Record<string, string | number> };
+  | { k: 'text'; key: string; args?: Record<string, string | number> }
+  /** The day that just ended (sent on sleep). */
+  | { k: 'dayEnd'; day: number; stats: DayStats };
+
+/** What happened in one shop day. */
+export interface DayStats {
+  /** Customers who were served and paid. */
+  served: number;
+  /** Of those, cups the player poured (the rest were auto-served). */
+  poured: number;
+  /** Kyat taken in, tips included. */
+  earned: number;
+  tips: number;
+  /** Best pour score of the day, 0–100. */
+  best: number;
+}
+
+export function emptyDayStats(): DayStats {
+  return { served: 0, poured: 0, earned: 0, tips: 0, best: 0 };
+}
 
 export interface AwaySummary {
   realMs: number;
@@ -54,6 +78,11 @@ export interface PlayerState {
   inventory: number[];
   canUndo: boolean;
   canRedo: boolean;
+  /** Shop day phase (shared/day.ts PHASE). */
+  phase: Phase;
+  /** Game day number, from 0. */
+  day: number;
+  today: DayStats;
 }
 
 export type FromSim =
