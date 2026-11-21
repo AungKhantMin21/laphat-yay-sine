@@ -2,6 +2,14 @@
 
 How Laphat Yay Sine is built. What we build is in DESIGN.md; working rules are in CLAUDE.md.
 
+## 0. Minimum browsers
+
+iOS/iPadOS Safari 15+, Android Chrome 90+, current desktop Chrome, Firefox, Safari and Edge.
+
+- Vite `build.target`: `['es2020', 'safari15', 'chrome90', 'firefox115', 'edge90']`.
+- All of these support module workers, WebGL2, Pointer Events, Web Audio and IndexedDB in workers.
+- Feature-check or fall back for: `dvh` units (Safari 15.4), `structuredClone` / `Array.prototype.at` (Safari 15.4), `screen.orientation` (iOS 16.4), Ogg audio on Safari (use m4a).
+
 ## 1. Folder structure
 
 ```
@@ -14,7 +22,7 @@ laphat-yay-sine/
   .github/workflows/deploy.yml
   assets/
     music/              loops + music.json, imported with ?url → hashed filenames
-    fonts/              subset NotoSansMyanmar.woff2 (generated)
+    fonts/              NotoSansMyanmar subset WOFF2 (generated; full Myanmar blocks + Basic Latin)
     atlas/              generated atlas-0.{webp,png,json}
   art/                  source .aseprite/.png, palette.hex — not shipped
   tools/                node scripts: pack-atlas, subset-font, check-size
@@ -136,7 +144,9 @@ Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick wi
 - Build mode is optimistic: main runs `shared/rules` against its mirror to show the placement ghost instantly; on `ack ok:false` it reverts and shows the reason.
 - Main renders about one tick behind and interpolates NPC x/y between the last two frames.
 - Undo/redo history lives in the worker (stack of inverse operations).
-- Hidden tab: main sends `clock running:false` and `save reason:'hidden'`, then stops rAF. On return, the worker compares wall-clock time; more than 10 real minutes away → catch-up (at most 7 game days, abstract LOD, yields after every game day, posts `catchup` progress, then `away`).
+- Hidden tab: main sends `clock running:false` and `save reason:'hidden'`, then stops rAF. On return (or on `init` from a save), the worker compares wall-clock time with the last save:
+  - away **< 1 real hour** → no catch-up; the clock simply resumes.
+  - otherwise → **1 game day per full real day away, maximum 7** (`days = min(7, floor(awayMs / 86 400 000))`). Catch-up runs at abstract LOD, yields after every game day, posts `catchup` progress, then `away` with the summary. If `days` is 0, no catch-up runs.
 - `PROTOCOL_VERSION` mismatch (stale service-worker cache) → main forces a reload.
 
 ## 3. Data layout (typed arrays, struct of arrays)

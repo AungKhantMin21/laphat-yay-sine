@@ -8,6 +8,12 @@ Read both before planning a milestone. docs/RISKS.md lists known device pitfalls
 TypeScript (strict) · Vite · PixiJS v8 (WebGL) · sim in a module Web Worker at 10 Hz · IndexedDB saves ·
 service worker (M6) · Web Audio · Vitest. Do not add runtime dependencies without asking.
 
+## Minimum browsers
+
+iOS/iPadOS Safari 15+, Android Chrome 90+, current desktop Chrome, Firefox, Safari and Edge.
+Vite `build.target` is set to match. Anything newer than these (e.g. `dvh` units, `structuredClone`,
+`Array.prototype.at`, `screen.orientation` on iOS < 16.4, Ogg on old Safari) needs a fallback or a feature check.
+
 ## Module boundaries
 
 - `src/shared/`: pure TS. Imports nothing outside `shared/`.
@@ -38,12 +44,15 @@ service worker (M6) · Web Audio · Vitest. Do not add runtime dependencies with
 
 - All text is DOM in `ui/`, from `src/ui/i18n/my.json` (Myanmar first). Unicode only; never Zawgyi.
 - Player-typed text goes through the Zawgyi detector/converter (myanmar-tools) before storage.
+- The font subset keeps whole Unicode ranges (Myanmar U+1000–109F, Extended-A U+AA60–AA7F, Extended-B U+A9E0–A9FF,
+  Basic Latin, digits, common punctuation) with GSUB/GPOS shaping. Never subset by the text in my.json: players type their own.
 - Touch targets ≥ 44 px. Respect `env(safe-area-inset-*)`; the HUD lives on the left and right edges.
 
 ## Audio
 
 - Music: decode on demand, `AudioBufferSourceNode` with `loop = true` and `loopStart`/`loopEnd` from
   `assets/music/music.json`; prefer `.ogg`, fall back to `.m4a`; 4 s crossfade. Keep at most 2 decoded tracks in memory.
+- Load music from the Vite-imported hashed URLs. The file names in music.json are labels only.
 - Resume the AudioContext on the first tap and after any interruption.
 - Ambient sound is generated in code (M6). No recorded ambience, no voices.
 
