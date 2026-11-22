@@ -6,6 +6,8 @@
     "road": 14,
     "pavement": 10,
     "shopTile": 10,
-    "dirt": 12
+    "dirt": 12,
+    "crossing": 14,
+    "kitchen": 10
   }
 }

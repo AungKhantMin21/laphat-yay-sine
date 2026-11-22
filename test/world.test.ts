@@ -3,7 +3,8 @@ import { CATALOG, LAYER } from '../src/shared/catalog';
 import { FrameWriter, readFrame } from '../src/shared/diff';
 import { WALL, ZONE } from '../src/shared/layout';
 import { SimWorld, type ObjectFields } from '../src/sim/world';
-import { createM1Area, SHOP, FRONTAGE } from '../src/sim/area';
+import { createM1Area, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, CROSSING, SHOP } from '../src/sim/area';
+import { WZ } from '../src/shared/rules/access';
 import { WorldView } from '../src/game/view';
 
 const T = (key: string) => CATALOG.byKey.get(key)!;
@@ -38,15 +39,34 @@ function sameOccupancy(a: SimWorld, b: WorldView): void {
 }
 
 describe('M1 area', () => {
-  it('shop is owned and roofed, frontage owned and open, back walls on −x and −y edges', () => {
+  it('shop is owned and roofed; back walls full height, front, east and kitchen walls low', () => {
     const a = createM1Area();
     const at = (x: number, y: number) => y * a.w + x;
     expect(a.zone[at(SHOP.x0 + 2, SHOP.y0 + 2)]).toBe(ZONE.owned | ZONE.roof);
-    expect(a.zone[at(FRONTAGE.x0, FRONTAGE.y0)]).toBe(ZONE.owned);
+    expect(a.zone[at(SHOP.x0, PAVEMENT.y0)]).toBe(0);
     expect(a.zone[at(2, 2)]).toBe(0);
     expect(a.wall[at(SHOP.x0, SHOP.y0)]).toBe(WALL.n | WALL.w);
     expect(a.wall[at(SHOP.x0 + 3, SHOP.y0)]).toBe(WALL.n);
-    expect(a.wall[at(SHOP.x0, SHOP.y0 + 3)]).toBe(WALL.w);
+    expect(a.wall[at(SHOP.x0, SHOP.y0 + 6)]).toBe(WALL.w);
+    expect(a.wall[at(SHOP.x1, SHOP.y0 + 3)]).toBe(WALL.lowW); // east side, on the tile beyond
+    expect(a.wall[at(SHOP.x0 + 1, SHOP.y1)]).toBe(WALL.lowN); // front beside the opening
+    expect(a.wall[at(OPENING.x0, SHOP.y1)]).toBe(0); // the opening
+    expect(a.wall[at(KITCHEN.x0 + 5, KITCHEN.y1)]).toBe(WALL.lowN); // kitchen partition
+    expect(a.wall[at(KITCHEN_DOOR.x, KITCHEN.y1)]).toBe(0); // its door
+  });
+
+  it('walk zones: pavements, road with one crossing, front, interior, kitchen; the rest blocked', () => {
+    const a = createM1Area();
+    const at = (x: number, y: number) => y * a.w + x;
+    expect(a.access[at(0, PAVEMENT.y0)]).toBe(WZ.pavement);
+    expect(a.access[at(5, ROAD.y0 + 2)]).toBe(WZ.road);
+    expect(a.access[at(CROSSING.x0, ROAD.y0 + 2)]).toBe(WZ.crossing);
+    expect(a.access[at(OPENING.x0, SHOP.y1 - 1)]).toBe(WZ.front);
+    expect(a.access[at(OPENING.x0 - 1, SHOP.y1 - 1)]).toBe(WZ.interior);
+    expect(a.access[at(KITCHEN.x0, KITCHEN.y0)]).toBe(WZ.kitchen);
+    expect(a.access[at(KITCHEN_DOOR.x, KITCHEN_DOOR.y)]).toBe(WZ.kitchenDoor);
+    expect(a.access[at(2, 2)]).toBe(WZ.blocked);
+    expect(a.access[at(SHOP.x1, SHOP.y0 + 2)]).toBe(WZ.blocked); // the neighbour's building
   });
 });
 

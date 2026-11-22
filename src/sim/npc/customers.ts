@@ -40,9 +40,8 @@ const FAILED = 2;
 export type OnServed = (handle: number, drink: number, poured: boolean, score: number) => void;
 
 export interface Street {
-  /** Pavement rows customers walk along (inclusive-exclusive); they enter and leave at x = 0 and x = w − 1. */
-  y0: number;
-  y1: number;
+  /** Pavement rows customers walk along; they enter and leave at x = 0 and x = w − 1. Row 0 is the shop side. */
+  rows: readonly number[];
 }
 
 export class Customers {
@@ -221,8 +220,8 @@ export class Customers {
     const W = this.walk.w;
     const st = this.street;
     const side = r.int(2);
-    const y0 = r.range(st.y0, st.y1 - 1);
-    const y1 = r.range(st.y0, st.y1 - 1);
+    const y0 = st.rows[r.int(st.rows.length)]!;
+    const y1 = st.rows[r.int(st.rows.length)]!;
     const rolled = pickOrder(r.next(), this.cust);
     const drink = order >= 0 ? order : rolled;
     const ms = this.cust.milkShift;
@@ -351,7 +350,7 @@ export class Customers {
     const W = walk.w;
     const reach = this.reach;
     reach.fill(0);
-    const start = this.street.y0 * W;
+    const start = this.street.rows[0]! * W;
     if (!walk.passable(start)) return;
     const q = this.bfs;
     let head = 0;

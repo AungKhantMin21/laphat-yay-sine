@@ -31,14 +31,14 @@ function furnished(seed: number): Game {
   for (const key of ['stool', 'table', 'radio', 'bench']) g.builder.give(T(key), 40);
   g.builder.money = 1_000_000;
   for (let x = 25; x < 35; x += 3) {
-    place(g, 'stool', x, 11);
-    place(g, 'table', x, 12);
-    place(g, 'stool', x, 13);
+    place(g, 'stool', x, 14);
+    place(g, 'table', x, 15);
+    place(g, 'stool', x, 16);
   }
-  place(g, 'bench', 26, 16);
-  place(g, 'table', 26, 17);
-  place(g, 'radio', 34, 17);
-  place(g, 'stool', 33, 16);
+  place(g, 'bench', 26, 17);
+  place(g, 'table', 26, 18);
+  place(g, 'radio', 34, 18);
+  place(g, 'stool', 33, 17);
   return g;
 }
 

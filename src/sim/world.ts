@@ -178,6 +178,7 @@ export class SimWorld {
     w.tilePatch(TILE_LAYER.floor, 0, 0, a.w, a.h, a.floor, a.w);
     w.tilePatch(TILE_LAYER.wall, 0, 0, a.w, a.h, a.wall, a.w);
     w.tilePatch(TILE_LAYER.zone, 0, 0, a.w, a.h, a.zone, a.w);
+    w.tilePatch(TILE_LAYER.access, 0, 0, a.w, a.h, a.access, a.w);
     const s = this.state.objects;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 1; i < s.capacity; i++) if (s.live[i] && (s.parent[i] === 0) === (pass === 0)) this.writeUpsert(w, i);

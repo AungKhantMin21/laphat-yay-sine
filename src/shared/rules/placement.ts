@@ -1,8 +1,9 @@
 // Placement rules, shared by the worker (authority) and build mode's ghost on the main thread.
 // Pure and allocation-free: the caller passes a result object to fill (the ghost checks every move).
 import { CATALOG, LAYER, footH, footW } from '../catalog';
-import { WALL, ZONE } from '../layout';
+import { MAX_AREA_H, MAX_AREA_W, WALL, WALL_N, WALL_W, ZONE } from '../layout';
 import { wallGridFor, type WorldState } from '../world-state';
+import { ACCESS, WZ, isShopZone, keepClear, mayEnter } from './access';
 
 export interface PlaceResult {
   ok: boolean;
@@ -47,22 +48,36 @@ export function checkPlacement(world: WorldState, type: number, x: number, y: nu
 
   switch (def.layer) {
     case LAYER.floor:
-      for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) if (!isFree(occ.floor[(y + dy) * W + x + dx]!, ignore)) return fail(out, 'build.err.blocked');
+      for (let dy = 0; dy < fh; dy++)
+        for (let dx = 0; dx < fw; dx++) if (!isFree(occ.floor[(y + dy) * W + x + dx]!, ignore)) return fail(out, 'build.err.blocked');
       break;
 
     case LAYER.furniture: {
       if (def.small) {
         const under = occ.furniture[t]!;
-        if (isFree(under, ignore)) break; // stands on the floor
-        const surface = CATALOG.defs[world.objects.type[under]!];
-        if (!surface || surface.surface === 0) return fail(out, 'build.err.noSurface');
-        if (!isFree(occ.stack[t]!, ignore)) return fail(out, 'build.err.blocked');
-        out.ok = true;
-        out.reason = '';
-        out.parent = under;
-        return out;
+        if (!isFree(under, ignore)) {
+          const surface = CATALOG.defs[world.objects.type[under]!];
+          if (!surface || surface.surface === 0) return fail(out, 'build.err.noSurface');
+          if (!isFree(occ.stack[t]!, ignore)) return fail(out, 'build.err.blocked');
+          out.ok = true;
+          out.reason = '';
+          out.parent = under;
+          return out;
+        }
+        // Otherwise it stands on the floor like any furniture.
       }
-      for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) if (!isFree(occ.furniture[(y + dy) * W + x + dx]!, ignore)) return fail(out, 'build.err.blocked');
+      for (let dy = 0; dy < fh; dy++) {
+        for (let dx = 0; dx < fw; dx++) {
+          const tt = (y + dy) * W + x + dx;
+          const z = a.access[tt]!;
+          if (!isShopZone(z)) return fail(out, 'build.err.notOwned');
+          if (keepClear(z)) return fail(out, 'build.err.walkway');
+          // Seats belong in the seating room: customers never enter the kitchen.
+          if (def.seat > 0 && z !== WZ.interior) return fail(out, 'build.err.seatOutside');
+          if (!isFree(occ.furniture[tt]!, ignore)) return fail(out, 'build.err.blocked');
+        }
+      }
+      if (!wayStaysOpen(world, x, y, fw, fh, ignore)) return fail(out, 'build.err.blocksWay');
       break;
     }
 
@@ -82,4 +97,77 @@ export function checkPlacement(world: WorldState, type: number, x: number, y: nu
   out.reason = '';
   out.parent = 0;
   return out;
+}
+
+// ---- the way through the shop ----
+
+// Scratch for the flood fill (no allocation per check; the ghost checks on every move).
+const queue = new Int32Array(MAX_AREA_W * MAX_AREA_H);
+const stamp = new Uint32Array(MAX_AREA_W * MAX_AREA_H);
+let stampId = 0;
+
+/**
+ * Would furniture covering the rect (x, y, fw, fh) still leave every walk-way tile (the shop front and
+ * the kitchen door) connected for staff? `ignore` is the object being moved (its tiles count as free).
+ * 4-way search is exact here: walkers never cut corners, so a diagonal step always has an orthogonal pair.
+ */
+export function wayStaysOpen(world: WorldState, x: number, y: number, fw: number, fh: number, ignore: number): boolean {
+  const a = world.area;
+  const W = a.w;
+  const H = a.h;
+  const n = W * H;
+  const acc = a.access;
+  const furn = world.occ.furniture;
+  const wall = a.wall;
+  if (++stampId === 0xffffffff) {
+    stamp.fill(0);
+    stampId = 1;
+  }
+  const id = stampId;
+  // Start from the first walk-way tile; count how many there are.
+  let start = -1;
+  let ways = 0;
+  for (let t = 0; t < n; t++) {
+    if (!keepClear(acc[t]!)) continue;
+    ways++;
+    if (start < 0) start = t;
+  }
+  if (start < 0) return true;
+  let head = 0;
+  let tail = 0;
+  queue[tail++] = start;
+  stamp[start] = id;
+  let found = 1;
+  while (head < tail) {
+    const c = queue[head++]!;
+    const cx = c % W;
+    const cy = (c - cx) / W;
+    // −y, +y, −x, +x; walls live on the −y / −x edge of the tile they belong to.
+    for (let d = 0; d < 4; d++) {
+      let nt: number;
+      if (d === 0) {
+        if (cy === 0 || wall[c]! & WALL_N) continue;
+        nt = c - W;
+      } else if (d === 1) {
+        if (cy === H - 1 || wall[c + W]! & WALL_N) continue;
+        nt = c + W;
+      } else if (d === 2) {
+        if (cx === 0 || wall[c]! & WALL_W) continue;
+        nt = c - 1;
+      } else {
+        if (cx === W - 1 || wall[c + 1]! & WALL_W) continue;
+        nt = c + 1;
+      }
+      if (stamp[nt] === id || !mayEnter(ACCESS.staff, acc[nt]!)) continue;
+      const ntx = nt % W;
+      const nty = (nt - ntx) / W;
+      if (ntx >= x && ntx < x + fw && nty >= y && nty < y + fh) continue;
+      const o = furn[nt]!;
+      if (o !== 0 && o !== ignore) continue;
+      stamp[nt] = id;
+      queue[tail++] = nt;
+      if (keepClear(acc[nt]!) && ++found === ways) return true;
+    }
+  }
+  return found === ways;
 }

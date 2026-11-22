@@ -17,7 +17,7 @@ describe('Game', () => {
 
   it('routes wire actions by handle and refuses stale handles', () => {
     const g = Game.create(1);
-    const r = g.act({ k: 'place', type: T('stool'), x: SHOP.x0 + 2, y: SHOP.y0 + 2, rot: 0, colour: 2 });
+    const r = g.act({ k: 'place', type: T('stool'), x: SHOP.x0 + 2, y: SHOP.y0 + 5, rot: 0, colour: 2 });
     expect(r.ok).toBe(true);
     const h = g.world.objects.handle(r.index!);
     expect(g.act({ k: 'recolour', id: h, colour: 4 }).ok).toBe(true);

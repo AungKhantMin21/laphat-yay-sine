@@ -86,8 +86,8 @@ describe('customers', () => {
   it('seat choice is deterministic for a seed', () => {
     const pick = (seed: number): number[] => {
       const g = game(seed);
-      for (let x = 25; x < 35; x += 2) place(g, 'stool', x, 12);
-      place(g, 'table', 30, 13);
+      for (let x = 25; x < 35; x += 2) place(g, 'stool', x, 14);
+      place(g, 'table', 30, 15);
       const out: number[] = [];
       for (let k = 0; k < 4; k++) out.push(g.npcs.seat[g.npcs.indexOf(g.npcs.spawn())]!);
       return out;
@@ -98,35 +98,34 @@ describe('customers', () => {
 
   it('a quiet-loving customer avoids the radio; a lively one sits by it', () => {
     const g = game();
-    place(g, 'stool', 26, 12);
-    place(g, 'stool', 33, 12);
-    place(g, 'radio', 33, 14);
+    place(g, 'stool', 26, 14);
+    place(g, 'stool', 33, 14);
+    place(g, 'radio', 33, 16);
     const i = g.npcs.indexOf(g.npcs.spawn());
     g.npcs.noiseTaste[i] = 1;
     g.npcs.choose(i);
-    expect(g.npcs.seat[i]).toBe(tileOf(26, 12));
+    expect(g.npcs.seat[i]).toBe(tileOf(26, 14));
     g.npcs.noiseTaste[i] = -1;
     g.npcs.choose(i);
-    expect(g.npcs.seat[i]).toBe(tileOf(33, 12));
+    expect(g.npcs.seat[i]).toBe(tileOf(33, 14));
   });
 
   it('a seat next to a table is preferred', () => {
     const g = game();
-    place(g, 'stool', 26, 12);
-    place(g, 'stool', 33, 12);
-    place(g, 'table', 33, 13);
+    place(g, 'stool', 26, 14);
+    place(g, 'stool', 33, 14);
+    place(g, 'table', 33, 15);
     const i = g.npcs.indexOf(g.npcs.spawn());
     g.npcs.noiseTaste[i] = 0;
     g.npcs.choose(i);
-    expect(g.npcs.seat[i]).toBe(tileOf(33, 12));
+    expect(g.npcs.seat[i]).toBe(tileOf(33, 14));
   });
 
   it('a walled-in seat is never chosen', () => {
     const g = game();
-    // Two stools against the back wall, boxed in by tables on every open side.
-    place(g, 'stool', 25, 9);
-    place(g, 'stool', 26, 9);
-    for (const [x, y] of [[24, 9], [27, 9], [24, 10], [25, 10], [26, 10], [27, 10]] as const) place(g, 'table', x, y);
+    // A stool in the middle of the room, boxed in by tables on all eight sides.
+    place(g, 'stool', 29, 14);
+    for (const [x, y] of [[28, 13], [29, 13], [30, 13], [28, 14], [30, 14], [28, 15], [29, 15], [30, 15]] as const) place(g, 'table', x, y);
     g.syncWalk(); // in play, arrivals happen inside step() after the walk grid has synced
     const h = g.npcs.spawn();
     expect(g.npcs.state[g.npcs.indexOf(h)]).toBe(CS.leaving);
@@ -222,16 +221,16 @@ describe('customers', () => {
 
   it('moving a seat sends its customer to the new spot; furniture built in the way makes walkers re-path', () => {
     const g = game();
-    const s = place(g, 'stool', 30, 12);
+    const s = place(g, 'stool', 30, 13);
     const h = g.npcs.spawn();
     const i = g.npcs.indexOf(h);
     steps(g, 30); // on the way
     expect(g.npcs.state[i]).toBe(CS.toSeat);
     // Wall off row 16 except one gap: the walker must go round.
     for (let x = 24; x < 36; x++) if (x !== 34) place(g, 'table', x, 16);
-    expect(g.act({ k: 'move', id: g.world.objects.handle(s), x: 28, y: 11, rot: 0 }).ok).toBe(true);
+    expect(g.act({ k: 'move', id: g.world.objects.handle(s), x: 28, y: 13, rot: 0 }).ok).toBe(true);
     until(g, () => g.npcs.state[i] === CS.waiting);
-    expect(g.npcs.tile[i]).toBe(tileOf(28, 11));
+    expect(g.npcs.tile[i]).toBe(tileOf(28, 13));
   });
 
   it('frames carry spawn, state and order sections', () => {
@@ -277,14 +276,14 @@ describe('a headless shop day', () => {
     const g = game(seed);
     // Two rows of stools at tables, a bench and a radio corner.
     for (let x = 25; x < 35; x += 3) {
-      place(g, 'stool', x, 11);
-      place(g, 'table', x, 12);
-      place(g, 'stool', x, 13);
+      place(g, 'stool', x, 14);
+      place(g, 'table', x, 15);
+      place(g, 'stool', x, 16);
     }
-    place(g, 'bench', 26, 16);
-    place(g, 'table', 26, 17);
-    place(g, 'radio', 34, 17);
-    place(g, 'stool', 33, 16);
+    place(g, 'bench', 26, 17);
+    place(g, 'table', 26, 18);
+    place(g, 'radio', 34, 18);
+    place(g, 'stool', 33, 17);
     return g;
   }
 

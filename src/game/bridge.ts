@@ -153,6 +153,7 @@ export class SimBridge {
         return;
       case 'loaded':
         if (msg.skipped) console.warn(`save: ${msg.skipped} objects no longer exist and were skipped`);
+        if (msg.returned) console.info(`save: ${msg.returned} objects no longer fit the shop and went back to the inventory`);
         this.handlers.onLoaded?.(msg.fresh, msg.awayDays, msg.skipped);
         return;
       case 'exported':

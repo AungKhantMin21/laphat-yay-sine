@@ -26,14 +26,21 @@ export const M0_AREA_W = 64;
 export const M0_AREA_H = 48;
 
 /** Floor tile types (grid values in the `floor` layer). */
-export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4 } as const;
-export const FLOOR_TYPES = 5;
+export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4, crossing: 5, kitchen: 6 } as const;
+export const FLOOR_TYPES = 7;
 
 /** TILE_PATCH layer ids. */
-export const TILE_LAYER = { floor: 0, wall: 1, zone: 2 } as const;
+export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3 } as const;
 
-/** `wall` grid bits: a back wall on the tile's north-east edge (−y side) or north-west edge (−x side). */
-export const WALL = { n: 1, w: 2 } as const;
+/**
+ * `wall` grid bits: a wall on the tile's north-east edge (−y side) or north-west edge (−x side).
+ * `n`/`w` are full-height back walls (wall decor hangs on them); `lowN`/`lowW` are walls drawn as a low
+ * sill in the cutaway view (shop front, east side, kitchen partition). Both kinds block walking.
+ */
+export const WALL = { n: 1, w: 2, lowN: 4, lowW: 8 } as const;
+/** Any wall on the −y / −x edge (walking). */
+export const WALL_N = WALL.n | WALL.lowN;
+export const WALL_W = WALL.w | WALL.lowW;
 
 /** `zone` grid bits. */
 export const ZONE = { owned: 1, roof: 2 } as const;

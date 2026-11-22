@@ -138,6 +138,7 @@ async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
   let fresh = true;
   let awayDays = 0;
   let skipped = 0;
+  let returned = 0;
   if (msg.seed === undefined) {
     try {
       const r = await loadSlot(slot);
@@ -145,6 +146,7 @@ async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
         const loaded = Game.fromSave(r.data);
         game = loaded.game;
         skipped = loaded.skipped;
+        returned = loaded.returned;
         fresh = false;
         awayDays = catchupDays(msg.nowMs - r.data.savedAt);
       } else if (r.kind === 'broken') {
@@ -158,7 +160,7 @@ async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
   game ??= Game.create(msg.seed ?? newSeed());
   for (let i = pool.length; i < 4; i++) pool.push(new ArrayBuffer(FRAME_BYTES));
   sendSnapshot();
-  post({ t: 'loaded', fresh, awayDays, skipped });
+  post({ t: 'loaded', fresh, awayDays, skipped, returned });
   if (awayDays > 0) {
     // M4 runs the abstract simulation here, one game day per slice.
     for (let d = 1; d <= awayDays; d++) post({ t: 'catchup', done: d, total: awayDays });

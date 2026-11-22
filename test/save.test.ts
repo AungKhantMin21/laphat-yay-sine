@@ -47,18 +47,20 @@ describe('save format', () => {
     }
     expect(Array.from(game.world.grids.accum[1]!)).toEqual(Array.from(g.world.grids.accum[1]!));
     // New objects after loading never reuse an old uid.
-    const r = game.act({ k: 'place', type: T('stool'), x: SHOP.x0 + 9, y: SHOP.y0 + 9, rot: 0, colour: 0 });
+    const r = game.act({ k: 'place', type: T('stool'), x: SHOP.x0 + 8, y: SHOP.y0 + 8, rot: 0, colour: 0 });
     expect(game.world.objects.uid[r.index!]).toBeGreaterThanOrEqual(data.nextUid);
   });
 
-  it('matches types by key, so a reordered catalog still loads; unknown keys are skipped', () => {
+  it('matches types by key, so a reordered catalog still loads; unknown keys are skipped, orphans go to the inventory', () => {
     const data = furnished().toSave(0);
     data.objects.push({ uid: 999, key: 'flying_carpet', x: 1, y: 1, rot: 0, layer: 1, colour: 0, flags: 0, parentUid: 0 });
     data.objects.push({ uid: 1000, key: 'teapot', x: 1, y: 1, rot: 0, layer: 1, colour: 0, flags: 0, parentUid: 999 }); // orphan
     data.inventory.flying_carpet = 3;
     data.objects.reverse(); // children before parents in the file
-    const { game, skipped } = Game.fromSave(parse(serialize(data)));
-    expect(skipped).toBe(2);
+    const { game, skipped, returned } = Game.fromSave(parse(serialize(data)));
+    expect(skipped).toBe(1); // the unknown key
+    expect(returned).toBe(1); // the teapot whose table no longer exists: kept, in the inventory
+    expect(game.builder.inventory[T('teapot')]).toBe((data.inventory.teapot ?? 0) + 1);
     const teapot = game.world.objects.indexOfUid(data.objects.find((o) => o.key === 'teapot' && o.uid !== 1000)!.uid);
     expect(game.world.objects.type[teapot]).toBe(T('teapot'));
     expect(game.world.objects.parent[teapot]).toBeGreaterThan(0);
@@ -91,5 +93,20 @@ describe('save format', () => {
     expect(() => fromBase64Url('not a code!')).toThrow();
     // Header + key table + 16 bytes per object: a typical shop stays well under DESIGN's 2,000 characters.
     expect(code.length).toBeLessThan(600);
+  });
+
+  it('objects that break the current shop rules go back to the inventory, never lost', () => {
+    const data = furnished().toSave(0);
+    const n = data.objects.length;
+    // Saved before M2.5: a stool on the pavement, a table in the shop's walk-way, a stool in the kitchen.
+    data.objects.push({ uid: 900, key: 'stool', x: SHOP.x0, y: SHOP.y1 + 1, rot: 0, layer: 1, colour: 0, flags: 0, parentUid: 0 });
+    data.objects.push({ uid: 901, key: 'table', x: SHOP.x0 + 7, y: SHOP.y1 - 1, rot: 0, layer: 1, colour: 0, flags: 0, parentUid: 0 });
+    data.objects.push({ uid: 902, key: 'stool', x: SHOP.x0 + 5, y: SHOP.y0 + 1, rot: 0, layer: 1, colour: 0, flags: 0, parentUid: 0 });
+    const { game, skipped, returned } = Game.fromSave(parse(serialize(data)));
+    expect(skipped).toBe(0);
+    expect(returned).toBe(3);
+    expect(game.world.objects.count).toBe(n);
+    expect(game.builder.inventory[T('stool')]).toBe((data.inventory.stool ?? 0) + 2);
+    expect(game.builder.inventory[T('table')]).toBe((data.inventory.table ?? 0) + 1);
   });
 });

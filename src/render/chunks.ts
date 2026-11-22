@@ -13,6 +13,9 @@ const CHUNK_W = CHUNK * 2 * HALF_W; // 256
 const CHUNK_H = CHUNK * 2 * HALF_H + PAD_TOP; // 192
 /** Back-wall sprite headroom (art/ART_STYLE.md). */
 export const WALL_H = 40;
+/** Wall bits in draw order (west, low west, north, low north) and their index in `walls`. */
+const WALL_ORDER = [WALL.w, WALL.lowW, WALL.n, WALL.lowN] as const;
+const WALL_TEX = [1, 3, 0, 2] as const;
 
 interface Chunk {
   sprite: Sprite;
@@ -43,8 +46,8 @@ export class FloorChunks {
   constructor(
     private readonly renderer: Renderer,
     private readonly tiles: Texture[],
-    /** Back-wall textures: [north edge, west edge]. */
-    private readonly walls: [Texture, Texture],
+    /** Wall textures: [north edge, west edge, low north sill, low west sill]. */
+    private readonly walls: readonly [Texture, Texture, Texture, Texture],
     /** Max chunk textures alive at once (each 256×192 RGBA ≈ 192 KB). */
     private maxLive = 48,
   ) {
@@ -166,10 +169,11 @@ export class FloorChunks {
         const tx = cx * CHUNK + i;
         const ty = cy * CHUNK + j;
         const bits = tx < W && ty < this.areaH ? this.wall[ty * W + tx]! : 0;
-        for (let side = 0; side < 2; side++) {
-          if (!(bits & (side === 0 ? WALL.w : WALL.n))) continue;
+        // West edge first, then north; a tile has at most one wall per edge (full or low).
+        for (let side = 0; side < 4; side++) {
+          if (!(bits & WALL_ORDER[side]!)) continue;
           const s = this.scratchWalls[wk++]!;
-          s.texture = this.walls[side === 0 ? 1 : 0];
+          s.texture = this.walls[WALL_TEX[side]!]!;
           s.visible = true;
           s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - WALL_H);
         }

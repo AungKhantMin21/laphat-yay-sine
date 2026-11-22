@@ -6,7 +6,8 @@ import { PATH, PathFinder } from '../src/sim/path/pathfinder';
 import { Rng } from '../src/shared/rng';
 import { Game } from '../src/sim/game';
 import { CATALOG } from '../src/shared/catalog';
-import { SHOP } from '../src/sim/area';
+import { KITCHEN, KITCHEN_DOOR, OPENING, SEATING, SHOP } from '../src/sim/area';
+import { ACCESS, WZ } from '../src/shared/rules/access';
 import rawWalk from '../src/data/walk.json';
 
 /** A small test area: all pavement; '#' in the map = blocked by marking furniture occupancy. */
@@ -15,6 +16,7 @@ function makeArea(map: string[]): { walk: WalkGrid; area: AreaGrids; state: Worl
   const w = map[0]!.length;
   const area = new AreaGrids(0, w, h);
   area.floor.fill(FLOOR.pavement);
+  area.access.fill(WZ.pavement);
   const state = new WorldState(area);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -27,8 +29,8 @@ function makeArea(map: string[]): { walk: WalkGrid; area: AreaGrids; state: Worl
   return { walk: new WalkGrid(area, state.occ), area, state };
 }
 
-function find(pf: PathFinder, from: number, to: number, budget = 1_000_000): number {
-  const h = pf.request(from, to);
+function find(pf: PathFinder, from: number, to: number, cls = 0, budget = 1_000_000): number {
+  const h = pf.request(from, to, cls);
   pf.tick(budget);
   return h;
 }
@@ -347,25 +349,31 @@ describe('walk grid in the game', () => {
     expect(g.walk.passable(at(x, y))).toBe(true);
   });
 
-  it('customers can walk from the street into the shop, but not through the back walls', () => {
+  it('customers walk from the pavement into the seating room through the opening, never into the kitchen', () => {
     const g = Game.create(5);
     const W = g.walk.w;
     const at = (x: number, y: number) => y * W + x;
-    const h = find(g.paths, at(2, 24), at(SHOP.x0 + 2, SHOP.y0 + 2));
+    const h = find(g.paths, at(2, 20), at(SEATING.x0 + 2, SEATING.y0 + 2));
     expect(g.paths.statusOf(h)).toBe(PATH.done);
-    // Behind the back wall to just inside it: must go around, so the path is long.
-    const behind = at(SHOP.x0 - 1, SHOP.y0 + 2);
-    const inside = at(SHOP.x0, SHOP.y0 + 2);
-    expect(g.paths.canStep(behind, inside)).toBe(false);
-    const h2 = find(g.paths, behind, inside);
-    expect(g.paths.statusOf(h2)).toBe(PATH.done);
-    expect(g.paths.length(h2)).toBeGreaterThan(5);
+    // The front sill blocks the edge beside the opening; the opening itself is open.
+    expect(g.paths.canStep(at(SHOP.x0 + 1, SHOP.y1), at(SHOP.x0 + 1, SHOP.y1 - 1))).toBe(false);
+    expect(g.paths.canStep(at(OPENING.x0, SHOP.y1), at(OPENING.x0, SHOP.y1 - 1))).toBe(true);
+    // The kitchen: customers can't get there at all; staff go through the door.
+    const sink = at(KITCHEN.x0 + 6, KITCHEN.y0 + 1);
+    expect(g.paths.statusOf(find(g.paths, at(2, 20), sink))).toBe(PATH.failed);
+    const hs = find(g.paths, at(2, 20), sink, ACCESS.staff);
+    expect(g.paths.statusOf(hs)).toBe(PATH.done);
+    expect(tilesOf(g.paths, hs)).toContain(at(KITCHEN_DOOR.x, KITCHEN_DOOR.y));
+    // Nobody walks on the road or the filler behind the shop.
+    expect(g.paths.statusOf(find(g.paths, at(2, 20), at(2, 24), ACCESS.staff))).toBe(PATH.failed);
+    expect(g.paths.statusOf(find(g.paths, at(2, 20), at(SHOP.x0 - 1, SHOP.y0 + 2), ACCESS.staff))).toBe(PATH.failed);
   });
 
   it('a corner-to-corner search keeps every tick within the node budget and finishes over a few ticks', () => {
     const g = Game.create(5);
     const W = g.walk.w;
-    const h = g.paths.request(0, (g.walk.h - 1) * W + W - 1);
+    // Pavement end to the far pavement's other end, over the crossing.
+    const h = g.paths.request(19 * W, 30 * W + W - 1);
     let ticks = 0;
     while (g.paths.statusOf(h) === PATH.queued && ticks < 20) {
       const before = g.paths.expansions;

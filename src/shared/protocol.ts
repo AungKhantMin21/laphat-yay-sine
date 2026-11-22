@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -108,7 +108,8 @@ export type FromSim =
   | { t: 'ack'; seq: number; ok: boolean; reason?: string; id?: number }
   | { t: 'state'; state: PlayerState }
   /** After init: whether this is a new game, and game days caught up after being away. */
-  | { t: 'loaded'; fresh: boolean; awayDays: number; skipped: number }
+  /** `returned`: saved objects that no longer fit the shop's rules, moved to the inventory. */
+  | { t: 'loaded'; fresh: boolean; awayDays: number; skipped: number; returned: number }
   | { t: 'exported'; code: string }
   /** reason = i18n key when the code was refused. */
   | { t: 'imported'; ok: boolean; reason?: string }

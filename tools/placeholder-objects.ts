@@ -19,6 +19,9 @@ const HEIGHT: Record<string, number> = {
 
 const WALL_H = 40;
 
+/** Low sill height in px. */
+const SILL_H = 8;
+
 export function drawWalls(): Array<[string, IsoImage]> {
   const out: Array<[string, IsoImage]> = [];
   for (const side of ['n', 'w'] as const) {
@@ -29,6 +32,11 @@ export function drawWalls(): Array<[string, IsoImage]> {
     img.wallQuad(side, 0, 1, WALL_H - 2, WALL_H, edge); // top cap
     img.wallQuad(side, 0, 1, 0, 3, side === 'n' ? 'a98258' : '8a6644'); // skirting
     out.push([`wall/${side}`, img]);
+    // Low sill (front, east side, kitchen partition): same wall, cut down so the room stays visible.
+    const low = new IsoImage(1, 1, WALL_H);
+    low.wallQuad(side, 0, 1, 0, SILL_H, side === 'n' ? 'c8a46e' : 'a98258');
+    low.wallQuad(side, 0, 1, SILL_H - 2, SILL_H, side === 'n' ? 'ecd3a5' : 'dab886');
+    out.push([`wall/low_${side}`, low]);
   }
   return out;
 }

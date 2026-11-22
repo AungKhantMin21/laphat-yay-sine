@@ -52,6 +52,8 @@ const atlas = await loadAtlas();
 const chunks = new FloorChunks(stage.renderer, floorTextures(atlas, floorFrames, FLOOR_TYPES), [
   atlas.get('wall/n') ?? Texture.EMPTY,
   atlas.get('wall/w') ?? Texture.EMPTY,
+  atlas.get('wall/low_n') ?? Texture.EMPTY,
+  atlas.get('wall/low_w') ?? Texture.EMPTY,
 ]);
 stage.world.addChild(chunks.layer);
 stage.onContextRestored(() => chunks.invalidateAll());

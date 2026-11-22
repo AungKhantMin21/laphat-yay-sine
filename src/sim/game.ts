@@ -4,7 +4,8 @@ import { CATALOG } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
-import { createM1Area, STREET } from './area';
+import { createM1Area, SPAWN_ROWS } from './area';
+import { ACCESS } from '../shared/rules/access';
 import { DRINKS, REACTION, autoPrice, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
@@ -16,6 +17,7 @@ import { SimWorld } from './world';
 import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
+import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
 import { SAVE_SCHEMA, type SaveData, type SavedObject } from './save/format';
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
@@ -23,7 +25,10 @@ const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: t
 export class Game {
   /** Events for the main thread, drained by the worker after each step or action. */
   readonly events: SimEvent[] = [];
+  /** Walk grid for customers (ACCESS.people). */
   readonly walk: WalkGrid;
+  /** Walk grid for the player and staff (ACCESS.staff: also the kitchen). */
+  readonly walkStaff: WalkGrid;
   readonly paths: PathFinder;
   readonly npcs: Customers;
   /** Last game minute an arrival was rolled for (one roll per minute). */
@@ -37,9 +42,10 @@ export class Game {
   ) {
     day.update(sim.gameMinute, 0);
     world.clearWalkDirty(); // the walk grid below starts from the current occupancy
-    this.walk = new WalkGrid(world.state.area, world.state.occ);
-    this.paths = new PathFinder(this.walk);
-    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, STREET, (h, drink, poured, score) =>
+    this.walk = new WalkGrid(world.state.area, world.state.occ, ACCESS.people);
+    this.walkStaff = new WalkGrid(world.state.area, world.state.occ, ACCESS.staff);
+    this.paths = new PathFinder([this.walk, this.walkStaff]);
+    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS }, (h, drink, poured, score) =>
       this.pay(h, drink, poured, score),
     );
   }
@@ -71,6 +77,7 @@ export class Game {
     const w = this.world;
     if (!w.walkDirty) return;
     this.walk.update(w.walkX0, w.walkY0, w.walkX1, w.walkY1);
+    this.walkStaff.update(w.walkX0, w.walkY0, w.walkX1, w.walkY1);
     w.clearWalkDirty();
   }
 
@@ -134,8 +141,10 @@ export class Game {
   /**
    * Rebuilds a game from a save. Types are matched by key; objects whose key no longer exists
    * are skipped (reported in `skipped`). Parents are placed before the items standing on them.
+   * Objects that break today's placement rules (the shop layout or rules changed since the save)
+   * go back to the inventory, never lost (`returned`); so do items whose surface went back.
    */
-  static fromSave(d: SaveData): { game: Game; skipped: number } {
+  static fromSave(d: SaveData): { game: Game; skipped: number; returned: number } {
     const sim = new Sim(d.seed);
     sim.tick = d.tick;
     sim.clock = d.clock;
@@ -147,12 +156,20 @@ export class Game {
       if (def) inv[def.id] = Math.min(0xffff, n);
     }
     let skipped = 0;
+    let returned = 0;
     const ordered = [...d.objects].sort((a, b) => Number(a.parentUid !== 0) - Number(b.parentUid !== 0));
+    const check = newPlaceResult();
     for (const o of ordered) {
       const def = CATALOG.byKey.get(o.key);
-      const parent = o.parentUid ? world.objects.indexOfUid(o.parentUid) : 0;
-      if (!def || (o.parentUid && !parent)) {
+      if (!def) {
         skipped++;
+        continue;
+      }
+      const parent = o.parentUid ? world.objects.indexOfUid(o.parentUid) : 0;
+      const ok = (!o.parentUid || parent !== 0) && checkPlacement(world.state, def.id, o.x, o.y, o.rot & 3, 0, check).ok && check.parent === parent;
+      if (!ok) {
+        inv[def.id] = Math.min(0xffff, inv[def.id]! + 1);
+        returned++;
         continue;
       }
       world.add({ type: def.id, x: o.x, y: o.y, rot: o.rot & 3, layer: def.layer, colour: o.colour, parent }, o.uid);
@@ -162,7 +179,7 @@ export class Game {
     day.shuttersOpen = d.shuttersOpen;
     day.today = { ...d.today };
     day.teaser = { ...d.teaser };
-    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped };
+    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped, returned };
   }
 
   /** Runs a player action. Object ids on the wire are handles; stale handles are refused. */

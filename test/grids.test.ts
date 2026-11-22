@@ -6,7 +6,10 @@ import { falloff, PropertyGrids } from '../src/sim/grids/property-grids';
 import { SimWorld } from '../src/sim/world';
 import { Builder } from '../src/sim/build/builder';
 import { Rng } from '../src/shared/rng';
-import { createM1Area, SHOP, FRONTAGE } from '../src/sim/area';
+import { createM1Area, SHOP, PAVEMENT } from '../src/sim/area';
+
+/** A pavement tile in front of the shop (open sky). */
+const FRONTAGE = { x0: SHOP.x0, y0: PAVEMENT.y0 };
 import { WorldView } from '../src/game/view';
 
 const T = (key: string) => CATALOG.byKey.get(key)!.id;

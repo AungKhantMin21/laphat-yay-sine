@@ -224,11 +224,12 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 
 ### Walk zones and access classes (M2.5)
 
-- The area `zone` grid carries the walk zone of every tile: `road`, `crossing`, `pavement`, `front` (shop opening and door tiles), `interior`, `kitchen`, `blocked` (filler, building fronts). If the bits don't fit next to `owned`/`roof` in u8, a separate `access` u8 grid holds them.
+- The area `access` grid (u8, mirrored to main as TILE_PATCH layer 3) holds the walk zone of every tile (`WZ` in `shared/rules/access.ts`, exclusive values): `blocked` (filler, building fronts), `road`, `crossing`, `pavement`, `front` (the shop-front row behind the opening), `interior`, `kitchen`, `kitchenDoor` (the kitchen side of its door). `front` and `kitchenDoor` are walk-ways: nothing is placed on them. The `zone` grid keeps `owned`/`roof`.
 - `shared/rules/access.ts` is the only place that says which **access class** may enter which zone: `people` (customers: pavement, crossing, front, interior) and `staff` (player and staff: those plus kitchen). Nobody walks on road or filler.
-- Shop walls are edge bits (`WALL.n`/`WALL.w`); front and east walls are stored on the tile beyond them, so the same two bits close the shop. The front stays open across the opening; the kitchen partition has one door tile. Rendering is a cutaway: back walls full height, front and side walls as a low sill.
-- `WalkGrid` keeps one cost array and one move mask per access class (2 × Uint8 each, dirty-rect updates as before); `PathFinder.request(from, to, cls)` selects them. Customers spawn at the pavement ends and beyond the zebra crossing (`SPAWNS` in `sim/area.ts`).
-- Placement (`shared/rules/placement.ts`): seating and furniture in the interior, kitchen fixtures in the kitchen, nothing on entrance tiles, and the entrance must still reach the counter.
+- Shop walls are edge bits: `WALL.n`/`WALL.w` (full-height back walls, where wall decor hangs) and `WALL.lowN`/`WALL.lowW` (drawn as a low sill); both kinds block walking (`WALL_N`/`WALL_W`). Front and east walls sit on the tile beyond them. The front stays open across the opening; the kitchen partition has one door tile. Rendering is a cutaway: back walls full height, front and side walls as a low sill.
+- `WalkGrid` keeps one cost array and one move mask per access class (2 × Uint8 each, dirty-rect updates as before); `PathFinder.request(from, to, cls)` selects them (one queue, one node budget, one path pool for both). Customers spawn at the pavement ends and beyond the zebra crossing (`SPAWNS` in `sim/area.ts`).
+- Placement (`shared/rules/placement.ts`): floor-standing furniture only on shop zones and never on a walk-way; seats only in `interior`; and `wayStaysOpen` (4-way flood fill with preallocated scratch, exact because walkers never cut corners) refuses furniture that would cut any walk-way tile off from the others (front ↔ kitchen door). Rugs and ceiling items don't block walking.
+- Loading a save checks every object against today's rules; anything that no longer fits (or whose surface didn't come back) goes into the inventory and is counted in `loaded.returned`. So rule or layout changes never need a save migration to protect objects.
 - Building fronts, awning, signboard and shutters are area **features** drawn by `render/facades.ts` (not objects, not saved).
 
 ### Task board, workers and cups (M2.5)
@@ -257,7 +258,7 @@ Database `laphat`:
 
 Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats.
 
-Binary save v3 (M2.5, planned) = v2 plus the staff roster (role key, hired day, day-off flag). Migration 2→3 adds missing fixtures (counter, kettle, sink, stove) and moves furniture that now stands on a wall line, in the kitchen or outside the allowed zones into the inventory — never deletes it. Workers, tasks and cups are not saved (cups reset to clean).
+Binary save v3 (M2.5, planned) = v2 plus the staff roster (role key, hired day, day-off flag). Migration 2→3 adds missing fixtures (counter, kettle, sink, stove); furniture that no longer fits is already handled at load (see walk zones). Workers, tasks and cups are not saved (cups reset to clean).
 
 Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 

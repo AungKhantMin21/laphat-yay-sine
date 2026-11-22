@@ -26,6 +26,8 @@ export class PathFinder {
   private readonly from: Int32Array;
   private readonly to: Int32Array;
   private readonly len: Uint16Array;
+  /** Access class per request: which walk grid it searches. */
+  private readonly cls: Uint8Array;
   /** Path tiles: slot i owns [i * stride, i * stride + len[i]). */
   readonly tiles: Uint16Array;
   readonly stride: number;
@@ -50,10 +52,19 @@ export class PathFinder {
   /** Node expansions so far (stats/tests). */
   expansions = 0;
 
+  /** One walk grid per access class (index = class). All share one budget and one path pool. */
+  readonly grids: readonly WalkGrid[];
+  /** The grid of the active search. */
+  private cur: WalkGrid;
+
   constructor(
-    readonly walk: WalkGrid,
+    grids: WalkGrid | readonly WalkGrid[],
     readonly config: WalkConfig = WALK,
   ) {
+    this.grids = Array.isArray(grids) ? (grids as readonly WalkGrid[]) : [grids as WalkGrid];
+    const walk = this.grids[0]!;
+    for (const g of this.grids) if (g.w !== walk.w || g.h !== walk.h) throw new Error('walk grids differ in size');
+    this.cur = walk;
     const n = walk.w * walk.h;
     if (n > 0x10000) throw new Error('area too large for 16-bit path tiles');
     const slots = config.pathSlots + 1; // slot 0 is never used
@@ -62,6 +73,7 @@ export class PathFinder {
     this.from = new Int32Array(slots);
     this.to = new Int32Array(slots);
     this.len = new Uint16Array(slots);
+    this.cls = new Uint8Array(slots);
     this.stride = config.maxPathLen;
     this.tiles = new Uint16Array(slots * this.stride);
     this.queue = new Uint16Array(slots);
@@ -80,11 +92,21 @@ export class PathFinder {
     return this.slots.count;
   }
 
-  /** Queues a search from tile index `from` to `to`. Returns a handle, or NONE if the pool is full. */
-  request(from: number, to: number): number {
+  /** The people grid (class 0). */
+  get walk(): WalkGrid {
+    return this.grids[0]!;
+  }
+
+  /**
+   * Queues a search from tile index `from` to `to` for access class `cls`.
+   * Returns a handle, or NONE if the pool is full.
+   */
+  request(from: number, to: number, cls = 0): number {
+    if (!this.grids[cls]) throw new Error(`no walk grid for access class ${cls}`);
     const h = this.slots.alloc();
     if (h === NONE) return NONE;
     const i = handleIndex(h);
+    this.cls[i] = cls;
     this.from[i] = from;
     this.to[i] = to;
     this.len[i] = 0;
@@ -137,8 +159,9 @@ export class PathFinder {
    * Whether one step from tile a to neighbouring tile b is allowed right now (paths go stale after
    * building): b passable (or the goal), no wall on the edge, no corner cutting on diagonals.
    */
-  canStep(a: number, b: number, goal = -1): boolean {
-    const w = this.walk.w;
+  canStep(a: number, b: number, goal = -1, cls = 0): boolean {
+    const walk = this.grids[cls]!;
+    const w = walk.w;
     const ax = a % w;
     const ay = (a - ax) / w;
     const bx = b % w;
@@ -146,7 +169,7 @@ export class PathFinder {
     const dx = bx - ax;
     const dy = by - ay;
     if (dx < -1 || dx > 1 || dy < -1 || dy > 1 || (dx === 0 && dy === 0)) return false;
-    return this.walk.stepAllowed(ax, ay, dx, dy, b === goal);
+    return walk.stepAllowed(ax, ay, dx, dy, b === goal);
   }
 
   /** Runs queued searches for up to `budget` node expansions (default: the per-tick budget). */
@@ -159,7 +182,7 @@ export class PathFinder {
         this.queue.copyWithin(0, 1, this.qLen);
         this.qLen--;
         this.start();
-      } else if (this.activeVersion !== this.walk.version) {
+      } else if (this.activeVersion !== this.cur.version) {
         this.start(); // the walk grid changed mid-search: begin again
       }
       left = this.expand(left);
@@ -168,7 +191,8 @@ export class PathFinder {
 
   private start(): void {
     const i = this.active;
-    this.activeVersion = this.walk.version;
+    this.cur = this.grids[this.cls[i]!]!;
+    this.activeVersion = this.cur.version;
     if (++this.sid === 0xffffffff) {
       this.seen.fill(0);
       this.closed.fill(0);
@@ -177,7 +201,7 @@ export class PathFinder {
     this.heapLen = 0;
     const s = this.from[i]!;
     const t = this.to[i]!;
-    const n = this.walk.w * this.walk.h;
+    const n = this.cur.w * this.cur.h;
     if (s < 0 || t < 0 || s >= n || t >= n) {
       this.finish(PATH.failed);
       return;
@@ -193,7 +217,7 @@ export class PathFinder {
   private expand(budget: number): number {
     const i = this.active;
     if (i === 0) return budget;
-    const walk = this.walk;
+    const walk = this.cur;
     const w = walk.w;
     const cost = walk.cost;
     const moves = walk.moves;

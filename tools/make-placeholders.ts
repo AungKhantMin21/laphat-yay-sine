@@ -56,6 +56,19 @@ const tiles: Record<string, Painter> = {
     const v = y / 8 - x / 16 + 2; // 0..4 in iso-y
     return (Math.floor(u / 2) + Math.floor(v / 2)) % 2 ? 'c8a46e' : 'dab886';
   },
+  crossing: (x, y, e) => {
+    // Road with zebra bars parallel to the road (iso-x), repeating along the walking direction (iso-y).
+    if (e === 'tl') return '5a504e';
+    if (e === 'br') return '3a3232';
+    const v = y / 8 - x / 16 + 2; // 0..4 across the tile in iso-y
+    return Math.floor(v) % 2 === 0 ? 'f6ead0' : '4a4040';
+  },
+  kitchen: (x, y, e) => {
+    // Plain concrete with a faint grid.
+    if (e === 'tl') return '9aa6ae';
+    if (e === 'br') return '44505c';
+    return noise(x, y, 3) % 17 === 0 ? '44505c' : (x + y * 2) % 16 === 0 ? '9aa6ae' : '6a7884';
+  },
   dirt: (x, y, e) => {
     if (e === 'tl') return '6e4e36';
     if (e === 'br') return '3d2a22';

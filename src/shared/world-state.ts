@@ -11,6 +11,8 @@ export class AreaGrids {
   readonly wall: Uint8Array;
   /** ZONE bits per tile. */
   readonly zone: Uint8Array;
+  /** Walk zone per tile (shared/rules/access.ts WZ). */
+  readonly access: Uint8Array;
 
   constructor(
     readonly id: number,
@@ -20,6 +22,7 @@ export class AreaGrids {
     this.floor = new Uint8Array(w * h);
     this.wall = new Uint8Array(w * h);
     this.zone = new Uint8Array(w * h);
+    this.access = new Uint8Array(w * h);
   }
 
   inBounds(x: number, y: number): boolean {

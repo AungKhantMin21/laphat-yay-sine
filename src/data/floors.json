@@ -2,5 +2,7 @@
   "1": "floor/road",
   "2": "floor/pavement",
   "3": "floor/shop",
-  "4": "floor/dirt"
+  "4": "floor/dirt",
+  "5": "floor/crossing",
+  "6": "floor/kitchen"
 }

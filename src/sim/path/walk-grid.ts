@@ -1,7 +1,9 @@
-// Walking cost per tile, derived from the floor type and furniture occupancy (src/data/walk.json).
-// Rebuilt only inside the rect around a build change; `version` tells searches in flight to restart.
+// Walking cost per tile for one access class (shared/rules/access.ts), derived from the floor type,
+// the walk zone and furniture occupancy (src/data/walk.json). Rebuilt only inside the rect around a
+// build change; `version` tells searches in flight to restart.
 import raw from '../../data/walk.json';
-import { FLOOR, FLOOR_TYPES, WALL } from '../../shared/layout';
+import { FLOOR, FLOOR_TYPES, WALL_N, WALL_W } from '../../shared/layout';
+import { ACCESS, mayEnter } from '../../shared/rules/access';
 import type { AreaGrids, Occupancy } from '../../shared/world-state';
 
 /** The 8 step directions, in move-mask bit order. */
@@ -68,6 +70,8 @@ export class WalkGrid {
   constructor(
     readonly area: AreaGrids,
     readonly occ: Occupancy,
+    /** Access class of the walkers using this grid (ACCESS.people / ACCESS.staff). */
+    readonly cls: number = ACCESS.people,
     readonly config: WalkConfig = WALK,
   ) {
     this.w = area.w;
@@ -85,12 +89,14 @@ export class WalkGrid {
     const bx = Math.min(w, x1);
     const by = Math.min(h, y1);
     const floor = this.area.floor;
+    const access = this.area.access;
     const furn = this.occ.furniture;
     const fc = this.config.floorCost;
+    const cls = this.cls;
     for (let y = ay; y < by; y++) {
       for (let x = ax; x < bx; x++) {
         const t = y * w + x;
-        this.cost[t] = furn[t] !== 0 ? BLOCKED : (fc[floor[t]!] ?? BLOCKED);
+        this.cost[t] = furn[t] !== 0 || !mayEnter(cls, access[t]!) ? BLOCKED : (fc[floor[t]!] ?? BLOCKED);
       }
     }
     // Move masks depend on neighbours, so refresh one tile further out.
@@ -108,6 +114,8 @@ export class WalkGrid {
     const bx = ax + dx;
     const by = ay + dy;
     if (bx < 0 || by < 0 || bx >= w || by >= this.h) return false;
+    // A blocked goal (a seat) is fine, but never one in a zone this class may not enter.
+    if (!mayEnter(this.cls, this.area.access[by * w + bx]!)) return false;
     if (!goalOk && !this.passable(by * w + bx)) return false;
     if (dx === 0 || dy === 0) return this.edgeOpen(ax, ay, bx, by);
     // Diagonal: both side tiles must be walkable and no wall on any of the four edges.
@@ -126,18 +134,18 @@ export class WalkGrid {
   }
 
   /**
-   * Whether the edge between orthogonal neighbours a=(ax,ay) and b is free of back walls.
-   * WALL.n sits on a tile's −y edge, WALL.w on its −x edge.
+   * Whether the edge between orthogonal neighbours a=(ax,ay) and b is free of walls (full or low).
+   * WALL.n/lowN sit on a tile's −y edge, WALL.w/lowW on its −x edge.
    */
   edgeOpen(ax: number, ay: number, bx: number, by: number): boolean {
     const wall = this.area.wall;
     const w = this.w;
     if (bx === ax) {
-      if (by === ay - 1) return (wall[ay * w + ax]! & WALL.n) === 0;
-      if (by === ay + 1) return (wall[by * w + bx]! & WALL.n) === 0;
+      if (by === ay - 1) return (wall[ay * w + ax]! & WALL_N) === 0;
+      if (by === ay + 1) return (wall[by * w + bx]! & WALL_N) === 0;
     } else if (by === ay) {
-      if (bx === ax - 1) return (wall[ay * w + ax]! & WALL.w) === 0;
-      if (bx === ax + 1) return (wall[by * w + bx]! & WALL.w) === 0;
+      if (bx === ax - 1) return (wall[ay * w + ax]! & WALL_W) === 0;
+      if (bx === ax + 1) return (wall[by * w + bx]! & WALL_W) === 0;
     }
     return false;
   }

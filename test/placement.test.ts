@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG } from '../src/shared/catalog';
 import { checkPlacement, newPlaceResult } from '../src/shared/rules/placement';
 import { SimWorld, type ObjectFields } from '../src/sim/world';
-import { createM1Area, SHOP, FRONTAGE } from '../src/sim/area';
+import { createM1Area, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, SHOP } from '../src/sim/area';
+import { ZONE } from '../src/shared/layout';
+
+/** A pavement tile in front of the shop (not owned, open sky). */
+const FRONTAGE = { x0: SHOP.x0, y0: PAVEMENT.y0 };
 
 const T = (key: string) => CATALOG.byKey.get(key)!;
 const fields = (key: string, x: number, y: number, rot = 0, parent = 0): ObjectFields => ({ type: T(key).id, x, y, rot, layer: T(key).layer, colour: 0, parent });
@@ -22,7 +26,7 @@ describe('placement rules', () => {
   it('only on owned tiles, inside the area', () => {
     const { check } = setup();
     expect(check('stool', IN.x, IN.y)).toBe('ok');
-    expect(check('stool', FRONTAGE.x0, FRONTAGE.y0)).toBe('ok');
+    expect(check('stool', FRONTAGE.x0, FRONTAGE.y0)).toBe('build.err.notOwned'); // the pavement is for walking
     expect(check('stool', 2, 2)).toBe('build.err.notOwned');
     expect(check('stool', -1, 0)).toBe('build.err.outside');
     expect(check('bench', SHOP.x1 - 1, IN.y)).toBe('build.err.notOwned'); // second tile off the shop's edge
@@ -86,11 +90,35 @@ describe('placement rules', () => {
 
   it('ceiling items need a roof and a free ceiling tile', () => {
     const { world, check } = setup();
-    expect(check('hanging_lamp', FRONTAGE.x0, FRONTAGE.y0)).toBe('build.err.noRoof');
+    expect(check('hanging_lamp', FRONTAGE.x0, FRONTAGE.y0)).toBe('build.err.notOwned');
+    const W = world.state.area.w;
+    world.state.area.zone[IN.y * W + IN.x + 4] = ZONE.owned; // an owned tile without a roof
+    expect(check('hanging_lamp', IN.x + 4, IN.y)).toBe('build.err.noRoof');
     expect(check('hanging_lamp', IN.x, IN.y)).toBe('ok');
     world.add(fields('table', IN.x, IN.y));
     expect(check('ceiling_fan', IN.x, IN.y)).toBe('ok'); // furniture below doesn't matter
     world.add(fields('ceiling_fan', IN.x, IN.y));
     expect(check('hanging_lamp', IN.x, IN.y)).toBe('build.err.blocked');
+  });
+
+  it('walk zones: seats only in the seating room, nothing on the walk-way, kitchen for other furniture', () => {
+    const { check } = setup();
+    expect(check('stool', KITCHEN.x0 + 4, KITCHEN.y0 + 1)).toBe('build.err.seatOutside');
+    expect(check('shelf', KITCHEN.x0 + 4, KITCHEN.y0)).toBe('ok');
+    expect(check('stool', OPENING.x0, SHOP.y1 - 1)).toBe('build.err.walkway');
+    expect(check('shelf', KITCHEN_DOOR.x, KITCHEN_DOOR.y)).toBe('build.err.walkway');
+    expect(check('pot_plant', OPENING.x0 + 1, SHOP.y1 - 1)).toBe('build.err.walkway'); // small items on the floor too
+    expect(check('rug', OPENING.x0, SHOP.y1 - T('rug').h)).toBe('ok'); // rugs don't block walking, even on the walk-way
+  });
+
+  it('furniture may not cut the kitchen door off from the shop front', () => {
+    const { world, check } = setup();
+    // Wall the door in from the seating side: (x−1, y+1), (x, y+1) and (x+1, y+1) below the door.
+    const y = KITCHEN_DOOR.y + 1;
+    world.add(fields('stool', KITCHEN_DOOR.x - 1, y));
+    world.add(fields('stool', KITCHEN_DOOR.x + 1, y));
+    expect(check('stool', KITCHEN_DOOR.x, y)).toBe('build.err.blocksWay');
+    // Furniture that leaves a way round is fine.
+    expect(check('stool', KITCHEN_DOOR.x + 3, y + 2)).toBe('ok');
   });
 });
