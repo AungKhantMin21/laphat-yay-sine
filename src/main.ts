@@ -6,6 +6,8 @@ import { createPixelStage } from './render/stage';
 import { floorTextures, loadAtlas } from './render/atlas';
 import floorFrames from './data/floors.json';
 import { FLOOR_TYPES } from './shared/layout';
+import { FACADE_FRAMES } from './shared/street';
+import { ShopFront } from './render/shopfront';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
 import { NpcLayer } from './render/npcs';
@@ -54,7 +56,7 @@ const chunks = new FloorChunks(stage.renderer, floorTextures(atlas, floorFrames,
   atlas.get('wall/w') ?? Texture.EMPTY,
   atlas.get('wall/low_n') ?? Texture.EMPTY,
   atlas.get('wall/low_w') ?? Texture.EMPTY,
-]);
+], FACADE_FRAMES.map((f) => (f ? (atlas.get(f) ?? Texture.EMPTY) : Texture.EMPTY)));
 stage.world.addChild(chunks.layer);
 stage.onContextRestored(() => chunks.invalidateAll());
 const camera = new Camera();
@@ -64,6 +66,7 @@ const objects = new ObjectLayer(view, atlas, new Recolourer(atlas));
 const ghost = new Ghost(objects, objects.layer);
 const heat = new HeatLayer(view);
 const npcs = new NpcLayer(view, atlas, objects.layer);
+const shopFront = new ShopFront(atlas, objects.layer);
 stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npcs.bubbles);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
@@ -91,12 +94,12 @@ const bridge: SimBridge = new SimBridge(view, {
     }
   },
   onReady: () => {
-    chunks.setArea(view.area.floor, view.area.wall, view.area.w, view.area.h);
+    chunks.setArea(view.area.floor, view.area.wall, view.area.facade, view.area.w, view.area.h);
     camera.setArea(view.area.w, view.area.h);
     if (!booted) {
       booted = true;
       showTitleCard();
-      camera.centreOn(isoX(30, 18), isoY(30, 18)); // the shop's front
+      camera.centreOn(isoX(30, 16), isoY(30, 16)); // the shop, with the pavement in front
       requestAnimationFrame(() => {
         pickMusic();
         setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
@@ -214,6 +217,7 @@ const loop = new FrameLoop({
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
     npcs.update(now, TIER_SETTINGS[device.tier].maxAnimatedNpcs, v.x0, v.y0, v.x1, v.y1);
+    shopFront.update(bridge.player?.phase ?? 0);
     stage.render();
     draws?.endFrame();
   },

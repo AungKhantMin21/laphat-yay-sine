@@ -2,7 +2,7 @@
 // then one sprite upscales it by a whole number into a canvas whose backing store is exactly
 // CSS size × devicePixelRatio. No browser scaling ever touches the pixels.
 import { autoDetectRenderer, Container, RenderTexture, Sprite, type Renderer } from 'pixi.js';
-import { BASE_H, computeSize, type StageSize } from './size';
+import { BASE_H, DEFAULT_ZOOM, computeSize, type StageSize } from './size';
 
 export { BASE_H, type StageSize };
 
@@ -58,12 +58,12 @@ export async function createPixelStage(parent: HTMLElement, background = 0x1b141
   view.roundPixels = true;
   screen.addChild(view);
 
-  const size: StageSize = { w: 1, h: 1, scale: 1, devW: 1, devH: 1, devPerCss: 1, zoom: 0 };
+  const size: StageSize = { w: 1, h: 1, scale: 1, devW: 1, devH: 1, devPerCss: 1, zoom: DEFAULT_ZOOM };
   const resizeCbs: Array<(s: StageSize) => void> = [];
   const restoreCbs: Array<() => void> = [];
   let lost = false;
   let renderScale = 1;
-  let zoom = 0;
+  let zoom = DEFAULT_ZOOM;
 
   function resize(): void {
     const css = viewportCss();

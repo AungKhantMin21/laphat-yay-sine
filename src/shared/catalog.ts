@@ -27,6 +27,12 @@ export interface ObjectDef {
   recolour: boolean;
   /** Seats it offers (customers, M2). */
   seat: number;
+  /** Part of the shop (M2.5): can be moved but never picked up or sold. */
+  fixed: boolean;
+  /** Where it may stand: ZONE_RULE.any (any shop zone), .kitchen or .seating. Seats are always seating. */
+  zone: number;
+  /** What the service loop uses it for (SERVICE), or SERVICE.none. */
+  service: number;
   /** Per property: level (−8…8 design levels) and radius in tiles (0–4). */
   propLevel: Int8Array;
   propRadius: Uint8Array;
@@ -52,8 +58,16 @@ interface RawObject {
   small?: boolean;
   recolour?: boolean;
   seat?: number;
+  fixed?: boolean;
+  zone?: 'kitchen' | 'seating';
+  service?: 'counter' | 'kettle' | 'sink' | 'stove';
   props?: Record<string, [number, number]>;
 }
+
+/** Where an object may stand (ObjectDef.zone). */
+export const ZONE_RULE = { any: 0, kitchen: 1, seating: 2 } as const;
+/** Service roles of objects (ObjectDef.service). */
+export const SERVICE = { none: 0, counter: 1, kettle: 2, sink: 3, stove: 4 } as const;
 
 export interface RawCatalog {
   ramps: string[][];
@@ -94,6 +108,11 @@ export function buildCatalog(data: RawCatalog): Catalog {
     if (surface > 0 && layer !== LAYER.furniture) throw new Error(`${at}: only furniture can have a surface`);
     if (small && (layer !== LAYER.furniture || o.w !== 1 || o.h !== 1 || surface > 0)) throw new Error(`${at}: small items are 1×1 furniture without a surface`);
     if ((layer === LAYER.wall || layer === LAYER.ceiling) && (o.w !== 1 || o.h !== 1)) throw new Error(`${at}: wall and ceiling items are 1×1`);
+    const zone = o.zone === undefined ? ZONE_RULE.any : (ZONE_RULE as Record<string, number>)[o.zone];
+    if (zone === undefined || (o.zone !== undefined && zone === ZONE_RULE.any)) throw new Error(`${at}: zone must be "kitchen" or "seating"`);
+    const service = o.service === undefined ? SERVICE.none : (SERVICE as Record<string, number>)[o.service];
+    if (service === undefined || (o.service !== undefined && service === SERVICE.none)) throw new Error(`${at}: unknown service "${o.service}"`);
+    if ((o.seat ?? 0) > 0 && zone === ZONE_RULE.kitchen) throw new Error(`${at}: seats can't be kitchen-only`);
     const propLevel = new Int8Array(PROP_COUNT);
     const propRadius = new Uint8Array(PROP_COUNT);
     for (const [name, pair] of Object.entries(o.props ?? {})) {
@@ -119,6 +138,9 @@ export function buildCatalog(data: RawCatalog): Catalog {
       small,
       recolour: o.recolour ?? false,
       seat: o.seat ?? 0,
+      fixed: o.fixed ?? false,
+      zone,
+      service,
       propLevel,
       propRadius,
     };

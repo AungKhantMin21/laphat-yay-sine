@@ -4,31 +4,10 @@ import { FLOOR, M0_AREA_H, M0_AREA_W, WALL, ZONE } from '../shared/layout';
 import { WZ } from '../shared/rules/access';
 import { AreaGrids } from '../shared/world-state';
 
-/** Rects are inclusive-exclusive. */
-export interface Rect {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
+import { BUILDINGS, CROSSING, FAR_PAVEMENT, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, SEATING, SHOP, facadeId, facadeKind } from '../shared/street';
 
-/** The whole shop building (kitchen + seating). */
-export const SHOP = { x0: 24, y0: 9, x1: 36, y1: 19 } as const;
-/** Back kitchen: staff and the player only. */
-export const KITCHEN = { x0: 24, y0: 9, x1: 36, y1: 12 } as const;
-/** Seating room in front of the kitchen. */
-export const SEATING = { x0: 24, y0: 12, x1: 36, y1: 19 } as const;
-/** The open part of the shop front (shutters span it); its row inside the shop is the `front` zone. */
-export const OPENING = { x0: 30, x1: 34 } as const;
-/** The kitchen door: the kitchen-side tile; the partition edge above (26, 12) is open. */
-export const KITCHEN_DOOR = { x: 26, y: 11 } as const;
-/** Near pavement (shop side), road, zebra crossing and far pavement. */
-export const PAVEMENT = { y0: 19, y1: 22 } as const;
-export const ROAD = { y0: 22, y1: 28 } as const;
-export const CROSSING = { x0: 30, x1: 32 } as const;
-export const FAR_PAVEMENT = { y0: 28, y1: 31 } as const;
-/** Pavement rows where customers appear and leave, at x = 0 and x = w − 1. */
-export const SPAWN_ROWS: readonly number[] = [19, 20, 21, 28, 29, 30];
+export { CROSSING, FAR_PAVEMENT, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, SEATING, SHOP, SPAWN_ROWS } from '../shared/street';
+export type { Rect } from '../shared/street';
 
 export function createM1Area(): AreaGrids {
   const a = new AreaGrids(0, M0_AREA_W, M0_AREA_H);
@@ -68,5 +47,10 @@ export function createM1Area(): AreaGrids {
   // Kitchen partition with one door.
   fill(a.wall, KITCHEN.x0, KITCHEN.y1, KITCHEN.x1, KITCHEN.y1 + 1, WALL.lowN, true);
   a.wall[KITCHEN.y1 * w + KITCHEN_DOOR.x] = a.wall[KITCHEN.y1 * w + KITCHEN_DOOR.x]! & ~WALL.lowN;
+
+  // Neighbouring building fronts along the back of the near pavement (on its tiles' −y edge).
+  for (const b of BUILDINGS) {
+    for (let x = b.x0; x < b.x1; x++) a.facade[PAVEMENT.y0 * w + x] = facadeId(b.tall, b.variant, facadeKind(x - b.x0, b.x1 - b.x0));
+  }
   return a;
 }

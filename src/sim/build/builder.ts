@@ -134,6 +134,7 @@ export class Builder {
   pickup(i: number): Result {
     if (!this.world.objects.live[i]) return no('build.err.gone');
     const before = this.group(i);
+    if (before.some((b) => CATALOG.defs[b.type]!.fixed)) return no('build.err.fixed');
     return this.commit({ before, after: [], inv: before.map((b) => [b.type, 1] as [number, number]), money: 0 });
   }
 
@@ -141,6 +142,7 @@ export class Builder {
   sell(i: number): Result {
     if (!this.world.objects.live[i]) return no('build.err.gone');
     const before = this.group(i);
+    if (before.some((b) => CATALOG.defs[b.type]!.fixed)) return no('build.err.fixed');
     const self = before[0]!;
     const refund = sellValue(CATALOG.defs[self.type]!);
     const inv = before.slice(1).map((b) => [b.type, 1] as [number, number]);

@@ -10,6 +10,7 @@ const T = (key: string) => CATALOG.byKey.get(key)!.id;
 
 function furnished(): Game {
   const g = Game.create(1234);
+  for (const k of ['table_long', 'teapot', 'bench', 'wall_clock', 'hanging_lamp', 'rug']) g.builder.give(T(k), 1);
   const P = (k: string, x: number, y: number, rot = 0, colour = 0) => g.act({ k: 'place', type: T(k), x: SHOP.x0 + x, y: SHOP.y0 + y, rot, colour });
   P('table_long', 3, 3, 1, 4);
   P('teapot', 3, 4, 0, 2);
@@ -47,6 +48,7 @@ describe('save format', () => {
     }
     expect(Array.from(game.world.grids.accum[1]!)).toEqual(Array.from(g.world.grids.accum[1]!));
     // New objects after loading never reuse an old uid.
+    game.builder.give(T('stool'), 1);
     const r = game.act({ k: 'place', type: T('stool'), x: SHOP.x0 + 8, y: SHOP.y0 + 8, rot: 0, colour: 0 });
     expect(game.world.objects.uid[r.index!]).toBeGreaterThanOrEqual(data.nextUid);
   });
@@ -91,8 +93,8 @@ describe('save format', () => {
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(parse(fromBase64Url(code).buffer as ArrayBuffer)).toEqual(data);
     expect(() => fromBase64Url('not a code!')).toThrow();
-    // Header + key table + 16 bytes per object: a typical shop stays well under DESIGN's 2,000 characters.
-    expect(code.length).toBeLessThan(600);
+    // Header + key table + 16 bytes per object: the start shop plus a few more stays well under DESIGN's 2,000 characters.
+    expect(code.length).toBeLessThan(900);
   });
 
   it('objects that break the current shop rules go back to the inventory, never lost', () => {
@@ -108,5 +110,22 @@ describe('save format', () => {
     expect(game.world.objects.count).toBe(n);
     expect(game.builder.inventory[T('stool')]).toBe((data.inventory.stool ?? 0) + 2);
     expect(game.builder.inventory[T('table')]).toBe((data.inventory.table ?? 0) + 1);
+  });
+
+  it('a save from before the kitchen gets the missing fixtures, and nothing is removed', () => {
+    const data = furnished().toSave(0);
+    const fixtures = ['counter', 'kettle', 'sink', 'stove'];
+    data.objects = data.objects.filter((o) => !fixtures.includes(o.key));
+    const n = data.objects.length;
+    const { game, added, returned } = Game.fromSave(parse(serialize(data)));
+    expect(added).toBe(4);
+    expect(returned).toBe(0);
+    expect(game.world.objects.count).toBe(n + 4);
+    const o = game.world.objects;
+    const keys = new Set<string>();
+    for (let i = 1; i < o.capacity; i++) if (o.live[i]) keys.add(CATALOG.defs[o.type[i]!]!.key);
+    for (const k of fixtures) expect(keys.has(k), k).toBe(true);
+    // Loading again adds nothing more.
+    expect(Game.fromSave(game.toSave(0)).added).toBe(0);
   });
 });

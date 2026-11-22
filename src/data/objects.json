@@ -19,7 +19,7 @@
     { "key": "bench", "w": 2, "h": 1, "layer": "furniture", "price": 8000, "rots": 2, "seat": 2, "recolour": true, "props": { "comfort": [2, 0] } },
     { "key": "table", "w": 1, "h": 1, "layer": "furniture", "price": 6000, "rots": 1, "surface": 8, "recolour": true, "props": {} },
     { "key": "table_long", "w": 2, "h": 1, "layer": "furniture", "price": 10000, "rots": 2, "surface": 10, "recolour": true, "props": {} },
-    { "key": "counter", "w": 2, "h": 1, "layer": "furniture", "price": 20000, "rots": 4, "surface": 14, "recolour": true, "props": { "smell": [1, 2] } },
+    { "key": "counter", "w": 2, "h": 1, "layer": "furniture", "price": 20000, "rots": 4, "surface": 14, "recolour": true, "fixed": true, "service": "counter", "props": { "smell": [1, 2] } },
     { "key": "shelf", "w": 1, "h": 1, "layer": "furniture", "price": 9000, "rots": 4, "recolour": true, "props": { "beauty": [1, 1] } },
     { "key": "rug", "w": 2, "h": 2, "layer": "floor", "price": 7000, "rots": 2, "recolour": true, "props": { "comfort": [1, 0], "beauty": [1, 1] } },
     { "key": "radio", "w": 1, "h": 1, "layer": "furniture", "price": 15000, "rots": 4, "small": true, "props": { "noise": [3, 3] } },
@@ -28,6 +28,9 @@
     { "key": "wall_clock", "w": 1, "h": 1, "layer": "wall", "price": 6000, "rots": 2, "props": { "beauty": [1, 1] } },
     { "key": "poster", "w": 1, "h": 1, "layer": "wall", "price": 2000, "rots": 2, "recolour": true, "props": { "beauty": [2, 1] } },
     { "key": "ceiling_fan", "w": 1, "h": 1, "layer": "ceiling", "price": 25000, "rots": 1, "props": { "warmth": [-3, 2], "comfort": [1, 1], "noise": [1, 1] } },
-    { "key": "hanging_lamp", "w": 1, "h": 1, "layer": "ceiling", "price": 8000, "rots": 1, "recolour": true, "props": { "light": [4, 3], "warmth": [1, 1] } }
+    { "key": "hanging_lamp", "w": 1, "h": 1, "layer": "ceiling", "price": 8000, "rots": 1, "recolour": true, "props": { "light": [4, 3], "warmth": [1, 1] } },
+    { "key": "kettle", "w": 1, "h": 1, "layer": "furniture", "price": 8000, "rots": 4, "small": true, "fixed": true, "service": "kettle", "props": { "smell": [1, 1], "warmth": [1, 1] } },
+    { "key": "sink", "w": 2, "h": 1, "layer": "furniture", "price": 15000, "rots": 4, "fixed": true, "zone": "kitchen", "service": "sink" },
+    { "key": "stove", "w": 2, "h": 1, "layer": "furniture", "price": 25000, "rots": 4, "fixed": true, "zone": "kitchen", "service": "stove", "props": { "warmth": [2, 2], "smell": [1, 2] } }
   ]
 }

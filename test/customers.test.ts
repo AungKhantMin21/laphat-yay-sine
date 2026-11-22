@@ -41,7 +41,7 @@ function place(g: Game, key: string, x: number, y: number, rot = 0): number {
 
 /** A game with stock to build a big shop. */
 function game(seed = 1): Game {
-  const g = Game.create(seed);
+  const g = Game.create(seed, false);
   for (const key of ['stool', 'table', 'radio', 'bench', 'chair']) g.builder.give(T(key), 40);
   g.builder.money = 1_000_000;
   return g;

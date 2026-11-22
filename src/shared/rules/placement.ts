@@ -1,6 +1,6 @@
 // Placement rules, shared by the worker (authority) and build mode's ghost on the main thread.
 // Pure and allocation-free: the caller passes a result object to fill (the ghost checks every move).
-import { CATALOG, LAYER, footH, footW } from '../catalog';
+import { CATALOG, LAYER, ZONE_RULE, footH, footW } from '../catalog';
 import { MAX_AREA_H, MAX_AREA_W, WALL, WALL_N, WALL_W, ZONE } from '../layout';
 import { wallGridFor, type WorldState } from '../world-state';
 import { ACCESS, WZ, isShopZone, keepClear, mayEnter } from './access';
@@ -73,7 +73,8 @@ export function checkPlacement(world: WorldState, type: number, x: number, y: nu
           if (!isShopZone(z)) return fail(out, 'build.err.notOwned');
           if (keepClear(z)) return fail(out, 'build.err.walkway');
           // Seats belong in the seating room: customers never enter the kitchen.
-          if (def.seat > 0 && z !== WZ.interior) return fail(out, 'build.err.seatOutside');
+          if ((def.seat > 0 || def.zone === ZONE_RULE.seating) && z !== WZ.interior) return fail(out, 'build.err.seatOutside');
+          if (def.zone === ZONE_RULE.kitchen && z !== WZ.kitchen) return fail(out, 'build.err.kitchenOnly');
           if (!isFree(occ.furniture[tt]!, ignore)) return fail(out, 'build.err.blocked');
         }
       }

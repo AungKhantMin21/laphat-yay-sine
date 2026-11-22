@@ -10,12 +10,26 @@ const DARK: Ramp = ['6e4e36', '523a2c', '3d2a22'];
 const CREAM: Ramp = ['f6ead0', 'ecd3a5', 'c8a46e'];
 const GREEN: Ramp = ['94b37a', '6b8f5a', '46573a'];
 const METAL: Ramp = ['9aa6ae', '6a7884', '44505c'];
+const CLAY: Ramp = ['c85a44', '9a3a30', '6a2a26'];
+const GLASS: Ramp = ['fff8ea', '9aa6ae', '6a7884'];
+const SOOT: Ramp = ['3d2a22', '2a1d18', '1b1411'];
 
 /** Height in px above the footprint per object (sprite headroom). */
 const HEIGHT: Record<string, number> = {
-  stool: 10, chair: 22, bench: 10, table: 12, table_long: 14, counter: 18, shelf: 34, rug: 2,
-  radio: 10, pot_plant: 18, teapot: 9, wall_clock: 56, poster: 56, ceiling_fan: 60, hanging_lamp: 60,
+  stool: 8, chair: 22, bench: 10, table: 10, table_long: 14, counter: 24, shelf: 34, rug: 2,
+  radio: 10, pot_plant: 24, teapot: 9, wall_clock: 56, poster: 56, ceiling_fan: 60, hanging_lamp: 60,
+  kettle: 12, sink: 18, stove: 16,
 };
+
+/** Four legs at the footprint corners, inset `i`, `t` thick. */
+function legs(img: IsoImage, i: number, t: number, z1: number, ramp: Ramp): void {
+  const W = img.fw;
+  const H = img.fh;
+  img.box(i, i, i + t, i + t, 0, z1, ramp);
+  img.box(W - i - t, i, W - i, i + t, 0, z1, ramp);
+  img.box(i, H - i - t, i + t, H - i, 0, z1, ramp);
+  img.box(W - i - t, H - i - t, W - i, H - i, 0, z1, ramp);
+}
 
 const WALL_H = 40;
 
@@ -65,8 +79,10 @@ type Draw = (img: IsoImage, rot: number) => void;
 
 const DRAW: Record<string, Draw> = {
   stool: (img) => {
-    slab(img, 0.3, 0, 6, DARK);
-    slab(img, 0.25, 6, 8, KEY);
+    // Low tea-shop stool: four short legs, a round-ish seat at knee height.
+    legs(img, 0.28, 0.08, 4, DARK);
+    slab(img, 0.24, 4, 6, KEY);
+    slab(img, 0.32, 6, 6, KEY);
   },
   chair: (img, rot) => {
     const back = backSide(rot);
@@ -80,17 +96,22 @@ const DRAW: Record<string, Draw> = {
     slab(img, 0.15, 6, 8, KEY);
   },
   table: (img) => {
-    slab(img, 0.3, 0, 6, WOOD);
-    slab(img, 0.12, 6, 8, KEY);
+    // Low table: thin legs, wide top with a darker rim.
+    legs(img, 0.16, 0.08, 6, WOOD);
+    slab(img, 0.08, 6, 7, DARK);
+    slab(img, 0.1, 7, 8, KEY);
   },
   table_long: (img) => {
     slab(img, 0.25, 0, 8, WOOD);
     slab(img, 0.1, 8, 10, KEY);
   },
   counter: (img, rot) => {
+    // Tea counter: wooden body, coloured front panel, cream top, a small glass case at the back.
     slab(img, 0.05, 0, 12, WOOD);
     strip(img, backSide(rot + 2), 0.08, 0.05, 2, 11, KEY); // front panel
     slab(img, 0.02, 12, 14, CREAM);
+    strip(img, backSide(rot), 0.3, 0.12, 14, 21, GLASS);
+    strip(img, backSide(rot), 0.3, 0.16, 15, 16, ['f0c060', 'd9a05b', 'a98258']); // snacks inside
   },
   shelf: (img, rot) => {
     const back = backSide(rot);
@@ -106,15 +127,39 @@ const DRAW: Record<string, Draw> = {
     strip(img, backSide(rot + 2), 0.04, 0.3, 2, 6, METAL);
   },
   pot_plant: (img) => {
-    slab(img, 0.32, 0, 6, KEY);
-    img.box(0.25, 0.25, 0.75, 0.75, 6, 14, GREEN);
-    img.box(0.35, 0.35, 0.65, 0.65, 14, 17, ['94b37a', '94b37a', '6b8f5a']);
+    // Clay pot with a bushy top: overlapping leaf clumps make a clear round silhouette.
+    slab(img, 0.32, 0, 7, KEY);
+    img.box(0.18, 0.3, 0.6, 0.72, 7, 15, GREEN);
+    img.box(0.4, 0.2, 0.82, 0.62, 9, 17, GREEN);
+    img.box(0.28, 0.28, 0.7, 0.7, 14, 21, ['94b37a', '6b8f5a', '46573a']);
+    img.box(0.42, 0.42, 0.58, 0.58, 20, 23, ['94b37a', '94b37a', '6b8f5a']);
   },
   teapot: (img, rot) => {
     slab(img, 0.36, 0, 5, KEY);
     slab(img, 0.42, 5, 7, KEY);
     const front = backSide(rot + 2);
     strip(img, front, 0.06, 0.44, 3, 5, KEY);
+  },
+  kettle: (img, rot) => {
+    // Aluminium kettle: squat body, lid knob, a spout towards the front.
+    img.box(0.28, 0.28, 0.72, 0.72, 0, 6, METAL);
+    img.box(0.34, 0.34, 0.66, 0.66, 6, 7, METAL);
+    img.box(0.46, 0.46, 0.54, 0.54, 7, 9, SOOT);
+    strip(img, backSide(rot + 2), 0.12, 0.44, 3, 6, METAL);
+    strip(img, backSide(rot), 0.06, 0.4, 7, 10, SOOT); // handle
+  },
+  sink: (img, rot) => {
+    // Concrete sink: grey cabinet, dark basin, a tap at the back.
+    slab(img, 0.05, 0, 12, METAL);
+    slab(img, 0.14, 10, 12, SOOT);
+    strip(img, backSide(rot), 0.08, 0.45, 12, 17, METAL);
+  },
+  stove: (img, rot) => {
+    // Clay stove: red-brown base, sooty top, a glowing fire hole at the front and a pot on top.
+    slab(img, 0.05, 0, 9, CLAY);
+    slab(img, 0.08, 9, 10, SOOT);
+    strip(img, backSide(rot + 2), 0.04, 0.3, 2, 6, ['f0c060', 'e98a5e', 'c85a44']);
+    img.box(img.fw / 2 - 0.3, img.fh / 2 - 0.3, img.fw / 2 + 0.3, img.fh / 2 + 0.3, 10, 15, METAL);
   },
   wall_clock: (img, rot) => {
     const side = rot & 1 ? 'n' : 'w';
@@ -151,6 +196,13 @@ export function drawObjects(): Array<[string, IsoImage]> {
       const fh = r & 1 ? o.w : o.h;
       const img = new IsoImage(fw, fh, HEIGHT[o.key] ?? 16);
       draw(img, r);
+      // Drop shadow under everything that stands on the floor (light from the top left: offset right),
+      // in a shade of the floor it usually stands on: shop terrazzo, or the grey kitchen concrete.
+      if (o.layer === 'furniture') {
+        const small = 'small' in o && o.small;
+        const kitchen = 'zone' in o && o.zone === 'kitchen';
+        img.shadow(fw / 2 + 0.12, fh / 2 + 0.08, fw / 2 - (small ? 0.14 : 0.04), fh / 2 - (small ? 0.14 : 0.04), kitchen ? '44505c' : 'a98258');
+      }
       out.push([`obj/${o.key}_r${r}`, img]);
     }
   }
@@ -158,3 +210,82 @@ export function drawObjects(): Array<[string, IsoImage]> {
 }
 
 export { WALL_H };
+
+/** Neighbouring building fronts: one-tile segments on a north edge (see src/shared/street.ts). */
+export function drawFacades(): Array<[string, IsoImage]> {
+  // [wall, trim, cap] per colourway; lit like a north wall (light from the top left).
+  const WAYS: Array<[string, string, string]> = [
+    ['ecd3a5', 'c8a46e', '8a6644'],
+    ['5e9a8e', '3c6e6a', '2c3440'],
+    ['e98a5e', 'c85a44', '6a2a26'],
+  ];
+  const out: Array<[string, IsoImage]> = [];
+  for (const tall of [true, false]) {
+    const H = tall ? 48 : 24;
+    WAYS.forEach(([wall, trim, cap], v) => {
+      for (const kind of ['pillar', 'door', 'window'] as const) {
+        const img = new IsoImage(1, 1, H);
+        const q = (a0: number, a1: number, z0: number, z1: number, hex: string) => img.wallQuad('n', a0, a1, z0, z1, hex);
+        q(0, 1, 0, H, kind === 'pillar' ? trim : wall);
+        q(0, 1, 0, 2, '3d2a22'); // skirting
+        q(0, 1, H - 3, H, cap); // roof edge
+        if (tall) q(0, 1, 22, 24, trim); // floor line between storeys
+        if (kind === 'door') {
+          // Rolled-down metal shutter of a closed shop, ribbed.
+          q(0.1, 0.9, 2, 19, '6a7884');
+          for (let z = 4; z < 19; z += 3) q(0.1, 0.9, z, z + 1, '9aa6ae');
+          q(0.06, 0.94, 19, 21, trim);
+        }
+        if (kind === 'window') {
+          q(0.2, 0.8, 8, 17, '44505c');
+          q(0.25, 0.5, 9, 16, '6a7884');
+          q(0.2, 0.8, 7, 8, trim);
+        }
+        if (tall && kind !== 'pillar') {
+          q(0.25, 0.75, 30, 41, '44505c');
+          q(0.3, 0.5, 31, 40, '9aa6ae');
+          q(0.2, 0.8, 29, 30, trim); // sill
+        }
+        out.push([`facade/${tall ? 't' : 'l'}${v}_${kind}`, img]);
+      }
+    });
+  }
+  return out;
+}
+
+/** Shop-front heights (px above the floor); src/render/shopfront.ts uses the same frames. */
+const SHUTTER_TOP = 34;
+
+/** The tea shop's own front: roll-up shutter (closed / rolled up), striped awning, signboard. */
+export function drawShopFront(): Array<[string, IsoImage]> {
+  const out: Array<[string, IsoImage]> = [];
+  const closed = new IsoImage(1, 1, 44);
+  closed.wallQuad('n', 0, 1, 0, SHUTTER_TOP, '3c6e6a');
+  for (let z = 3; z < SHUTTER_TOP; z += 3) closed.wallQuad('n', 0, 1, z, z + 1, '5e9a8e');
+  closed.wallQuad('n', 0, 1, SHUTTER_TOP, SHUTTER_TOP + 4, '2c3440'); // shutter box
+  closed.wallQuad('n', 0, 1, 0, 1, '2c3440'); // bottom bar
+  out.push(['shop/shutter_closed', closed]);
+  const open = new IsoImage(1, 1, 44);
+  open.wallQuad('n', 0, 1, SHUTTER_TOP, SHUTTER_TOP + 4, '2c3440');
+  open.wallQuad('n', 0, 1, SHUTTER_TOP - 2, SHUTTER_TOP, '3c6e6a'); // the rolled-up edge
+  out.push(['shop/shutter_open', open]);
+  // Awning: slopes out over the pavement (+v) from above the shutter box; red and cream stripes.
+  for (const [k, hex] of [['a', 'c85a44'], ['b', 'f6ead0']] as const) {
+    const aw = new IsoImage(1, 1, 52);
+    const P = (u: number, v: number, z: number) => aw.at(u, v, z);
+    aw.poly([P(0, 0, 44), P(1, 0, 44), P(1, 0.7, 36), P(0, 0.7, 36)], hex);
+    aw.poly([P(0, 0.7, 36), P(1, 0.7, 36), P(1, 0.7, 33), P(0, 0.7, 33)], k === 'a' ? '9a3a30' : 'ecd3a5'); // valance
+    out.push([`shop/awning_${k}`, aw]);
+  }
+  // Signboard on a post: cream board, red border, a glass of tea.
+  const sign = new IsoImage(1, 1, 50);
+  sign.wallQuad('n', 0.45, 0.55, 0, 30, '3d2a22'); // post
+  sign.wallQuad('n', 0, 1, 30, 46, '9a3a30');
+  sign.wallQuad('n', 0.06, 0.94, 31, 45, 'fff8ea');
+  sign.wallQuad('n', 0.38, 0.62, 34, 42, 'a98258'); // tea
+  sign.wallQuad('n', 0.38, 0.62, 41, 42, 'f6ead0'); // froth
+  sign.wallQuad('n', 0.15, 0.3, 37, 38, 'c85a44'); // lettering marks
+  sign.wallQuad('n', 0.7, 0.85, 37, 38, 'c85a44');
+  out.push(['shop/sign', sign]);
+  return out;
+}

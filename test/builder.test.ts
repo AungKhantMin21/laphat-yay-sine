@@ -62,13 +62,13 @@ describe('Builder', () => {
 
   it('selling pays 70%; items on it go back to the inventory; undo takes the money back', () => {
     const { b, inv } = setup(0);
-    const counter = b.place(T('counter'), X, Y, 0, 0).index!;
+    const longTable = b.place(T('table_long'), X, Y, 0, 0).index!;
     b.place(T('radio'), X, Y, 0, 0);
     const radios = inv[T('radio')]!;
-    expect(b.sell(counter).ok).toBe(true);
-    expect(b.money).toBe(sellValue(CATALOG.defs[T('counter')]!));
+    expect(b.sell(longTable).ok).toBe(true);
+    expect(b.money).toBe(sellValue(CATALOG.defs[T('table_long')]!));
     expect(inv[T('radio')]).toBe(radios + 1);
-    expect(inv[T('counter')]).toBe(4); // sold, not returned
+    expect(inv[T('table_long')]).toBe(4); // sold, not returned
     expect(b.undo().ok).toBe(true);
     expect(b.money).toBe(0);
   });

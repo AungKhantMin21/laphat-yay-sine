@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_H, computeSize } from '../src/render/size';
+import { BASE_H, DEFAULT_ZOOM, computeSize } from '../src/render/size';
 
 describe('computeSize', () => {
   it('1080p desktop is exactly 480×270 at ×4', () => {
@@ -24,12 +24,20 @@ describe('computeSize', () => {
     }
   });
 
-  it('zoom changes the whole-number scale within range, never below ×1', () => {
+  it('zoom changes the whole-number scale within range: never wider than 270 rows, up to three steps in', () => {
     expect(computeSize(1920, 1080, 1, 1, 1).scale).toBe(5);
-    expect(computeSize(1920, 1080, 1, 1, -1).scale).toBe(3);
-    expect(computeSize(1920, 1080, 1, 1, -5).scale).toBe(3); // clamped to one step out
-    expect(computeSize(1920, 1080, 1, 1, 9).scale).toBe(6); // clamped to two steps in
+    expect(computeSize(1920, 1080, 1, 1, -1).scale).toBe(4); // clamped to the widest view
+    expect(computeSize(1920, 1080, 1, 1, 9).scale).toBe(7); // clamped to three steps in
     expect(computeSize(480, 270, 1, 1, -1).scale).toBe(1);
+  });
+
+  it('the default zoom makes characters readable on a landscape phone', () => {
+    // iPhone-class phone in landscape: 844×390 CSS px at dpr 3.
+    const s = computeSize(844, 390, 3, 1, DEFAULT_ZOOM);
+    expect(s.h).toBeGreaterThanOrEqual(180);
+    expect(s.h).toBeLessThanOrEqual(240);
+    // A 24 px character is about 40 CSS px tall.
+    expect((24 * s.scale) / 3).toBeGreaterThanOrEqual(38);
   });
 
   it('render scale lowers device pixels for low-tier phones', () => {

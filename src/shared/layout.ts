@@ -30,7 +30,7 @@ export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4, cros
 export const FLOOR_TYPES = 7;
 
 /** TILE_PATCH layer ids. */
-export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3 } as const;
+export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3, facade: 4 } as const;
 
 /**
  * `wall` grid bits: a wall on the tile's north-east edge (−y side) or north-west edge (−x side).

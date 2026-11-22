@@ -13,7 +13,7 @@ import { FrameWriter } from '../src/shared/diff';
 const T = (key: string): number => CATALOG.byKey.get(key)!.id;
 
 function game(seed: number): Game {
-  const g = Game.create(seed);
+  const g = Game.create(seed, false);
   for (const key of ['stool', 'table', 'bench', 'chair', 'table_long']) g.builder.give(T(key), 60);
   g.builder.money = 10_000_000;
   return g;

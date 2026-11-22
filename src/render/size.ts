@@ -1,7 +1,12 @@
 // Pure sizing math for the pixel stage (tested in test/size.test.ts).
 
-/** World height in pixels the game is designed around. */
+/** World height in pixels at the widest zoom. */
 export const BASE_H = 270;
+/**
+ * Default zoom: one whole step in from the widest view (about 200–240 px of world height), so
+ * characters are about 40 CSS px tall on a landscape phone. See CLAUDE.md "Pixel art".
+ */
+export const DEFAULT_ZOOM = 1;
 
 export interface StageSize {
   /** Internal (world-pixel) size of the render texture. */
@@ -18,10 +23,9 @@ export interface StageSize {
   zoom: number;
 }
 
-/** Zoom offsets allowed for a screen: one step out (never below ×1) and two steps in. */
-export function zoomRange(devH: number): [number, number] {
-  const base = Math.max(1, Math.floor(devH / BASE_H));
-  return [Math.max(1, base - 1) - base, 2];
+/** Zoom offsets allowed: the widest view (BASE_H rows) out to three steps in. */
+export function zoomRange(): [number, number] {
+  return [0, 3];
 }
 
 /**
@@ -32,7 +36,7 @@ export function computeSize(cssW: number, cssH: number, dpr: number, renderScale
   const devPerCss = dpr * renderScale;
   const devW = Math.max(1, Math.round(cssW * devPerCss));
   const devH = Math.max(1, Math.round(cssH * devPerCss));
-  const [zMin, zMax] = zoomRange(devH);
+  const [zMin, zMax] = zoomRange();
   const z = Math.min(zMax, Math.max(zMin, Math.round(zoom)));
   const scale = Math.max(1, Math.floor(devH / BASE_H) + z);
   return { w: Math.ceil(devW / scale), h: Math.ceil(devH / scale), scale, devW, devH, devPerCss, zoom: z };

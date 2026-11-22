@@ -27,7 +27,7 @@ function place(g: Game, key: string, x: number, y: number): void {
 
 /** The furnished shop from test/customers.test.ts: 11 seats, tables, a bench and a radio. */
 function furnished(seed: number): Game {
-  const g = Game.create(seed);
+  const g = Game.create(seed, false);
   for (const key of ['stool', 'table', 'radio', 'bench']) g.builder.give(T(key), 40);
   g.builder.money = 1_000_000;
   for (let x = 25; x < 35; x += 3) {

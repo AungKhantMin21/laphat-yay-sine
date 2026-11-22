@@ -324,7 +324,8 @@ describe('walk grid in the game', () => {
   const T = (key: string) => CATALOG.byKey.get(key)!.id;
 
   it('building updates walk costs only around the change, and paths avoid new furniture', () => {
-    const g = Game.create(5);
+    const g = Game.create(5, false);
+    for (const k of ['table_long', 'teapot', 'rug']) g.builder.give(T(k), 1);
     const W = g.walk.w;
     const at = (x: number, y: number) => y * W + x;
     const x = SHOP.x0 + 4;

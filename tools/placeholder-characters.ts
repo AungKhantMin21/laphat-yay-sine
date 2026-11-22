@@ -115,6 +115,17 @@ function person(look: Look, back: boolean, step: number, sit: boolean): Canvas {
     c.rect(b, 23, b + 1, 23, SHOE);
   }
   c.outline();
+  if (!sit) {
+    // Dithered drop shadow at the feet, offset right (light from the top left); only into empty pixels.
+    for (let y = 21; y <= 23; y++) {
+      for (let x = 2; x <= 14; x++) {
+        const dx = (x - 8.5) / 6;
+        const dy = (y - 22.5) / 1.6;
+        if ((x + y) & 1 || dx * dx + dy * dy > 1 || c.filled(x, y)) continue;
+        c.set(x, y, '2a1d18');
+      }
+    }
+  }
   return c;
 }
 

@@ -13,6 +13,8 @@ export class AreaGrids {
   readonly zone: Uint8Array;
   /** Walk zone per tile (shared/rules/access.ts WZ). */
   readonly access: Uint8Array;
+  /** Building-front segment on the tile's −y edge (shared/street.ts FACADE_FRAMES index; 0 = none). Decor only. */
+  readonly facade: Uint8Array;
 
   constructor(
     readonly id: number,
@@ -23,6 +25,7 @@ export class AreaGrids {
     this.wall = new Uint8Array(w * h);
     this.zone = new Uint8Array(w * h);
     this.access = new Uint8Array(w * h);
+    this.facade = new Uint8Array(w * h);
   }
 
   inBounds(x: number, y: number): boolean {

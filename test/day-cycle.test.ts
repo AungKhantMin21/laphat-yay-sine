@@ -19,7 +19,7 @@ function runTo(g: Game, minute: number, max = MINUTES_PER_DAY * TICK_HZ): void {
 
 describe('shop day cycle', () => {
   it('a new game waits at opening time with the shutters closed', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     expect(g.sim.gameMinute).toBe(START_MINUTE);
     expect(g.playerState().phase).toBe(PHASE.morning);
     steps(g, 600);
@@ -28,7 +28,7 @@ describe('shop day cycle', () => {
   });
 
   it('opening starts the clock; open → evening at closing time with an empty shop; then it holds', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     expect(g.act({ k: 'openShop' }).ok).toBe(true);
     expect(g.playerState().phase).toBe(PHASE.open);
     steps(g, 10);
@@ -41,7 +41,7 @@ describe('shop day cycle', () => {
   });
 
   it('open and sleep are refused outside their phase', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     expect(g.act({ k: 'sleep' })).toEqual({ ok: false, reason: 'day.err.notNow' });
     g.act({ k: 'openShop' });
     expect(g.act({ k: 'openShop' })).toEqual({ ok: false, reason: 'day.err.notNow' });
@@ -49,7 +49,7 @@ describe('shop day cycle', () => {
   });
 
   it('sleep reports the day, resets the stats and moves to the next opening time, exactly one day on', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     g.act({ k: 'openShop' });
     runTo(g, SHOP.close);
     g.day.today.served = 7;
@@ -69,7 +69,7 @@ describe('shop day cycle', () => {
   });
 
   it('announces the new day in the next frame after sleeping', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     g.act({ k: 'openShop' });
     runTo(g, SHOP.close);
     g.act({ k: 'sleep' });
@@ -82,7 +82,7 @@ describe('shop day cycle', () => {
   });
 
   it('state changes are flagged once for the worker to post', () => {
-    const g = Game.create(1);
+    const g = Game.create(1, false);
     g.takeChanged();
     expect(g.takeChanged()).toBe(false);
     g.act({ k: 'openShop' });

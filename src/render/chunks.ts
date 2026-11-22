@@ -40,6 +40,7 @@ export class FloorChunks {
   private readonly scratchWalls: Sprite[] = [];
   private floor: Uint8Array = new Uint8Array(0);
   private wall: Uint8Array = new Uint8Array(0);
+  private facade: Uint8Array = new Uint8Array(0);
   private areaW = 0;
   private areaH = 0;
 
@@ -48,6 +49,8 @@ export class FloorChunks {
     private readonly tiles: Texture[],
     /** Wall textures: [north edge, west edge, low north sill, low west sill]. */
     private readonly walls: readonly [Texture, Texture, Texture, Texture],
+    /** Building-front textures by facade grid value (index 0 unused). */
+    private readonly facades: readonly Texture[],
     /** Max chunk textures alive at once (each 256×192 RGBA ≈ 192 KB). */
     private maxLive = 48,
   ) {
@@ -57,7 +60,8 @@ export class FloorChunks {
       this.scratchTiles.push(s);
       this.scratch.addChild(s);
     }
-    for (let i = 0; i < CHUNK * CHUNK * 2; i++) {
+    // Up to two walls and one building front per tile.
+    for (let i = 0; i < CHUNK * CHUNK * 3; i++) {
       const s = new Sprite();
       s.roundPixels = true;
       this.scratchWalls.push(s);
@@ -66,8 +70,9 @@ export class FloorChunks {
   }
 
   /** Call when a new area loads. */
-  setArea(floor: Uint8Array, wall: Uint8Array, w: number, h: number): void {
+  setArea(floor: Uint8Array, wall: Uint8Array, facade: Uint8Array, w: number, h: number): void {
     this.wall = wall;
+    this.facade = facade;
     for (const c of this.chunks) this.release(c);
     this.layer.removeChildren().forEach((c) => c.destroy());
     this.floor = floor;
@@ -168,7 +173,17 @@ export class FloorChunks {
       for (let i = 0; i < CHUNK; i++) {
         const tx = cx * CHUNK + i;
         const ty = cy * CHUNK + j;
-        const bits = tx < W && ty < this.areaH ? this.wall[ty * W + tx]! : 0;
+        const inside = tx < W && ty < this.areaH;
+        const bits = inside ? this.wall[ty * W + tx]! : 0;
+        // A building front stands on the tile's −y edge, like a north wall, but taller.
+        const f = inside ? this.facade[ty * W + tx]! : 0;
+        if (f !== 0 && this.facades[f]) {
+          const s = this.scratchWalls[wk++]!;
+          const tex = this.facades[f]!;
+          s.texture = tex;
+          s.visible = true;
+          s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - (tex.height - 2 * HALF_H));
+        }
         // West edge first, then north; a tile has at most one wall per edge (full or low).
         for (let side = 0; side < 4; side++) {
           if (!(bits & WALL_ORDER[side]!)) continue;

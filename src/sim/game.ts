@@ -1,6 +1,6 @@
 // One running game: clock, world, economy and build commands. Plain TS (tested headless);
 // worker.ts only adds messaging and timing around it.
-import { CATALOG } from '../shared/catalog';
+import { CATALOG, SERVICE } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
@@ -86,13 +86,17 @@ export class Game {
     return this.npcs.inShop();
   }
 
-  static create(seed: number): Game {
+  /** A new game. `layout` = false leaves the shop empty (tests that build their own layout). */
+  static create(seed: number, layout = true): Game {
     const inv = new Uint16Array(CATALOG.defs.length);
     for (const [key, n] of Object.entries(start.inventory as Record<string, number>)) {
       const def = CATALOG.byKey.get(key);
       if (def) inv[def.id] = n;
     }
     const world = new SimWorld(createM1Area());
+    for (const e of layout ? start.layout : []) {
+      if (!placeStart(world, e)) throw new Error(`start.json: ${e.key} at ${e.x},${e.y} breaks the placement rules`);
+    }
     return new Game(new Sim(seed), world, new Builder(world, start.money, inv));
   }
 
@@ -144,7 +148,7 @@ export class Game {
    * Objects that break today's placement rules (the shop layout or rules changed since the save)
    * go back to the inventory, never lost (`returned`); so do items whose surface went back.
    */
-  static fromSave(d: SaveData): { game: Game; skipped: number; returned: number } {
+  static fromSave(d: SaveData): { game: Game; skipped: number; returned: number; added: number } {
     const sim = new Sim(d.seed);
     sim.tick = d.tick;
     sim.clock = d.clock;
@@ -175,11 +179,13 @@ export class Game {
       world.add({ type: def.id, x: o.x, y: o.y, rot: o.rot & 3, layer: def.layer, colour: o.colour, parent }, o.uid);
     }
     world.uidCounter = d.nextUid;
+    // Saves from before M2.5 have no kitchen fixtures: add any that are missing (never removes anything).
+    const added = addMissingFixtures(world, inv);
     const day = new ShopDay();
     day.shuttersOpen = d.shuttersOpen;
     day.today = { ...d.today };
     day.teaser = { ...d.teaser };
-    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped, returned };
+    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped, returned, added };
   }
 
   /** Runs a player action. Object ids on the wire are handles; stale handles are refused. */
@@ -285,4 +291,53 @@ export class Game {
     this.world.writeSnapshot(w);
     this.npcs.writeSnapshot(w);
   }
+}
+
+interface StartEntry {
+  key: string;
+  x: number;
+  y: number;
+  rot: number;
+}
+
+const startCheck = newPlaceResult();
+
+/** Places one start-layout object if the rules allow it there; returns the slot or 0. `onSurface`: small items only on a surface. */
+function placeStart(world: SimWorld, e: StartEntry, onSurface = false): number {
+  const def = CATALOG.byKey.get(e.key);
+  if (!def) throw new Error(`start.json: unknown object "${e.key}"`);
+  if (!checkPlacement(world.state, def.id, e.x, e.y, e.rot & 3, 0, startCheck).ok) return 0;
+  if (onSurface && startCheck.parent === 0) return 0;
+  return world.add({ type: def.id, x: e.x, y: e.y, rot: e.rot & 3, layer: def.layer, colour: 0, parent: startCheck.parent });
+}
+
+/**
+ * Every shop needs one of each service fixture (counter, kettle, sink, stove). For any that is
+ * missing, place the start-layout one: at its start spot, else the first legal spot in the shop,
+ * else (the shop is full) into the inventory. Returns how many were added.
+ */
+function addMissingFixtures(world: SimWorld, inv: Uint16Array): number {
+  const s = world.objects;
+  const have = new Set<number>();
+  for (let i = 1; i < s.capacity; i++) if (s.live[i]) have.add(CATALOG.defs[s.type[i]!]!.service);
+  let added = 0;
+  for (const e of start.layout) {
+    const def = CATALOG.byKey.get(e.key)!;
+    if (def.service === SERVICE.none || have.has(def.service)) continue;
+    have.add(def.service);
+    added++;
+    if (placeStart(world, e)) continue;
+    let placed = false;
+    const a = world.state.area;
+    // Small items (the kettle) try surfaces first, then the floor.
+    for (let pass = def.small ? 0 : 1; pass < 2 && !placed; pass++) {
+      for (let y = 0; y < a.h && !placed; y++) {
+        for (let x = 0; x < a.w && !placed; x++) {
+          for (let rot = 0; rot < 4 && !placed; rot++) placed = placeStart(world, { key: e.key, x, y, rot }, pass === 0) !== 0;
+        }
+      }
+    }
+    if (!placed) inv[def.id] = Math.min(0xffff, inv[def.id]! + 1);
+  }
+  return added;
 }
