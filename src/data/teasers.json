@@ -1,0 +1,8 @@
+{
+  "kinds": [
+    { "key": "friends", "weight": 3, "need": { "served": 6 }, "boost": { "from": "06:00", "to": "08:00", "perHour": 8 } },
+    { "key": "praise", "weight": 2, "need": { "best": 90 }, "appeal": 0.3 },
+    { "key": "asked", "weight": 2, "need": { "poured": 1 }, "guest": { "after": 20 } },
+    { "key": "early", "weight": 1, "need": {}, "guest": { "after": 1 } }
+  ]
+}

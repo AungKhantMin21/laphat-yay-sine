@@ -7,6 +7,7 @@ import start from '../data/start.json';
 import { createM1Area, STREET } from './area';
 import { DRINKS, REACTION, autoPrice, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { PHASE, minuteOfDay } from '../shared/day';
+import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
 import { Customers } from './npc/customers';
 import { Builder, type Result } from './build/builder';
@@ -190,7 +191,11 @@ export class Game {
       case 'sleep': {
         const r = this.day.sleep(this.sim, this.customers());
         if (!r.ok) return r;
-        if (r.ended) this.events.push({ k: 'dayEnd', day: r.ended.day, stats: r.ended.stats });
+        if (r.ended) {
+          this.events.push({ k: 'dayEnd', day: r.ended.day, stats: r.ended.stats });
+          const t = this.day.teaser;
+          if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
+        }
         this.npcs.clear(); // the last passers-by go home too
         return { ok: true };
       }
@@ -244,7 +249,13 @@ export class Game {
     const minute = this.sim.gameMinute;
     if (minute !== this.arrivalMinute) {
       this.arrivalMinute = minute;
-      if (day.phase === PHASE.open && minuteOfDay(minute) < SHOP.close) this.npcs.arrivalRoll(minuteOfDay(minute));
+      const md = minuteOfDay(minute);
+      if (day.phase === PHASE.open && md < SHOP.close) {
+        const t = day.teaser;
+        this.npcs.arrivalRoll(md, teaserRate(t, md), teaserAppeal(t));
+        const guest = teaserGuest(t, md, SHOP.open);
+        if (guest >= 0) this.npcs.spawn(guest);
+      }
     }
     this.npcs.tick();
     day.update(this.sim.gameMinute, this.customers());

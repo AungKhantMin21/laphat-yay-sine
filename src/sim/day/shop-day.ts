@@ -3,12 +3,10 @@
 import { PHASE, clockHolds, dayPhase, nextMorning, type Phase } from '../../shared/day';
 import { emptyDayStats, type DayStats } from '../../shared/protocol';
 import type { Sim } from '../sim';
+import { pickTeaser, type TeaserPick } from '../../shared/teasers';
 
-export interface Teaser {
-  /** Teaser kind key ('' = none). Its effect happens tomorrow (M2.8). */
-  key: string;
-  arg: string;
-}
+/** Tomorrow's teaser: kind key ('' = none) and the guest's drink key. Its effect happens the next day. */
+export type Teaser = TeaserPick;
 
 export type DayResult = { ok: true; ended?: { day: number; stats: DayStats } } | { ok: false; reason: string };
 
@@ -43,10 +41,15 @@ export class ShopDay {
     return { ok: true };
   }
 
-  /** Ends the day: returns its stats, resets them and moves the clock to the next opening time. */
+  /** Ends the day: returns its stats, picks tomorrow's teaser, resets the stats and moves the clock to the next opening time. */
   sleep(sim: Sim, customers: number): DayResult {
     if (this.update(sim.gameMinute, customers) !== PHASE.evening) return { ok: false, reason: 'day.err.notNow' };
     const ended = { day: sim.day, stats: this.today };
+    // Both draws always happen, so the events stream advances the same way every night.
+    const e = sim.rng.events;
+    const u1 = e.next();
+    const u2 = e.next();
+    this.teaser = pickTeaser(this.today, u1, u2);
     this.today = emptyDayStats();
     this.shuttersOpen = false;
     sim.jumpTo(nextMorning(sim.gameMinute));

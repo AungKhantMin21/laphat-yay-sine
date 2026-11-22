@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -43,6 +43,8 @@ export type ToSim =
   | { t: 'recycle'; buf: ArrayBuffer }
   /** Debug: add items to the inventory. */
   | { t: 'give'; type: number; qty: number }
+  /** Debug: move the game clock forward to `minute` (never back). */
+  | { t: 'jump'; minute: number }
   | { t: 'exportSave' }
   | { t: 'importSave'; code: string };
 
@@ -56,7 +58,9 @@ export type SimEvent =
    * Customer `id` (NPC handle) got drink `drink` and paid `price` + `tip` kyat.
    * `poured` = the player poured it (else auto-served); `reaction` = shared/drinks.ts REACTION.
    */
-  | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number };
+  | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number }
+  /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
+  | { k: 'teaser'; key: string; drink: number };
 
 /** What happened in one shop day. */
 export interface DayStats {

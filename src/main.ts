@@ -19,6 +19,7 @@ import { installBuildKeys } from './input/keyboard';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
 import { installTin } from './ui/hud/tin';
+import { installDayEnd } from './ui/hud/day-end';
 import { installPourUi } from './ui/pour/pour';
 import { installReactions } from './ui/pour/reactions';
 import { requestPersistentStorage } from './platform/persist';
@@ -65,7 +66,10 @@ stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npc
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
 let musicPinned: TrackId | null = null;
-const pickMusic = (): void => music.play(musicPinned ?? trackFor(Math.floor(view.gameMinute / 60) % 24, false));
+// The sleep screen plays the night loop; otherwise music follows the game clock.
+let nightPinned = false;
+const pickMusic = (): void =>
+  music.play(musicPinned ?? (nightPinned ? 'night' : trackFor(Math.floor(view.gameMinute / 60) % 24, false)));
 
 let booted = false;
 const bridge: SimBridge = new SimBridge(view, {
@@ -74,13 +78,14 @@ const bridge: SimBridge = new SimBridge(view, {
     settings.refresh();
     dayHud.refresh();
     tin.refresh(bridge.player?.money ?? 0);
+    dayEnd.refresh();
   },
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
     for (const e of list) {
       if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
-      else if (e.k === 'dayEnd' && import.meta.env.DEV) console.info('day end', e.day, e.stats);
+      else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
     }
   },
   onReady: () => {
@@ -139,7 +144,14 @@ const dayHud = installDayHud({
   player: () => bridge.player,
   gameMinute: () => view.gameMinute,
   open: async () => (await bridge.act({ k: 'openShop' })).ok,
+});
+const dayEnd = installDayEnd({
+  player: () => bridge.player,
   sleep: async () => (await bridge.act({ k: 'sleep' })).ok,
+  onSleepScreen: (open) => {
+    nightPinned = open;
+    if (booted) pickMusic();
+  },
 });
 const tin = installTin();
 const pour = installPourUi({
@@ -261,4 +273,4 @@ if (debug) {
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd } });

@@ -204,15 +204,18 @@ export class Customers {
     return f < a.min ? a.min : f > a.max ? a.max : f;
   }
 
-  /** Called once per game minute during shop hours: maybe a customer arrives. Returns their handle or NONE. */
-  arrivalRoll(minuteOfDay: number): number {
-    const p = (arrivalRate(minuteOfDay, this.rules) * this.appeal()) / 60;
+  /**
+   * Called once per game minute during shop hours: maybe a customer arrives. `extraRate` (per hour)
+   * and `extraAppeal` come from tomorrow's teaser. Returns their handle or NONE.
+   */
+  arrivalRoll(minuteOfDay: number, extraRate = 0, extraAppeal = 0): number {
+    const p = ((arrivalRate(minuteOfDay, this.rules) + extraRate) * (this.appeal() + extraAppeal)) / 60;
     if (!this.decide.chance(p)) return NONE;
     return this.spawn();
   }
 
-  /** A customer appears at a street edge and chooses a seat (or walks on by). */
-  spawn(): number {
+  /** A customer appears at a street edge and chooses a seat (or walks on by). `order` ≥ 0 fixes their drink. */
+  spawn(order = -1): number {
     if (this.freeTop === 0) return NONE;
     const r = this.decide;
     const W = this.walk.w;
@@ -220,7 +223,8 @@ export class Customers {
     const side = r.int(2);
     const y0 = r.range(st.y0, st.y1 - 1);
     const y1 = r.range(st.y0, st.y1 - 1);
-    const drink = pickOrder(r.next(), this.cust);
+    const rolled = pickOrder(r.next(), this.cust);
+    const drink = order >= 0 ? order : rolled;
     const ms = this.cust.milkShift;
     const nt = this.cust.noiseTaste;
     const milkShift = ms[0] + (ms[1] - ms[0]) * r.next();

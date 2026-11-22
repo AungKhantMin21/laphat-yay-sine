@@ -219,6 +219,9 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
       dirtyAt ||= performance.now();
       postStateIfChanged();
       return;
+    case 'jump':
+      game?.sim.jumpTo(msg.minute);
+      return;
     case 'save':
       save(msg.reason);
       return;

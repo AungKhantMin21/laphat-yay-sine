@@ -1,5 +1,5 @@
-// Shop-day HUD (DOM): the clock and the one day button — "open the shutters" in the morning,
-// "sleep" in the evening. M2.7/M2.8 replace this with the savings tin, evening panel and sleep screen.
+// Shop-day HUD (DOM) on the left edge: the clock and, in the morning, "open the shutters".
+// The evening's Sleep button lives in the evening panel (ui/hud/day-end.ts).
 import './day-hud.css';
 import type { PlayerState } from '../../shared/protocol';
 import { PHASE } from '../../shared/day';
@@ -9,7 +9,6 @@ export interface DayHudDeps {
   player: () => PlayerState | null;
   gameMinute: () => number;
   open: () => Promise<boolean>;
-  sleep: () => Promise<boolean>;
 }
 
 export function installDayHud(deps: DayHudDeps): { refresh(): void; tick(): void } {
@@ -33,7 +32,6 @@ export function installDayHud(deps: DayHudDeps): { refresh(): void; tick(): void
     btn.disabled = true;
     try {
       if (p.phase === PHASE.morning) await deps.open();
-      else if (p.phase === PHASE.evening) await deps.sleep();
     } finally {
       busy = false;
       btn.disabled = false;
@@ -43,7 +41,7 @@ export function installDayHud(deps: DayHudDeps): { refresh(): void; tick(): void
   function refresh(): void {
     const p = deps.player();
     const phase = p?.phase;
-    const label = phase === PHASE.morning ? t('day.open') : phase === PHASE.evening ? t('day.sleep') : '';
+    const label = phase === PHASE.morning ? t('day.open') : '';
     btn.textContent = label;
     btn.classList.toggle('hidden', !label);
     box.dataset.phase = String(phase ?? '');

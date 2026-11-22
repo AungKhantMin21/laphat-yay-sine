@@ -55,7 +55,11 @@ describe('shop day cycle', () => {
     g.day.today.served = 7;
     g.day.today.earned = 8400;
     expect(g.act({ k: 'sleep' }).ok).toBe(true);
-    expect(g.events).toEqual([{ k: 'dayEnd', day: 0, stats: expect.objectContaining({ served: 7, earned: 8400 }) }]);
+    expect(g.events).toEqual([
+      { k: 'dayEnd', day: 0, stats: expect.objectContaining({ served: 7, earned: 8400 }) },
+      { k: 'teaser', key: g.day.teaser.key, drink: expect.any(Number) },
+    ]);
+    expect(g.day.teaser.key).not.toBe('');
     expect(g.sim.gameMinute).toBe(MINUTES_PER_DAY + SHOP.open);
     expect(g.sim.day).toBe(1);
     const p = g.playerState();

@@ -85,6 +85,11 @@ export class SimBridge {
     this.send({ t: 'give', type, qty });
   }
 
+  /** Debug: move the game clock forward to `minute`. */
+  jump(minute: number): void {
+    this.send({ t: 'jump', minute });
+  }
+
   save(reason: 'auto' | 'hidden' | 'manual'): void {
     this.send({ t: 'save', reason });
   }
