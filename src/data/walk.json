@@ -1,5 +1,5 @@
 {
-  "nodesPerTick": 1000,
+  "nodesPerTick": 700,
   "pathSlots": 128,
   "maxPathLen": 512,
   "floorCost": {

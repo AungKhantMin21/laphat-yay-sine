@@ -273,4 +273,6 @@ if (debug) {
   });
 }
 
+// ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it).
+if (debug) Object.assign(window, { __debug: { bridge } });
 if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd } });

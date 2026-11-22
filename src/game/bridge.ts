@@ -90,6 +90,11 @@ export class SimBridge {
     this.send({ t: 'jump', minute });
   }
 
+  /** Debug (perf gate): `n` customers arrive at once. */
+  crowd(n: number): void {
+    this.send({ t: 'crowd', n });
+  }
+
   save(reason: 'auto' | 'hidden' | 'manual'): void {
     this.send({ t: 'save', reason });
   }

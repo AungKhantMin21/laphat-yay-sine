@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -45,6 +45,8 @@ export type ToSim =
   | { t: 'give'; type: number; qty: number }
   /** Debug: move the game clock forward to `minute` (never back). */
   | { t: 'jump'; minute: number }
+  /** Debug (perf gate): `n` customers arrive at once. */
+  | { t: 'crowd'; n: number }
   | { t: 'exportSave' }
   | { t: 'importSave'; code: string };
 

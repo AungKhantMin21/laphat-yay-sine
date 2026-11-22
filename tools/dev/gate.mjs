@@ -1,10 +1,13 @@
 // Perf gate on a PRODUCTION build (npm run build && npx vite preview --port 4173).
 // Imports a save code through Settings, throttles the CPU, pans, and prints the ?debug=1 overlay.
-// Usage: node tools/dev/gate.mjs http://localhost:4173/games/laphat-yay-sine/ code.txt [shotDir]
+// Usage: node tools/dev/gate.mjs http://localhost:4173/games/laphat-yay-sine/ code.txt [shotDir] [crowd]
+// `crowd` > 0 opens the shop and makes that many customers arrive at once (debug `crowd`), then waits
+// for them to walk in and sit before measuring.
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright-core';
 
-const [url, codeFile, shotDir] = process.argv.slice(2);
+const [url, codeFile, shotDir, crowdArg] = process.argv.slice(2);
+const crowd = Number(crowdArg ?? 0);
 const code = codeFile ? readFileSync(codeFile, 'utf8').trim() : '';
 const b = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: false });
 
@@ -25,6 +28,14 @@ async function run(label, ctxOpts, cpu, q, buildMode) {
     await p.waitForTimeout(1000);
     await p.click('.settings-box .row .hud-btn:last-child');
   }
+  if (crowd > 0) {
+    await p.evaluate((n) => {
+      const b = window.__debug.bridge;
+      void b.act({ k: 'openShop' });
+      b.crowd(n);
+    }, crowd);
+    await p.waitForTimeout(35000); // walk in from both street edges (~30 s), sit, order
+  }
   const cdp = await ctx.newCDPSession(p);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
   if (buildMode) {
@@ -42,7 +53,7 @@ async function run(label, ctxOpts, cpu, q, buildMode) {
   await p.mouse.up();
   const txt = await p.evaluate(() => document.getElementById('perf')?.textContent ?? 'no overlay');
   console.log(`--- ${label} (cpu ${cpu}x)${buildMode ? ' [build + overlay]' : ''}\n${txt}${errs.length ? '\nERRORS: ' + errs.join('; ') : ''}`);
-  if (shotDir) await p.screenshot({ path: `${shotDir}/gate-${label.replace(/\W+/g, '_')}${buildMode ? '_build' : ''}.png` });
+  if (shotDir && shotDir !== '-') await p.screenshot({ path: `${shotDir}/gate-${label.replace(/\W+/g, '_')}${buildMode ? '_build' : ''}.png` });
   await ctx.close();
 }
 

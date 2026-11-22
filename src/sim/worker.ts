@@ -222,6 +222,9 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
     case 'jump':
       game?.sim.jumpTo(msg.minute);
       return;
+    case 'crowd':
+      for (let k = 0; k < msg.n; k++) game?.npcs.spawn();
+      return;
     case 'save':
       save(msg.reason);
       return;
