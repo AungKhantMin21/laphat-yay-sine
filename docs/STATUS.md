@@ -59,8 +59,19 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Share links (M6) need compression; save codes are uncompressed (~24 bytes/object).
 - Multi-tile depth sorting may need sprite slicing once characters walk around (M2/M3).
 - BACKLOG.md holds deferred ideas.
+- Flaky test: `test/builder.test.ts` "any random sequence fully undoes…" failed once in a full parallel run on 22 Nov 2026 and passes alone and in every rerun. It looks like a timeout under load. Look at it in M2.9 if it recurs.
 
 ## Next step: M2 Shop day — continue at M2.9 gate + docs (see docs/M2.md)
+
+### Handoff notes for M2.9 (written before a context clear, 22 Nov 2026)
+
+M2.1–M2.8 are built, committed and pushed (last code commit `0f25767`). M2.9 = the gate + docs step in docs/M2.md:
+- **Determinism test:** run 3 full seeded days headless (open → run to close → evening → sleep, ×3) twice and compare money, today's stats, teasers and RNG states. Check that no NPC is stuck and that money only goes up. Helpers to copy: `runTo`/`steps` in `test/day-cycle.test.ts` and `test/teasers.test.ts`, and the furnished-day setup in `test/customers.test.ts`.
+- **Perf gate:** `npm run build` + `npx vite preview`, then `node tools/dev/gate.mjs <preview-url> code.txt [dir]` (headed Chrome, 6× throttle Low / 4× Mid). Make the code with `tools/dev/furnish150.js` and add a full room of customers at peak. Budgets: ≤ 25 ms frame, ≤ 40 draws, texture ≤ 48 MB, heap ≤ 100 MB; worker tick time on the overlay; pathfinding ≤ 2 ms per tick. gate.mjs may need a step that opens the shop and waits for customers. `bridge.jump(minute)` (debug) skips time.
+- **Browser flow** (already scripted): `tools/dev/pour.js`, `tools/dev/tin.js`, `tools/dev/dayend.js` (prefix `window.__shot='evening'|'sleep';` for screenshots). Still to check: reload mid-day keeps the day (money, stats, phase).
+- **Docs:** docs/ARCHITECTURE.md still describes older versions. Update it to protocol **v7** (actions openShop/sleep/startPour/cancelPour/serve; events money/served/dayEnd/teaser; debug `jump`), save **v2** (phase, today's stats, teaser `{key, arg}`), frame section NPC_ORDER (kind 9), `sim/path/` and `sim/npc/`. Then the gate table in docs/M2.md, this file, and BACKLOG for anything deferred.
+- **New my.json keys in M2.6–M2.8** (for the user's end-of-project review): `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
+- **Data added in M2.6–M2.8:** `drinks.json` `flow` (pour speeds), `shop.json` `tin` (sizes), `src/data/teasers.json`.
 
 Decided 21 Nov 2026: day = shutters open 06:00 (clock waits until Open) → shop hours to 17:00 → last customers finish → evening waits for Sleep → next 06:00. Player pours every cup, with an auto-serve fallback (lower price, no tip). A* core built in M2. Ingredients unlimited and free until M3.
 
