@@ -36,8 +36,9 @@ Vite `build.target` is set to match. Anything newer than these (e.g. `dvh` units
 
 ## Pixel art
 
-- The world renders into a RenderTexture 270 px high (width follows aspect, ~480), then one integer
+- The world renders into a RenderTexture 270 px high at the widest zoom (width follows aspect, ~480), then one integer
   upscale pass (nearest) with the colour-grade shader. Canvas backing size = CSS size × devicePixelRatio, exactly.
+- The default zoom is one whole step in (about 200 px high), so characters are about 40 CSS px tall on a landscape phone.
 - Snap camera and sprites to whole pixels. Zoom only in whole-number scales.
 - Iso tiles 32×16, characters ~16×24, ≤ 32-colour palette (`art/palette.hex`), light from the top left. See docs/ART_STYLE.md.
 - All art lives in ≤ 2 atlases of 1024×1024 made by `tools/pack-atlas`. Never load loose images.
@@ -86,6 +87,8 @@ Daily check: Chrome DevTools with 6× CPU throttling and the perf overlay (`?deb
 
 ## World, build and saves
 - Placement rules live only in `shared/rules/placement.ts` (worker and ghost both use it). Don't duplicate them.
+- Walk access rules (which zones customers and staff may enter) live only in `shared/rules/access.ts`.
+- Service is done by people (player or staff) from the sim's task board; never auto-serve.
 - Wire ids are handles, arrays use slots, history and saves use uids. Never store a slot or handle anywhere durable.
 - Saves store object keys, never type ids. Changing the save layout = new parser + migration; never edit old ones.
 - Anything a player made must never be lost: unreadable saves are moved aside, not overwritten.

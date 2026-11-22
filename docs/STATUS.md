@@ -71,7 +71,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 
 The M2 review (22 Nov 2026) found that the game doesn't play like a tea shop yet, so M2.5 comes before M3. Read docs/M2_5.md: decisions 1–9 at the top, then steps S2–S9. DESIGN.md and ARCHITECTURE.md already describe the M2.5 target (ARCHITECTURE marks protocol v9 and save v3 as planned).
 
-- **CLAUDE.md is not updated yet:** the edit was blocked by a permission check. The planned lines: the default zoom is one step in (~200 px world height, characters ~40 CSS px on a phone; 270 px is the widest view); walk access rules live only in `shared/rules/access.ts`; service is done by people from the task board, never auto-serve.
+- CLAUDE.md now has the M2.5 rules (default zoom one step in, `shared/rules/access.ts`, no auto-serve).
 - What moves between milestones is in the table at the end of docs/M2_5.md (avatar + tap-to-walk and building fronts from M3, debug UI from M6; helper → M4, tea sayar and cook → M5, vehicles → M4).
 
 Carried over for M3 (after M2.5):
