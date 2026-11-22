@@ -31,16 +31,24 @@ export interface PourRules {
   ratioFalloff: number;
 }
 
+/** Pour speed while holding, in cup fractions per real second. */
+export interface PourFlow {
+  tea: number;
+  milk: number;
+}
+
 export interface Drinks {
   defs: DrinkDef[];
   byKey: Map<string, DrinkDef>;
   pour: PourRules;
+  flow: PourFlow;
   /** Score thresholds for the customer's reaction. */
   reactions: { great: number; good: number };
 }
 
 export interface RawDrinks {
   pour: PourRules;
+  flow: PourFlow;
   reactions: { great: number; good: number };
   presets: { key: string; price: number; milk: number }[];
 }
@@ -60,6 +68,11 @@ export function buildDrinks(d: RawDrinks): Drinks {
     ratioFalloff: frac(p.ratioFalloff, 'pour.ratioFalloff'),
   };
   if (pour.fillFalloff <= 0 || pour.ratioFalloff <= 0) throw new Error('pour: falloffs must be > 0');
+  const flowOk = (v: number, where: string): number => {
+    if (!(v > 0 && v <= 5)) throw new Error(`${where}: must be > 0 and ≤ 5 (cups per second)`);
+    return v;
+  };
+  const flow: PourFlow = { tea: flowOk(d.flow.tea, 'flow.tea'), milk: flowOk(d.flow.milk, 'flow.milk') };
   const reactions = { great: frac(d.reactions.great, 'reactions.great'), good: frac(d.reactions.good, 'reactions.good') };
   if (reactions.good >= reactions.great) throw new Error('reactions: good must be below great');
   if (d.presets.length === 0 || d.presets.length > 255) throw new Error('presets: need 1…255');
@@ -74,7 +87,7 @@ export function buildDrinks(d: RawDrinks): Drinks {
     defs.push(def);
     byKey.set(r.key, def);
   });
-  return { defs, byKey, pour, reactions };
+  return { defs, byKey, pour, flow, reactions };
 }
 
 export const DRINKS: Drinks = buildDrinks(raw as RawDrinks);

@@ -18,9 +18,12 @@ import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys } from './input/keyboard';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
+import { installPourUi } from './ui/pour/pour';
+import { installReactions } from './ui/pour/reactions';
 import { requestPersistentStorage } from './platform/persist';
 import { CATALOG, spriteFrame } from './shared/catalog';
 import { tileAtX, tileAtY } from './shared/iso';
+import { handleIndex } from './shared/ids';
 import { Camera } from './render/camera';
 import { installGestures } from './input/pointer';
 import { FrameLoop } from './game/loop';
@@ -72,7 +75,10 @@ const bridge: SimBridge = new SimBridge(view, {
   },
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
-    for (const e of list) if (e.k === 'dayEnd' && import.meta.env.DEV) console.info('day end', e.day, e.stats);
+    for (const e of list) {
+      if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
+      else if (e.k === 'dayEnd' && import.meta.env.DEV) console.info('day end', e.day, e.stats);
+    }
   },
   onReady: () => {
     chunks.setArea(view.area.floor, view.area.wall, view.area.w, view.area.h);
@@ -88,6 +94,7 @@ const bridge: SimBridge = new SimBridge(view, {
     } else {
       // A save code was loaded: the whole world was replaced.
       build.close();
+      pour.close();
     }
   },
 });
@@ -131,6 +138,21 @@ const dayHud = installDayHud({
   open: async () => (await bridge.act({ k: 'openShop' })).ok,
   sleep: async () => (await bridge.act({ k: 'sleep' })).ok,
 });
+const pour = installPourUi({
+  startPour: (id) => bridge.act({ k: 'startPour', id }),
+  cancelPour: (id) => void bridge.act({ k: 'cancelPour', id }),
+  serve: (id, tea, milk) => bridge.act({ k: 'serve', id, tea, milk }),
+  onChange: (open) => document.body.classList.toggle('pouring', open),
+});
+const headAt = { x: 0, y: 0 };
+const reactions = installReactions({
+  anchor: (id) => {
+    if (!npcs.headOf(id, headAt)) return null;
+    // World px → CSS px (the inverse of toWorld).
+    const k = stage.size.devPerCss / stage.size.scale;
+    return { x: (headAt.x + stage.world.x) / k, y: (headAt.y + stage.world.y) / k };
+  },
+});
 build.onChange(() => {
   settings.refresh();
   document.body.classList.toggle('building', build.open);
@@ -144,10 +166,10 @@ installGestures(stageEl, {
   zoomStep: (dir) => stage.setZoom(stage.size.zoom + dir),
   tap: (x, y, type) => {
     if (build.open) return build.tap(x, y, type);
+    if (pour.isOpen) return;
     const [wx, wy] = toWorld(x, y);
     const customer = npcs.pickOrder(wx, wy);
-    // M2.6 opens the pour minigame here.
-    if (customer && import.meta.env.DEV) console.info('customer tapped', customer);
+    if (customer) pour.open(customer, view.npcDrink[handleIndex(customer)]!);
   },
   hover: (x, y) => build.hover(x, y),
   dragStart: (x, y) => build.dragStart(x, y),
@@ -235,4 +257,4 @@ if (debug) {
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour } });

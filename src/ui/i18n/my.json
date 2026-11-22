@@ -81,5 +81,11 @@
   "day.sleep": "အိပ်မယ်",
   "day.clock": "နေ့ {day} · {time}",
   "day.err.notNow": "ဒီအချိန်မှာ မလုပ်နိုင်သေးပါ",
-  "pour.err.gone": "ဒီအော်ဒါ မရှိတော့ပါ"
+  "pour.err.gone": "ဒီအော်ဒါ မရှိတော့ပါ",
+  "pour.holdTea": "ဖိထားပြီး လက်ဖက်ရည် ငှဲ့ပါ",
+  "pour.holdMilk": "ဖိထားပြီး နို့ဆီ ထည့်ပါ",
+  "pour.tea": "လက်ဖက်ရည်",
+  "pour.milk": "နို့ဆီ",
+  "pour.cancel": "မလုပ်တော့",
+  "pour.paid": "+{n} ကျပ်"
 }

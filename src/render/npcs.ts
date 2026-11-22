@@ -8,6 +8,7 @@ import { DRINKS } from '../shared/drinks';
 import { HALF_H, HALF_W } from '../shared/iso';
 import { ANIM, ORDER } from '../shared/npc';
 import { MAX_NPCS } from '../shared/layout';
+import { handleIndex } from '../shared/ids';
 import { TICK_MS } from '../shared/protocol';
 import type { WorldView } from '../game/view';
 import type { Atlas } from './atlas';
@@ -131,6 +132,20 @@ export class NpcLayer {
     }
     this.visible = shown;
     this.animated = animated;
+  }
+
+  /**
+   * World-pixel point just above a drawn customer's head (into `out`), or false when the handle
+   * is stale or the customer is not on screen.
+   */
+  headOf(handle: number, out: { x: number; y: number }): boolean {
+    const i = handleIndex(handle);
+    if (i <= 0 || i >= MAX_NPCS || this.view.npcHandle(i) !== handle) return false;
+    const sp = this.body[i];
+    if (!sp || !sp.visible) return false;
+    out.x = sp.x;
+    out.y = sp.y - sp.texture.frame.height - BUBBLE_GAP;
+    return true;
   }
 
   /**

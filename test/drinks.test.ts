@@ -39,6 +39,7 @@ describe('drink data', () => {
     expect(bad((d) => (d.presets[0]!.price = 0))).toThrow(/price/);
     expect(bad((d) => (d.reactions.good = d.reactions.great))).toThrow(/good/);
     expect(bad((d) => (d.pour.ratioFalloff = 0))).toThrow(/falloff/);
+    expect(bad((d) => (d.flow.milk = 0))).toThrow(/flow\.milk/);
   });
 });
 

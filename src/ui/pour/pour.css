@@ -1,0 +1,143 @@
+/* Pour minigame overlay. The cup is CSS layers in palette colours (no images, no new deps). */
+.pour {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  background: rgba(27, 20, 17, 0.55);
+  touch-action: none;
+}
+.pour.hidden {
+  display: none;
+}
+.pour-panel {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  background: #2a1d18;
+  border: 4px solid var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 4px 0 #1b1411;
+}
+.pour-cup {
+  position: relative;
+  flex: none;
+  width: 80px;
+  /* height is set in whole art pixels by pour.ts */
+  background: #fff8ea;
+  border: 4px solid #9aa6ae;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  /* the saucer */
+  box-shadow: 0 8px 0 -2px #c8a46e, 0 12px 0 -2px #6e4e36;
+  margin-bottom: 12px;
+}
+.pour-liquid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+}
+.pour-mark {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 0;
+  border-top: 4px dashed #94b37a;
+  opacity: 0.75;
+}
+.pour-mark.hidden {
+  display: none;
+}
+.pour.holding .pour-cup {
+  border-color: #dab886;
+}
+.pour-side {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 160px;
+}
+.pour-title {
+  font-size: 20px;
+  color: var(--accent);
+}
+.pour-hint {
+  font-size: 14px;
+  opacity: 0.85;
+}
+.pour-hold {
+  min-height: 64px;
+  font-size: 18px;
+  touch-action: none;
+}
+.pour[data-stage='milk'] .pour-hold {
+  background: #8a6644;
+  border-color: #ecd3a5;
+}
+.pour.holding .pour-hold {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #1b1411;
+}
+.pour-msg {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 14px);
+  transform: translateX(-50%);
+  padding: 4px 16px;
+  font-size: 16px;
+  background: rgba(106, 42, 38, 0.92);
+  border: 2px solid #e98a5e;
+  border-radius: 6px;
+}
+.pour-msg.hidden {
+  display: none;
+}
+
+/* Reaction bubbles above served customers (placed once, float up and fade in CSS). */
+.react {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: #1b1411;
+  background: #f6ead0;
+  border: 2px solid #523a2c;
+  border-radius: 6px;
+  pointer-events: none;
+  animation: react-float 2.2s ease-out forwards;
+}
+.react.hidden {
+  display: none;
+}
+.react .paid {
+  margin-inline-start: 6px;
+  color: #46573a;
+}
+@keyframes react-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -80%);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -220%);
+  }
+}
