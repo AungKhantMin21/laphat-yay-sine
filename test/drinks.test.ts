@@ -1,7 +1,7 @@
 import rawShop from '../src/data/shop.json';
 import { describe, expect, it } from 'vitest';
 import { DRINKS, REACTION, REACTION_NAMES, autoPrice, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, type DrinkDef, type RawDrinks } from '../src/shared/drinks';
-import { SHOP, buildShopRules, parseClock, toCoins, type RawShop } from '../src/shared/shop';
+import { SHOP, buildShopRules, parseClock, tinLevel, toCoins, type RawShop } from '../src/shared/shop';
 import rawDrinks from '../src/data/drinks.json';
 import my from '../src/ui/i18n/my.json';
 
@@ -138,5 +138,42 @@ describe('shop rules', () => {
     const pay = base.pay;
     expect(() => buildShopRules({ ...base, hours: { open: '17:00', close: '06:00' } })).toThrow(/before close/);
     expect(() => buildShopRules({ ...base, pay: { ...pay, coin: 0.5 } })).toThrow(/coin/);
+  });
+
+  it('rejects tin sizes that do not increase', () => {
+    const base = rawShop as RawShop;
+    expect(() => buildShopRules({ ...base, tin: [] })).toThrow(/tin/);
+    expect(() => buildShopRules({ ...base, tin: [100, 100] })).toThrow(/increase/);
+    expect(() => buildShopRules({ ...base, tin: [0] })).toThrow(/tin\[0\]/);
+  });
+});
+
+describe('savings tin', () => {
+  const rules = buildShopRules({ ...(rawShop as RawShop), tin: [1000, 5000, 20000] });
+  it('uses the smallest tin that holds the savings', () => {
+    expect(tinLevel(0, rules)).toEqual({ size: 0, fill: 0 });
+    expect(tinLevel(500, rules)).toEqual({ size: 0, fill: 0.5 });
+    expect(tinLevel(1000, rules)).toEqual({ size: 0, fill: 1 });
+    expect(tinLevel(1050, rules)).toEqual({ size: 1, fill: 0.21 });
+    expect(tinLevel(20000, rules)).toEqual({ size: 2, fill: 1 });
+  });
+
+  it('stays full past the largest tin, and treats negative money as empty', () => {
+    expect(tinLevel(1e9, rules)).toEqual({ size: 2, fill: 1 });
+    expect(tinLevel(-5, rules)).toEqual({ size: 0, fill: 0 });
+  });
+
+  it('the start money sits in the first tin, part full', () => {
+    const t = tinLevel(20000);
+    expect(t.size).toBe(0);
+    expect(t.fill).toBeGreaterThan(0);
+    expect(t.fill).toBeLessThan(1);
+    expect(SHOP.tin.length).toBeGreaterThan(1);
+  });
+
+  it('fills into a caller-owned object without allocating', () => {
+    const out = { size: -1, fill: -1 };
+    expect(tinLevel(2500, rules, out)).toBe(out);
+    expect(out).toEqual({ size: 1, fill: 0.5 });
   });
 });

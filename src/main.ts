@@ -18,6 +18,7 @@ import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys } from './input/keyboard';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
+import { installTin } from './ui/hud/tin';
 import { installPourUi } from './ui/pour/pour';
 import { installReactions } from './ui/pour/reactions';
 import { requestPersistentStorage } from './platform/persist';
@@ -72,11 +73,13 @@ const bridge: SimBridge = new SimBridge(view, {
     buildUi.refresh();
     settings.refresh();
     dayHud.refresh();
+    tin.refresh(bridge.player?.money ?? 0);
   },
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
     for (const e of list) {
       if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
+      else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'dayEnd' && import.meta.env.DEV) console.info('day end', e.day, e.stats);
     }
   },
@@ -138,6 +141,7 @@ const dayHud = installDayHud({
   open: async () => (await bridge.act({ k: 'openShop' })).ok,
   sleep: async () => (await bridge.act({ k: 'sleep' })).ok,
 });
+const tin = installTin();
 const pour = installPourUi({
   startPour: (id) => bridge.act({ k: 'startPour', id }),
   cancelPour: (id) => void bridge.act({ k: 'cancelPour', id }),

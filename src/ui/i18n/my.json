@@ -87,5 +87,6 @@
   "pour.tea": "လက်ဖက်ရည်",
   "pour.milk": "နို့ဆီ",
   "pour.cancel": "မလုပ်တော့",
-  "pour.paid": "+{n} ကျပ်"
+  "pour.paid": "+{n} ကျပ်",
+  "tin.label": "စုဘူး · {n} ကျပ်"
 }

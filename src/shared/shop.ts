@@ -37,6 +37,8 @@ export interface ShopRules {
     /** A walker who hasn't reached their goal after this long gives up (leaves, or vanishes if leaving). */
     stuck: number;
   };
+  /** Savings tin sizes in kyat, increasing: savings move to the next tin once a tin is full. */
+  tin: number[];
   /** Seat utility weights, per design level of each property near the seat. */
   seat: { comfort: number; light: number; beauty: number; shade: number; warmth: number; noise: number; table: number; distance: number; jitter: number };
 }
@@ -46,6 +48,7 @@ export interface RawShop {
   pay: ShopRules['pay'];
   arrivals: { perHour: { from: string; rate: number }[]; appeal: ShopRules['arrivals']['appeal'] };
   service: ShopRules['service'];
+  tin: number[];
   seat: ShopRules['seat'];
 }
 
@@ -90,6 +93,7 @@ export function buildShopRules(d: RawShop): ShopRules {
     },
     arrivals: buildArrivals(d.arrivals),
     service: checkAll({ ...d.service }, 'service', 0, 24 * 60),
+    tin: buildTin(d.tin),
     seat: checkAll({ ...d.seat }, 'seat', -100, 100),
   };
 }
@@ -106,6 +110,32 @@ function buildArrivals(a: RawShop['arrivals']): ShopRules['arrivals'] {
   const ap = checkAll({ ...a.appeal }, 'arrivals.appeal', -10, 100);
   if (!(ap.min >= 0 && ap.min <= ap.max)) throw new Error('arrivals.appeal: need 0 ≤ min ≤ max');
   return { from, rate, appeal: ap };
+}
+
+function buildTin(t: number[]): number[] {
+  if (!Array.isArray(t) || t.length === 0 || t.length > 16) throw new Error('tin: need 1…16 sizes');
+  t.forEach((v, i) => {
+    if (!(Number.isInteger(v) && v > 0)) throw new Error(`tin[${i}]: must be a whole number > 0`);
+    if (i > 0 && v <= t[i - 1]!) throw new Error('tin: sizes must increase');
+  });
+  return [...t];
+}
+
+/** Which savings tin holds `money` (index into `tin`), and how full it is (0…1). */
+export interface TinLevel {
+  size: number;
+  fill: number;
+}
+
+/** The smallest tin that holds the savings; past the largest tin it simply stays full. */
+export function tinLevel(money: number, rules: ShopRules = SHOP, out: TinLevel = { size: 0, fill: 0 }): TinLevel {
+  const tin = rules.tin;
+  const m = Math.max(0, money);
+  let i = 0;
+  while (i < tin.length - 1 && m > tin[i]!) i++;
+  out.size = i;
+  out.fill = Math.min(1, m / tin[i]!);
+  return out;
 }
 
 /** Customers per game hour at a minute of the day (before appeal). */

@@ -1,0 +1,88 @@
+/* Savings tin on the right edge (outside build mode it replaces the plain money readout). */
+.tin {
+  position: absolute;
+  top: calc(var(--safe-t) + 8px);
+  right: calc(var(--safe-r) + 10px);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.tin-can {
+  position: relative;
+  box-sizing: border-box;
+  background: #2c3440;
+  border: 3px solid #9aa6ae;
+  border-top-color: #6a7884;
+  border-radius: 2px;
+  /* the lid's rim */
+  box-shadow: 0 -3px 0 #44505c, 0 2px 0 #1b1411;
+}
+.tin-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: #f0c060;
+  border-top: 1px solid #fff8ea;
+  box-sizing: border-box;
+  transition: height 0.4s steps(4, end);
+}
+.tin-coin {
+  position: absolute;
+  left: 50%;
+  top: -24px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  background: #f0c060;
+  border: 1px solid #d9a05b;
+  box-sizing: border-box;
+  border-radius: 50%;
+  animation: tin-coin 0.7s cubic-bezier(0.5, 0, 1, 1) forwards;
+}
+.tin-coin.hidden {
+  display: none;
+}
+@keyframes tin-coin {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(24px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+}
+.tin-can.grow {
+  animation: tin-grow 0.5s ease-out;
+}
+@keyframes tin-grow {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.tin-label {
+  padding: 2px 12px;
+  font-size: 16px;
+  background: rgba(27, 20, 17, 0.78);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+}
+body.building .tin {
+  display: none;
+}
+body:not(.building) .money {
+  display: none;
+}
