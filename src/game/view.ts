@@ -1,8 +1,9 @@
 // Main-thread mirror of the simulation, filled from worker frames. render/ and ui/ read it;
 // build mode validates its ghost against the same WorldState the worker uses.
 import type { FrameHandler } from '../shared/diff';
-import { IndexQueue } from '../shared/ids';
-import { MAX_OBJECTS, PROP_COUNT, TILE_LAYER } from '../shared/layout';
+import { IndexQueue, handleGen, handleIndex, makeHandle } from '../shared/ids';
+import { MAX_NPCS, MAX_OBJECTS, PROP_COUNT, TILE_LAYER } from '../shared/layout';
+import { POS_SCALE } from '../shared/diff';
 import { AreaGrids, markOccupancy, WorldState } from '../shared/world-state';
 
 /** Inclusive-exclusive tile rect that changed since render last consumed it. */
@@ -52,6 +53,22 @@ export class WorldView implements FrameHandler {
   /** Set if more removals arrived than the buffer holds: render rebuilds everything. */
   objResync = false;
 
+  // NPCs by slot index (struct of arrays). Positions in tiles; render interpolates prev → cur.
+  readonly npcLive = new Uint8Array(MAX_NPCS);
+  readonly npcGen = new Uint16Array(MAX_NPCS);
+  readonly npcPrevX = new Float32Array(MAX_NPCS);
+  readonly npcPrevY = new Float32Array(MAX_NPCS);
+  readonly npcX = new Float32Array(MAX_NPCS);
+  readonly npcY = new Float32Array(MAX_NPCS);
+  readonly npcDir = new Uint8Array(MAX_NPCS);
+  readonly npcAnim = new Uint8Array(MAX_NPCS);
+  readonly npcLook = new Uint8Array(MAX_NPCS);
+  readonly npcDrink = new Uint8Array(MAX_NPCS);
+  /** shared/npc.ts ORDER */
+  readonly npcOrderState = new Uint8Array(MAX_NPCS);
+  /** performance.now() when the latest frame arrived (interpolation clock). */
+  frameAt = 0;
+
   get area(): AreaGrids {
     return this.state.area;
   }
@@ -64,12 +81,17 @@ export class WorldView implements FrameHandler {
     this.tilesDirty.add(0, 0, w, h);
     this.objChanged.clear();
     this.objRemovedCount = 0;
+    this.npcLive.fill(0);
     // A new area or a loaded game: renderers drop everything they had and rebuild.
     this.objResync = true;
     this.gridsDirty.add(0, 0, w, h);
   }
 
   header(tick: number, gameMinute: number, workCentiMs: number): void {
+    // A new frame: everyone's last position becomes the start of this frame's movement.
+    this.npcPrevX.set(this.npcX);
+    this.npcPrevY.set(this.npcY);
+    this.frameAt = performance.now();
     this.tick = tick;
     this.gameMinute = gameMinute;
     this.simWorkMs = workCentiMs / 100;
@@ -112,10 +134,39 @@ export class WorldView implements FrameHandler {
     if (this.objRemovedCount < this.objRemoved.length) this.objRemoved[this.objRemovedCount++] = handle;
     else this.objResync = true;
   }
-  npcSpawn(): void {}
-  npcDespawn(): void {}
-  npcState(): void {}
-  npcOrder(): void {}
+  /** Live NPC handle for a slot, or 0. */
+  npcHandle(i: number): number {
+    return this.npcLive[i] ? makeHandle(i, this.npcGen[i]!) : 0;
+  }
+  npcSpawn(handle: number, _def: number, _area: number, look: number, x: number, y: number): void {
+    const i = handleIndex(handle);
+    if (i === 0 || i >= MAX_NPCS) return;
+    this.npcLive[i] = 1;
+    this.npcGen[i] = handleGen(handle);
+    this.npcX[i] = this.npcPrevX[i] = x / POS_SCALE;
+    this.npcY[i] = this.npcPrevY[i] = y / POS_SCALE;
+    this.npcLook[i] = look;
+    this.npcDir[i] = 0;
+    this.npcAnim[i] = 0;
+    this.npcOrderState[i] = 0;
+  }
+  npcDespawn(handle: number): void {
+    const i = handleIndex(handle);
+    if (i > 0 && i < MAX_NPCS && this.npcGen[i] === handleGen(handle)) this.npcLive[i] = 0;
+  }
+  npcState(slot: number, x: number, y: number, dir: number, anim: number): void {
+    if (slot >= MAX_NPCS || !this.npcLive[slot]) return;
+    this.npcX[slot] = x / POS_SCALE;
+    this.npcY[slot] = y / POS_SCALE;
+    this.npcDir[slot] = dir;
+    this.npcAnim[slot] = anim;
+  }
+  npcOrder(handle: number, drink: number, state: number): void {
+    const i = handleIndex(handle);
+    if (i === 0 || i >= MAX_NPCS || !this.npcLive[i] || this.npcGen[i] !== handleGen(handle)) return;
+    this.npcDrink[i] = drink;
+    this.npcOrderState[i] = state;
+  }
   gridPatch(prop: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void {
     const dst = this.grids[prop];
     if (!dst) return;

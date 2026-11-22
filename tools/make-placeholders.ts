@@ -1,11 +1,12 @@
 // Generates placeholder art into art/sprites/ using only palette colours: floor tiles, back walls,
-// and every object in src/data/objects.json at each of its rotations.
+// every object in src/data/objects.json at each of its rotations, customers and order bubbles.
 // Original art for this project (no third-party licence). Replace with hand-made sprites later.
 // Usage: node tools/make-placeholders.ts
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
 import { diamondHalf } from './png.ts';
 import { drawObjects, drawWalls } from './placeholder-objects.ts';
+import { drawCharacters } from './placeholder-characters.ts';
 
 const hex = (h: string): [number, number, number] => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 
@@ -69,7 +70,7 @@ for (const [name, paint] of Object.entries(tiles)) {
   console.log(`art/sprites/floor/${name}.png`);
 }
 
-for (const [name, img] of [...drawWalls(), ...drawObjects()]) {
+for (const [name, img] of [...drawWalls(), ...drawObjects(), ...drawCharacters()]) {
   const file = `art/sprites/${name}.png`;
   mkdirSync(file.slice(0, file.lastIndexOf('/')), { recursive: true });
   await sharp(img.px, { raw: { width: img.w, height: img.h, channels: 4 } }).png().toFile(file);

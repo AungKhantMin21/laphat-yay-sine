@@ -8,6 +8,7 @@ import floorFrames from './data/floors.json';
 import { FLOOR_TYPES } from './shared/layout';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
+import { NpcLayer } from './render/npcs';
 import { Recolourer } from './render/recolour';
 import { Texture } from 'pixi.js';
 import { Ghost } from './render/ghost';
@@ -55,7 +56,8 @@ const view = new WorldView();
 const objects = new ObjectLayer(view, atlas, new Recolourer(atlas));
 const ghost = new Ghost(objects, objects.layer);
 const heat = new HeatLayer(view);
-stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer);
+const npcs = new NpcLayer(view, atlas, objects.layer);
+stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npcs.bubbles);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
 let musicPinned: TrackId | null = null;
@@ -141,7 +143,11 @@ installGestures(stageEl, {
   },
   zoomStep: (dir) => stage.setZoom(stage.size.zoom + dir),
   tap: (x, y, type) => {
-    if (build.open) build.tap(x, y, type);
+    if (build.open) return build.tap(x, y, type);
+    const [wx, wy] = toWorld(x, y);
+    const customer = npcs.pickOrder(wx, wy);
+    // M2.6 opens the pour minigame here.
+    if (customer && import.meta.env.DEV) console.info('customer tapped', customer);
   },
   hover: (x, y) => build.hover(x, y),
   dragStart: (x, y) => build.dragStart(x, y),
@@ -153,7 +159,7 @@ const draws = debug ? new DrawCallCounter(stage.renderer) : null;
 
 const loop = new FrameLoop({
   update: () => undefined,
-  render: () => {
+  render: (_alpha, now) => {
     if (!bridge.isReady) return;
     dayHud.tick();
     draws?.beginFrame();
@@ -167,6 +173,7 @@ const loop = new FrameLoop({
     camera.apply(stage.world, stage.size);
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
+    npcs.update(now, TIER_SETTINGS[device.tier].maxAnimatedNpcs, v.x0, v.y0, v.x1, v.y1);
     stage.render();
     draws?.endFrame();
   },
@@ -222,9 +229,10 @@ if (debug) {
     info: () => [
       `tier    ${TIER_NAMES[device.tier]} (${device.source}${device.bench ? `, cpu ${device.bench.cpuScore}, p90 ${device.bench.p90FrameMs} ms` : ''})`,
       `view    ${stage.size.w}×${stage.size.h} ×${stage.size.scale} (zoom ${stage.size.zoom}), dpr ${stage.size.devPerCss.toFixed(2)}`,
+      `npcs    ${npcs.visible} on screen, ${npcs.animated} animated (cap ${TIER_SETTINGS[device.tier].maxAnimatedNpcs})`,
       `chunks  ${chunks.liveTextures} live · day ${view.day} ${String(Math.floor(view.gameMinute / 60) % 24).padStart(2, '0')}:${String(view.gameMinute % 60).padStart(2, '0')}`,
     ],
   });
 }
 
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, build } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build } });
