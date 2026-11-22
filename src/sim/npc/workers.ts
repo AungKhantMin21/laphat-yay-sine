@@ -11,6 +11,8 @@ import { ANIM, DIR, NPC_DEF_PLAYER, NPC_DEF_WAITER } from '../../shared/npc';
 import { TICK_HZ, type SimEvent } from '../../shared/protocol';
 import { ACCESS } from '../../shared/rules/access';
 import { SHOP, type ShopRules } from '../../shared/shop';
+import type { Rng } from '../../shared/rng';
+import { STAFF, type RoleDef, type StaffRules } from '../../shared/staff';
 import type { PathFinder } from '../path/pathfinder';
 import { DX, DY, type WalkGrid } from '../path/walk-grid';
 import { CUP } from '../service/cups';
@@ -30,6 +32,9 @@ export const WS = {
 } as const;
 
 export const ROLE = { player: 0, waiter: 1 } as const;
+
+/** Pour score of a cup brewed by staff (tea sayar, M5): steady, a little better than average. */
+const STAFF_BREW_SCORE = 0.85;
 
 /** The player is always worker 1. */
 export const PLAYER = 1;
@@ -62,6 +67,10 @@ export class Workers {
   readonly brewFor: Uint32Array;
   /** The player state (queue, brewing) changed: Game sends a new PlayerState. */
   changed = false;
+  /** Staff role of each worker (null for the player). */
+  private readonly staffRole: (RoleDef | null)[];
+  /** Current sim tick (set by tick()): how long jobs have waited. */
+  private now = 0;
 
   private readonly dirty: IndexQueue;
   private readonly spawned: Uint8Array;
@@ -70,7 +79,7 @@ export class Workers {
   private despawnedN = 0;
   private readonly speed: number;
   private readonly stuck: number;
-  private readonly t: { takeOrder: number; pickUp: number; serve: number; clear: number; wash: number };
+  private readonly t: { takeOrder: number; pickUp: number; serve: number; clear: number; wash: number; brew: number };
 
   constructor(
     private readonly walk: WalkGrid,
@@ -78,9 +87,12 @@ export class Workers {
     private readonly service: Service,
     private readonly customers: Customers,
     private readonly emit: (e: SimEvent) => void,
+    private readonly decide: Rng,
     rules: ShopRules = SHOP,
+    private readonly staff: StaffRules = STAFF,
   ) {
     const n = this.capacity;
+    this.staffRole = new Array<RoleDef | null>(n).fill(null);
     this.alive = new Uint8Array(n);
     this.gen = new Uint16Array(n);
     this.role = new Uint8Array(n);
@@ -107,7 +119,7 @@ export class Workers {
     const ticks = (sec: number): number => Math.max(1, Math.round(sec * TICK_HZ));
     this.speed = s.walkSpeed / TICK_HZ;
     this.stuck = ticks(s.stuck);
-    this.t = { takeOrder: ticks(s.takeOrder), pickUp: ticks(s.pickUp), serve: ticks(s.serve), clear: ticks(s.clear), wash: ticks(s.wash) };
+    this.t = { takeOrder: ticks(s.takeOrder), pickUp: ticks(s.pickUp), serve: ticks(s.serve), clear: ticks(s.clear), wash: ticks(s.wash), brew: ticks(s.brew) };
   }
 
   /** NPC handle of worker w (its slot on the wire). */
@@ -121,10 +133,11 @@ export class Workers {
     return w >= 1 && w < this.capacity && this.alive[w] && this.gen[w] === handleGen(h) ? w : 0;
   }
 
-  /** A worker appears at `tile`. Worker 1 is always the player. */
-  spawn(w: number, role: number, tile: number): void {
+  /** A worker appears at `tile`. Worker 1 is always the player; staff pass their role. */
+  spawn(w: number, role: number, tile: number, staffRole: RoleDef | null = null): void {
     this.alive[w] = 1;
     this.role[w] = role;
+    this.staffRole[w] = staffRole;
     this.place(w, tile);
     this.dir[w] = DIR.south;
     this.anim[w] = ANIM.stand;
@@ -170,9 +183,12 @@ export class Workers {
     const base = w * QUEUE_MAX;
     for (let k = 0; k < this.qLen[w]!; k++) if (this.queue[base + k] === h) return 'serve.err.queued';
     if (this.qLen[w]! >= QUEUE_MAX) return 'serve.err.queueFull';
-    // Taking a job over from staff: they let it go and choose another.
+    // Taking a job over from staff: they let it go and choose another (not once it's in their hands).
     const other = b.claimedBy[i]!;
-    if (other !== 0 && other !== w) this.release(other, h);
+    if (other !== 0 && other !== w) {
+      if (this.task[other] === h && this.carrying(other)) return 'serve.err.taken';
+      this.release(other, h);
+    }
     b.claim(h, w);
     this.queue[base + this.qLen[w]!] = h;
     this.qLen[w]!++;
@@ -227,11 +243,13 @@ export class Workers {
 
   // ---- per tick ----
 
-  tick(): void {
+  tick(now: number): void {
+    this.now = now;
     for (let w = 1; w < this.capacity; w++) {
       if (!this.alive[w]) continue;
       switch (this.state[w]) {
         case WS.idle:
+          if (this.qLen[w]! === 0 && this.staffRole[w]) this.choose(w);
           if (this.qLen[w]! > 0) this.start(w, this.queue[w * QUEUE_MAX]!);
           break;
         case WS.walking: {
@@ -311,6 +329,7 @@ export class Workers {
         return this.act(w, t.takeOrder);
       case TASK.brew: {
         if (!this.service.canBrew()) return this.giveUp(w, 'serve.err.noCups');
+        if (this.staffRole[w]) return this.act(w, t.brew); // staff brew on their own (tea sayar, M5)
         const customer = b.target[i]!;
         this.state[w] = WS.brewing;
         this.brewFor[w] = customer;
@@ -341,6 +360,9 @@ export class Workers {
       case TASK.order:
         s.takeOrder(target);
         return this.finish(w);
+      case TASK.brew:
+        s.brew(target, STAFF_BREW_SCORE, false);
+        return this.finish(w);
       case TASK.serve:
         if (this.phase[w] === 0) {
           if (s.pickUp(target, w)) return this.giveUp(w, 'serve.err.gone');
@@ -367,6 +389,63 @@ export class Workers {
         return this.finish(w);
     }
     this.finish(w);
+  }
+
+  /**
+   * An idle staff member picks the best open job they do: role weight − distance (tiles) + how long
+   * it has waited (seconds) + a little seeded jitter. Re-scored only while idle, never per tick for busy staff.
+   */
+  private choose(w: number): void {
+    const role = this.staffRole[w]!;
+    const sc = this.staff.score;
+    const b = this.service.board;
+    const W = this.walk.w;
+    const x = this.tile[w]! % W;
+    const y = (this.tile[w]! - x) / W;
+    let best = NONE;
+    let bestScore = -Infinity;
+    for (let i = 1; i < b.capacity; i++) {
+      if (!b.live[i] || b.claimedBy[i] !== 0) continue;
+      const kind = b.kind[i]!;
+      const weight = role.weight[kind]!;
+      if (weight <= 0) continue;
+      const t = this.jobTile(kind, b.target[i]!);
+      if (t < 0) continue;
+      const tx = t % W;
+      const ty = (t - tx) / W;
+      const dx = tx > x ? tx - x : x - tx;
+      const dy = ty > y ? ty - y : y - ty;
+      const dist = dx > dy ? dx : dy;
+      const age = (this.now - b.created[i]!) / TICK_HZ;
+      const s = weight - sc.distance * dist + sc.age * age + sc.jitter * this.decide.next();
+      if (s > bestScore) {
+        bestScore = s;
+        best = b.handle(i);
+      }
+    }
+    if (best === NONE) return;
+    b.claim(best, w);
+    this.queue[w * QUEUE_MAX] = best;
+    this.qLen[w] = 1;
+  }
+
+  /** Where a staff member would go first for a job, or −1 if they can't start it now. */
+  private jobTile(kind: number, target: number): number {
+    const s = this.service;
+    switch (kind) {
+      case TASK.order:
+        return this.seatOf(target);
+      case TASK.brew:
+        return s.canBrew() ? s.fixtureTile(SERVICE.counter) : -1;
+      case TASK.serve:
+        return s.cups.place[target] === CUP.counter ? s.fixtureTile(SERVICE.counter) : -1;
+      case TASK.clear:
+        return s.cups.place[target] === CUP.table ? s.cups.tile[target]! : -1;
+      case TASK.wash:
+        return s.fixtureTile(SERVICE.sink);
+      default:
+        return -1;
+    }
   }
 
   /** At the counter with room on the tray: take the cups of the next queued serve jobs too. */

@@ -98,6 +98,10 @@ const bridge: SimBridge = new SimBridge(view, {
       else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
+      else if (e.k === 'wages') {
+        dayEnd.wages(e.paid, e.dayOff);
+        tin.refresh(e.total);
+      }
     }
   },
   onReady: () => {
@@ -160,6 +164,8 @@ const dayHud = installDayHud({
 const dayEnd = installDayEnd({
   player: () => bridge.player,
   sleep: async () => (await bridge.act({ k: 'sleep' })).ok,
+  hire: async (role) => (await bridge.act({ k: 'hire', role })).reason ?? '',
+  dismiss: async (role) => (await bridge.act({ k: 'dismiss', role })).reason ?? '',
   onSleepScreen: (open) => {
     nightPinned = open;
     if (booted) pickMusic();

@@ -122,15 +122,18 @@ describe('save v2', () => {
   });
 
   it('migrates a v1 save: clock = tick, shutters open, empty day', () => {
-    // A v1 file is the v2 layout without the trailing day block, with schema 1.
+    // A v1 file is the current layout without the trailing day block (20 B + 2 empty teaser strings)
+    // and the staff block (1 B, empty), with schema 1.
     const g = midDay();
     const data = g.toSave(1);
     data.teaser = { key: '', arg: '' };
-    const v2 = serialize(data);
-    const v1 = v2.slice(0, v2.byteLength - 20 - 2);
+    data.staff = [];
+    const v3 = serialize(data);
+    const v1 = v3.slice(0, v3.byteLength - 20 - 2 - 1);
     new DataView(v1).setUint16(4, 1, true);
     const back = parse(v1);
-    expect(back.schema).toBe(2);
+    expect(back.schema).toBe(3); // v1 → v2 → v3
+    expect(back.staff).toEqual([]);
     expect(back.clock).toBe(back.tick);
     expect(back.shuttersOpen).toBe(true);
     expect(back.today).toEqual({ served: 0, poured: 0, earned: 0, tips: 0, best: 0 });

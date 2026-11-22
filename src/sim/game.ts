@@ -9,6 +9,8 @@ import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { Service } from './service/service';
 import { PLAYER, ROLE, Workers } from './npc/workers';
+import { STAFF, hireBlock } from '../shared/staff';
+import { MAX_WORKERS } from '../shared/layout';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
@@ -20,7 +22,7 @@ import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
-import { SAVE_SCHEMA, type SaveData, type SavedObject } from './save/format';
+import { SAVE_SCHEMA, type SaveData, type SavedObject, type StaffMember } from './save/format';
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
 
@@ -37,6 +39,8 @@ export class Game {
   readonly service: Service;
   /** The player character and staff. */
   readonly workers: Workers;
+  /** Hired staff (saved): role key, the day they were hired, and whether they're off (unpaid) today. */
+  staff: StaffMember[] = [];
   /** Last game minute an arrival was rolled for (one roll per minute). */
   private arrivalMinute = -1;
 
@@ -53,7 +57,7 @@ export class Game {
     this.paths = new PathFinder([this.walk, this.walkStaff]);
     this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS });
     this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
-    this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e));
+    this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e), sim.rng.npcDecide);
     const home = this.workers.homeTile();
     this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
   }
@@ -81,6 +85,73 @@ export class Game {
     const reaction = reactionFor(score);
     this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction, wait: Math.round(wait) });
     this.events.push({ k: 'money', delta: price + tip, total: b.money });
+  }
+
+  // ---- staff (M2.5) ----
+
+  /** Hires one of `role` (evening only; one of each role; unlocked by savings and seats). */
+  private hire(role: string): Result {
+    if (this.day.phase !== PHASE.evening) return { ok: false, reason: 'day.err.notNow' };
+    const def = STAFF.byKey.get(role);
+    if (!def) return { ok: false, reason: 'staff.err.notYet' };
+    if (this.staff.some((m) => m.role === role)) return { ok: false, reason: 'staff.err.hired' };
+    if (this.staff.length >= MAX_WORKERS - 1) return { ok: false, reason: 'staff.err.full' };
+    const block = hireBlock(def, this.builder.money, this.npcs.seatCount());
+    if (block) return { ok: false, reason: block };
+    // They start tomorrow; the first wage is paid tonight at Sleep.
+    this.staff.push({ role, hiredDay: this.sim.day, dayOff: true });
+    this.day.changed = true;
+    return { ok: true };
+  }
+
+  private dismiss(role: string): Result {
+    if (this.day.phase !== PHASE.evening) return { ok: false, reason: 'day.err.notNow' };
+    const k = this.staff.findIndex((m) => m.role === role);
+    if (k < 0) return { ok: false, reason: 'staff.err.notHired' };
+    this.staff.splice(k, 1);
+    this.spawnStaff();
+    this.day.changed = true;
+    return { ok: true };
+  }
+
+  /**
+   * Sleep: each staff member's wage comes out of the tin for tomorrow. If the tin holds less, they take
+   * an unpaid day off instead — nothing is taken and money never goes below zero.
+   */
+  private payWages(): void {
+    if (this.staff.length === 0) return;
+    const b = this.builder;
+    let paid = 0;
+    let off = 0;
+    for (const m of this.staff) {
+      const wage = STAFF.byKey.get(m.role)!.wage;
+      if (b.money >= wage) {
+        b.money -= wage;
+        paid += wage;
+        m.dayOff = false;
+      } else {
+        m.dayOff = true;
+        off++;
+      }
+    }
+    b.changed = true;
+    this.day.changed = true;
+    this.events.push({ k: 'wages', paid, dayOff: off, total: b.money });
+    this.spawnStaff();
+  }
+
+  /** Workers 2… follow the roster: present unless on a day off. */
+  spawnStaff(): void {
+    const home = this.workers.homeTile();
+    for (let w = 2; w < this.workers.capacity; w++) {
+      const m = this.staff[w - 2];
+      const want = m !== undefined && !m.dayOff;
+      if (want && !this.workers.alive[w]) {
+        this.workers.spawn(w, ROLE.waiter, home >= 0 ? home : this.workers.tile[PLAYER]!, STAFF.byKey.get(m.role)!);
+      } else if (!want && this.workers.alive[w]) {
+        this.workers.despawn(w);
+      }
+    }
   }
 
   /** Rebuilds walk costs around build changes (searches in flight restart). */
@@ -145,6 +216,7 @@ export class Game {
       shuttersOpen: day.shuttersOpen,
       today: { ...day.today },
       teaser: { ...day.teaser },
+      staff: this.staff.map((m) => ({ ...m })),
       rng: [r.market.state >>> 0, r.npcDecide.state >>> 0, r.events.state >>> 0, r.cosmetic.state >>> 0],
       money: this.builder.money,
       nextUid: this.world.uidCounter,
@@ -196,7 +268,11 @@ export class Game {
     day.shuttersOpen = d.shuttersOpen;
     day.today = { ...d.today };
     day.teaser = { ...d.teaser };
-    return { game: new Game(sim, world, new Builder(world, d.money, inv), day), skipped, returned, added };
+    const game = new Game(sim, world, new Builder(world, d.money, inv), day);
+    // Staff whose role no longer exists are dropped (they were never objects; nothing is lost).
+    game.staff = d.staff.filter((m) => STAFF.byKey.has(m.role)).map((m) => ({ ...m }));
+    game.spawnStaff();
+    return { game, skipped, returned, added };
   }
 
   /** Runs a player action. Object ids on the wire are handles; stale handles are refused. */
@@ -232,9 +308,14 @@ export class Game {
         }
         this.npcs.clear(); // the last passers-by go home too
         this.service.endOfDay(); // cups washed overnight, no jobs left
+        this.payWages();
         this.workers.reset(); // everyone back beside the counter
         return { ok: true };
       }
+      case 'hire':
+        return this.hire(a.role);
+      case 'dismiss':
+        return this.dismiss(a.role);
       case 'queueTask':
         return res(this.workers.queueTask(PLAYER, a.task));
       case 'cancelTask':
@@ -266,6 +347,8 @@ export class Game {
       today: { ...d.today },
       queue: this.workers.playerQueue(),
       brewing: this.workers.brewFor[PLAYER]!,
+      staff: this.staff.map((m) => ({ role: m.role, dayOff: m.dayOff })),
+      seats: this.npcs.seatCount(),
     };
   }
 
@@ -300,7 +383,7 @@ export class Game {
     }
     this.service.tick(this.sim.tick);
     this.npcs.tick(this.sim.tick);
-    this.workers.tick();
+    this.workers.tick(this.sim.tick);
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);

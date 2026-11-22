@@ -80,3 +80,17 @@ body.building .evening {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Staff row (M2.5). */
+.evening-staff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+  padding-top: 6px;
+  border-top: 1px solid #ffffff22;
+}
+.evening-staff.hidden,
+.evening-staff-btn.hidden {
+  display: none;
+}

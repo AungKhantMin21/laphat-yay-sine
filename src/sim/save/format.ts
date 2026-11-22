@@ -12,10 +12,13 @@
 //   u32 clock | u8 dayFlags (bit 0 shutters open) | u8 reserved
 //   | u16 served | u16 poured | u8 best | u8 reserved | u32 earned | u32 tips
 //   | u8 len + ASCII teaser key | u8 len + ASCII teaser arg
+//
+// v3 = the v2 layout (schema 3), then staff (M2.5):
+//   u8 count, then count × (u8 len + ASCII role key | u16 hiredDay | u8 flags (bit 0 day off))
 
 import type { DayStats } from '../../shared/protocol';
 
-export const SAVE_SCHEMA = 2;
+export const SAVE_SCHEMA = 3;
 const MAGIC = 0x3153594c; // 'LYS1' little-endian
 const OBJ_BYTES = 16;
 const DAY_BYTES = 20;
@@ -45,6 +48,15 @@ interface SaveDataV1 {
   objects: SavedObject[];
 }
 
+/** A hired staff member (M2.5). */
+export interface StaffMember {
+  /** staff.json role key. */
+  role: string;
+  hiredDay: number;
+  /** Off (unpaid) today: the tin was short at the last Sleep. */
+  dayOff: boolean;
+}
+
 /** The current-schema save, as plain data. */
 export interface SaveData {
   schema: number;
@@ -59,6 +71,7 @@ export interface SaveData {
   today: DayStats;
   /** Tomorrow's teaser ('' key = none). */
   teaser: { key: string; arg: string };
+  staff: StaffMember[];
   /** RNG stream states: market, npcDecide, events, cosmetic. */
   rng: [number, number, number, number];
   money: number;
@@ -82,8 +95,11 @@ export function serialize(d: SaveData): ArrayBuffer {
   const teaserKey = enc.encode(d.teaser.key);
   const teaserArg = enc.encode(d.teaser.arg);
   if (teaserKey.length > 255 || teaserArg.length > 255) throw new Error('teaser too long');
+  const staffKeys = d.staff.map((m) => enc.encode(m.role));
+  if (staffKeys.length > 255 || staffKeys.some((b) => b.length > 255)) throw new Error('staff too long');
   const size = 4 + 4 + 4 + 8 + 4 + 16 + 8 + 2 + keyBytes.reduce((s, b) => s + 1 + b.length, 0) + 2 + inv.length * 4 + 2 + d.objects.length * OBJ_BYTES
-    + DAY_BYTES + 1 + teaserKey.length + 1 + teaserArg.length;
+    + DAY_BYTES + 1 + teaserKey.length + 1 + teaserArg.length
+    + 1 + staffKeys.reduce((s, b) => s + 1 + b.length + 3, 0);
   const buf = new ArrayBuffer(size);
   const dv = new DataView(buf);
   const u8 = new Uint8Array(buf);
@@ -149,6 +165,16 @@ export function serialize(d: SaveData): ArrayBuffer {
     u8.set(b, o);
     o += b.length;
   }
+  u8[o++] = staffKeys.length;
+  d.staff.forEach((m, k) => {
+    const b = staffKeys[k]!;
+    u8[o++] = b.length;
+    u8.set(b, o);
+    o += b.length;
+    dv.setUint16(o, Math.min(0xffff, Math.max(0, m.hiredDay)), true);
+    u8[o + 2] = m.dayOff ? 1 : 0;
+    o += 3;
+  });
   return buf;
 }
 
@@ -273,13 +299,46 @@ function parseV2(dv: DataView): SaveData {
   };
   const key = str();
   const arg = str();
-  return { ...base, schema: 2, clock, shuttersOpen, today, teaser: { key, arg } };
+  return { ...base, schema: 2, clock, shuttersOpen, today, teaser: { key, arg } } as SaveData;
+}
+
+/** Byte offset just after the v2 layout (the shop day and teaser). */
+function endOfV2(dv: DataView): number {
+  let o = endOfV1(dv) + DAY_BYTES;
+  for (let k = 0; k < 2; k++) {
+    if (o + 1 > dv.byteLength) throw new Error('save truncated');
+    o += 1 + dv.getUint8(o);
+  }
+  return o;
+}
+
+function parseV3(dv: DataView): SaveData {
+  const base = parseV2(dv);
+  let o = endOfV2(dv);
+  const need = (n: number): void => {
+    if (o + n > dv.byteLength) throw new Error('save truncated');
+  };
+  const dec = new TextDecoder();
+  need(1);
+  const n = dv.getUint8(o++);
+  const staff: StaffMember[] = [];
+  for (let k = 0; k < n; k++) {
+    need(1);
+    const len = dv.getUint8(o++);
+    need(len + 3);
+    const role = dec.decode(new Uint8Array(dv.buffer, dv.byteOffset + o, len));
+    o += len;
+    staff.push({ role, hiredDay: dv.getUint16(o, true), dayOff: (dv.getUint8(o + 2) & 1) === 1 });
+    o += 3;
+  }
+  return { ...base, schema: 3, staff };
 }
 
 /** One parser per schema that ever existed. Never edit an old one. */
 export const PARSERS: Record<number, Parser> = {
   1: parseV1 as unknown as Parser,
   2: parseV2 as unknown as Parser,
+  3: parseV3 as unknown as Parser,
 };
 
 /** Upgrades schema n → n+1. MIGRATIONS[n] upgrades from n. Append only. */
@@ -293,6 +352,8 @@ export const MIGRATIONS: Record<number, (s: VersionedSave) => VersionedSave> = {
     today: { served: 0, poured: 0, earned: 0, tips: 0, best: 0 },
     teaser: { key: '', arg: '' },
   }),
+  // v2 → v3 (M2.5): no staff yet. (New kitchen fixtures and objects that no longer fit are handled at load.)
+  2: (s) => ({ ...s, schema: 3, staff: [] }),
 };
 
 export function migrate(s: VersionedSave, migrations = MIGRATIONS, target = SAVE_SCHEMA): VersionedSave {

@@ -186,6 +186,18 @@ export class Customers {
 
   // ---- arrivals ----
 
+  /** Seats in the shop (seat tiles of floor-standing seating furniture). */
+  seatCount(): number {
+    const s = this.world.objects;
+    let n = 0;
+    for (let o = 1; o < s.capacity; o++) {
+      if (!s.live[o] || s.layer[o] !== LAYER.furniture || s.parent[o] !== 0) continue;
+      const def = CATALOG.defs[s.type[o]!]!;
+      if (def.seat > 0) n += Math.min(def.seat, def.w * def.h);
+    }
+    return n;
+  }
+
   /** Shop appeal (arrival multiplier) from its seats: count and average comfort/beauty. */
   appeal(): number {
     const s = this.world.objects;

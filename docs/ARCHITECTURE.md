@@ -262,7 +262,7 @@ Database `laphat`:
 
 Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats.
 
-Binary save v3 (M2.5, planned) = v2 plus the staff roster (role key, hired day, day-off flag). Migration 2→3 adds missing fixtures (counter, kettle, sink, stove); furniture that no longer fits is already handled at load (see walk zones). Workers, tasks and cups are not saved (cups reset to clean).
+Binary save v3 (M2.5) = v2 plus the staff roster: u8 count, then (u8 len + role key, u16 hired day, u8 flags: bit 0 day off). Migration 2→3 adds an empty roster; missing kitchen fixtures and furniture that no longer fits are handled at load (see walk zones). Workers, tasks and cups are not saved (cups reset to clean).
 
 Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 

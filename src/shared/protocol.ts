@@ -22,6 +22,9 @@ export type Action =
   | { k: 'openShop' }
   /** Evening: end the day; the clock jumps to the next opening time and the game saves. */
   | { k: 'sleep' }
+  /** Evening: hire / let go a staff member (staff.json role key). */
+  | { k: 'hire'; role: string }
+  | { k: 'dismiss'; role: string }
   /** Queue a job from the task board for the player (task handle); up to 3. */
   | { k: 'queueTask'; task: number }
   /** Take a job off the player's queue (not once a cup is in hand). */
@@ -65,6 +68,8 @@ export type SimEvent =
    * brewed it); `reaction` = shared/drinks.ts REACTION.
    */
   | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number; wait: number }
+  /** Sleep paid tomorrow's wages (`paid` kyat in all); `dayOff` staff are off unpaid (the tin was short). */
+  | { k: 'wages'; paid: number; dayOff: number; total: number }
   /** The player reached the counter to brew customer `id`'s `drink`: open the pour minigame. */
   | { k: 'brewReady'; id: number; drink: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
@@ -109,6 +114,10 @@ export interface PlayerState {
   queue: number[];
   /** Customer handle the player is pouring for at the counter (0 = not brewing). */
   brewing: number;
+  /** Hired staff (role key) and whether they're off today (M2.5). */
+  staff: { role: string; dayOff: boolean }[];
+  /** Seats in the shop (hiring unlocks). */
+  seats: number;
 }
 
 export type FromSim =
