@@ -30,7 +30,7 @@ Laphat Yay Sine is a calm sandbox life sim in a small, fictional Yangon-style ne
 One in-game day takes 8–12 real minutes and ends with sleep, a save and a teaser for tomorrow.
 
 1. **Morning** — open the shutters, check the ingredient shelf, hear overnight news from the first regulars.
-2. **Serve** — brew and pour tea, fry snacks, seat customers. A tactile pour minigame (milk-to-tea ratio by holding). No harsh timers; slow service only means a shorter queue.
+2. **Serve** — a calm Diner Dash. The player is a character in the shop, and every cup is made by a person: take the order at the table → brew at the tea counter (a tactile pour minigame: milk-to-tea ratio by holding) → carry it on the tray (2 cups at first) → later clear the cups → wash them at the sink. Tap to queue up to 3 tasks (small numbered markers; tap a marker to cancel). Customers never leave angry and there is no failure state: waiting longer only lowers the tip, fast and good service raises it. Cups are a fixed set, so washing keeps the service going. Staff can be hired to share the work (§6).
 3. **Errands** — walk the neighbourhood: ingredients at the wet market, furniture at the furniture shop, paint at the hardware stall. Stock changes daily.
 4. **Build** — rearrange, place and paint in build mode at any time. The shop keeps running while you build.
 5. **Evening** — close up, count the day in the savings tin, read the notice board, sleep.
@@ -86,6 +86,23 @@ One small walkable neighbourhood, not an open world. Buying happens in person, a
 | Notice board corner | for-rent and for-sale papers | updates each morning |
 | Bus stop / trishaw stand | edge of the map | reserved for future districts |
 
+**The tea shop street (M2.5)**
+
+Walkable zones are explicit; everything else is blocked:
+
+| Zone | Who may walk there |
+| --- | --- |
+| Road | vehicles only (people cross only at the zebra crossing) |
+| Pavement, zebra crossing | everyone |
+| Shop front opening and door tiles | everyone; the only ways into the shop |
+| Shop interior (seating) | customers, staff, player |
+| Back kitchen (stove, sink) | staff and player only |
+| Outside filler, walls | nobody |
+
+Customers come along the pavement (or across the crossing), enter through the shop front, sit, and leave the same way. No one ever crosses a wall or the filler. The empty land around the shop is replaced by neighbouring building fronts so the street feels lived in.
+
+The shop: an open front with roll-up shutters facing the pavement, a signboard with the shop name, an awning, the tea counter at the front, and the back kitchen with stove and sink behind it. A new game starts small and deliberate: counter, kettle, sink, stove, 3 low tables, 8 low stools, 2 plants.
+
 **Walking rules**
 
 - Any errand is 20–40 seconds of walking at most.
@@ -102,7 +119,8 @@ Currency is kyat. Space is bought only when an owner is selling or renting.
 ### Money
 
 - Income: drinks and snacks; tips from happy regulars; occasional catering orders.
-- Spending: ingredients, furniture, materials, property, staff wages (later).
+- Spending: ingredients, furniture, materials, property, staff wages.
+- **Staff wages** are paid daily from the savings tin at Sleep. If the tin is too low, that staff member takes an unpaid day off tomorrow; nothing is taken and there is never debt.
 - Savings live in a tin box under the counter; its fill level is the money display.
 - All prices live in data tables, so balancing never needs code changes.
 
@@ -142,6 +160,21 @@ Coded rules, not an LLM: schedules, utility scoring and state machines with seed
 | Seeded RNG (mulberry32) | each save has a seed: varied playthroughs, reproducible bugs |
 | Offline catch-up | missed days run as a fast, render-free simulation on a 1-hour tick |
 
+**Staff and the task board (M2.5)**
+
+The sim keeps a **task board** of all open jobs: take order, brew, serve, clear, wash, cook. The player and staff take jobs from the same board. A job the player queues is theirs; staff working on it pick another.
+
+| Role | Jobs | Arrives |
+| --- | --- | --- |
+| Waiter | take orders, serve, clear | M2.5 |
+| Helper | wash cups | M4 (with staff schedules) |
+| Tea sayar | brew, at a better quality than an average pour | M5 (with drink mixing) |
+| Cook | snacks | M5 (with snacks) |
+
+- Staff are NPCs that choose jobs by utility scoring (role weight per job, distance, how long the job has waited, small jitter).
+- Hiring unlocks by savings and number of seats (data in `src/data/staff.json`). The player can still do any job.
+- Wages: see §5. Hiring and letting go happen in the evening.
+
 **Levels of detail**
 
 - **Near** (on screen): full movement, pathfinding, animation, every tick.
@@ -170,6 +203,8 @@ All dialogue lives in JSON, written in Myanmar first (Unicode), English added la
 - **Taste matching:** each customer has a preferred point on those axes; satisfaction falls off with distance.
 - **Classic presets** (pon man, cho seint, kya seint, plain tea) unlocked from the start.
 - **Snacks:** paratha, samosa, e kya kwe, mohinga (later), each with a simple prep minigame.
+- **Tea sayar** (M5): brews for you at a steady, better-than-average quality; the pour minigame stays for the player's own cups.
+- **Cook** (M5): needs the snack recipes; the stove in the back kitchen is placed from the start and waits for them.
 - **Naming:** players name creations; they appear on the chalkboard menu and in share codes.
 
 ## 9. Sharing
@@ -264,6 +299,9 @@ A 2-second benchmark plus `hardwareConcurrency` and `deviceMemory` picks Low / M
 ### Input and layout
 
 - Pointer Events for mouse, touch and pen; tap-to-walk, drag to pan, pinch or wheel to zoom (zoom snaps to whole-number pixel scales).
+- In the shop, a tap on a customer, a table, the counter or the sink queues that task for the player (up to 3, numbered markers; tap a marker to cancel).
+- Default zoom shows characters clearly on a landscape phone (about 40 CSS px tall: a world view about 200 px high); one step out shows the full 270 px view.
+- Debug UI (perf overlay, music switcher) appears only with `?debug=1`, in one small box inside the safe area.
 - Touch targets ≥ 44 px; UI scales with screen size.
 - Landscape only; HUD along the left and right edges for thumbs.
 
@@ -309,10 +347,13 @@ Build in Claude Code, one milestone at a time: plan mode first, performance chec
 | M0 | Foundation | repo, CLAUDE.md, perf overlay, device tiers, atlas pipeline, music player, deploy action; empty pixel iso grid at 60 fps on a mid phone, landscape | 1 week |
 | M1 | Build mode | place, rotate, stack, recolour, undo/redo, property grids, IndexedDB save/load | 2 weeks |
 | M2 | Shop day | customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser | 2 weeks |
-| M3 | Neighbourhood | 3 streets, tap-to-walk A*, 4 shops with daily stock, carrying and delivery | 2 weeks |
-| M4 | Living world | sim worker, schedules, LOD, property market, gossip, offline catch-up | 3 weeks |
-| M5 | Story and kitchen | 3 regulars with full arcs, story-driven needs, seasons, drink mixing | 2 weeks |
+| M2.5 | Shop, service and street | walkable zones and a walled shop with front, counter and back kitchen; player character with tap-to-queue service (order → brew → tray → serve → clear → wash); task board; the waiter; starting layout, readable sprites with shadows, default zoom; building fronts; debug UI only with `?debug=1` | 2 weeks |
+| M3 | Neighbourhood | 3 streets (reusing M2.5 zones), walking the neighbourhood, 4 shops with daily stock, carrying and delivery | 2 weeks |
+| M4 | Living world | sim worker, schedules (incl. staff), LOD, property market, gossip, offline catch-up (incl. staff and wages), vehicles on the road, helper role | 3 weeks |
+| M5 | Story and kitchen | 3 regulars with full arcs, story-driven needs, seasons, drink mixing, tea sayar and cook roles, snacks | 2 weeks |
 | M6 | Ship v0.1 | generated ambience, PWA install, share codes, device-matrix pass, published | 2 weeks |
+
+M2.5 was added on 22 Nov 2026 after the M2 review: the player avatar and tap-to-walk moved from M3, building fronts from M3 (decor only; M3 makes them real shops), the debug-UI cleanup from M6.
 
 Estimates assume hobby pace (evenings and weekends).
 
@@ -336,3 +377,4 @@ Estimates assume hobby pace (evenings and weekends).
 - The neighbourhood is fictional, inspired by Yangon.
 - Ambient sound is generated in code with no voices.
 - Music: four Gemini loops, already processed into `assets/music/`.
+- 22 Nov 2026 (M2 review): service is done by people only (no auto-serve); customers never leave angry, waiting only lowers the tip; the road is for vehicles, people cross at one zebra crossing; the waiter unlocks at 60,000 kyat savings and 6 seats, wage 3,000 kyat/day (data, tunable).

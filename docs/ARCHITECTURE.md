@@ -143,6 +143,8 @@ kind 6 GRID_PATCH   8 B head: u8 prop | u8 _ | u8 x | u8 y | u8 w | u8 h | u16 _
 kind 7 TILE_PATCH   same shape as GRID_PATCH; prop = 0 floor, 1 wall
 kind 8 WORLD         4 B: u8 weather | u8 season | u16 day
 kind 9 NPC_ORDER     8 B each: u32 handle | u8 drink | u8 order state (shared/npc.ts ORDER) | u16 pad   (changed only)
+kind 10 TASK        12 B each: u32 task handle | u8 kind | u8 queuePos (0 none, 1–3 player queue, 4 staff) | u8 state | u8 _ | i16 x | i16 y   (M2.5, changed only; state 0 = gone)
+kind 11 CUP          8 B each: u16 cup id | u8 place (shelf, tray, table, sink) | u8 drink | i16 x | i16 y   (M2.5, changed only)
 ```
 
 Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick with no changes still sends the 16-byte header so the interpolation clock keeps moving.
@@ -152,6 +154,17 @@ Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick wi
 `Sim.tick` counts every step; `Sim.clock` is game time in ticks and **stands still** while the shop day holds it: in the morning until `openShop`, and in the evening (after closing time, once the shop is empty) until `sleep`, which jumps it to the next opening time (`shared/day.ts`, hours in `src/data/shop.json`). The frame header carries the game minute, so the main thread sees the hold.
 
 On `sleep`, `ShopDay` sends `dayEnd` with today's stats, then picks tomorrow's **teaser** (`shared/teasers.ts`, `src/data/teasers.json`) with two `events` draws every night, among the kinds whose condition the day's stats meet (at least one kind has no condition). The pick is saved and has a real effect the next day, applied in `Game.step`: extra arrivals for a time window, extra appeal, or a promised guest who arrives a set time after opening and orders a named drink. Customers pay when served (poured: full price + tip by pour score; auto-served after `service.autoServe`: 70 %, no tip).
+
+### Service (M2.5, protocol v9 — planned, see docs/M2_5.md)
+
+Every cup is made by a person; there is no auto-serve. The worker keeps a **task board** (`sim/service/task-board.ts`) of open jobs: `order` (take the order), `brew`, `serve`, `clear`, `wash`, `cook` (no producer until M5 snacks). The player avatar and staff are **workers** (`sim/npc/workers.ts`) that take jobs from it.
+
+- Actions: `queueTask {task}` / `cancelTask {task}` (task handles; the player queue holds ≤ 3, in `PlayerState`); `hire {role}` / `dismiss {role}` (evening only). `startPour` / `cancelPour` / `serve` now belong to the player's brew at the counter: the sim sends `brewReady {task, drink}` when the avatar arrives, the UI opens the pour overlay, `serve` puts the filled cup on the tray (2 slots), cancel puts the brew back on the board.
+- A job the player queues is theirs; a staff member holding it drops it and re-chooses.
+- Customers: toSeat → wantsOrder (`order` task, "?" bubble) → ordered (`brew` task) → served (pays: full price + pour tip × wait factor 1.25…0) → drinking → leaving; the cup stays on the table (`clear` task) → the sink (`wash`). They never leave unserved; after closing time no one new comes, and the evening starts when the shop is empty.
+- Cups are a fixed pool (`shop.json`); with no clean cup, `brew` waits for a wash. Cups reset to clean on load.
+- Workers and customers use NPC_SPAWN/STATE with def ids `NPC_DEF_CUSTOMER`, `NPC_DEF_PLAYER`, `NPC_DEF_WAITER` (shared/npc.ts); markers and cups come from the TASK and CUP sections.
+- Events: `brewReady`, `served` (now with `wait`), `wages {paid, dayOff}` at sleep.
 
 ### Protocol rules
 
@@ -209,6 +222,22 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 - **M2 customers** (`sim/npc/customers.ts`) use a subset: `x, y Float32` (tiles, centre = +0.5) · `tile, goal, seat, exit Int32` · `seatObj u32` (object handle, checked after build changes) · `path u32` (path handle) · `pathStep, stateT, walkT, pourT u16` · `state, drink, order, look, dir, anim u8` · `milkShift, noiseTaste Float32` · `gen u16`. A `seatRes` Uint16 grid holds which customer reserved each seat tile. States: toSeat → ordering → waiting → drinking → leaving (and straight to leaving when no free reachable seat). Seat choice scans seat tiles of floor-standing `seat > 0` furniture and scores property `value`s with the weights in `shop.json` (`seat`), plus table-adjacent, distance and jitter from `npcDecide`; a flood fill from the street (rebuilt only when the walk grid version changes) rules out walled-in seats. Arrivals: one `npcDecide` roll per game minute during shop hours, chance = hourly rate × shop appeal / 60. Customers are not saved; the customer is paid at serve time.
 - Main mirror (`game/view.ts`): `prevX, prevY, curX, curY Float32` · `dir, anim, look Uint8` · `sprite Int16` (pool index, −1 = none). Render caps visible animated NPCs at the tier limit (12 / 25 / 40).
 
+### Walk zones and access classes (M2.5)
+
+- The area `zone` grid carries the walk zone of every tile: `road`, `crossing`, `pavement`, `front` (shop opening and door tiles), `interior`, `kitchen`, `blocked` (filler, building fronts). If the bits don't fit next to `owned`/`roof` in u8, a separate `access` u8 grid holds them.
+- `shared/rules/access.ts` is the only place that says which **access class** may enter which zone: `people` (customers: pavement, crossing, front, interior) and `staff` (player and staff: those plus kitchen). Nobody walks on road or filler.
+- Shop walls are edge bits (`WALL.n`/`WALL.w`); front and east walls are stored on the tile beyond them, so the same two bits close the shop. The front stays open across the opening; the kitchen partition has one door tile. Rendering is a cutaway: back walls full height, front and side walls as a low sill.
+- `WalkGrid` keeps one cost array and one move mask per access class (2 × Uint8 each, dirty-rect updates as before); `PathFinder.request(from, to, cls)` selects them. Customers spawn at the pavement ends and beyond the zebra crossing (`SPAWNS` in `sim/area.ts`).
+- Placement (`shared/rules/placement.ts`): seating and furniture in the interior, kitchen fixtures in the kitchen, nothing on entrance tiles, and the entrance must still reach the counter.
+- Building fronts, awning, signboard and shutters are area **features** drawn by `render/facades.ts` (not objects, not saved).
+
+### Task board, workers and cups (M2.5)
+
+- `TaskBoard`: SoA, capacity 128, index + generation handles: `kind u8`, `state u8` (open/claimed), `claimedBy u8` (worker index), `target u32` (customer handle, cup id or fixture tile), `x, y i16`, `created u32` (tick). Per-kind open counters; changed slots go into the TASK section.
+- `Workers`: SoA for the player (index 1) and staff: `x, y Float32`, `tile, goal Int32`, `path u32`, `state, role, dir, anim u8`, `actT u16`, `tray` (2 × u16 cup ids), `queue` (3 × u32 task handles, player only). They walk with the `staff` access class; action times come from `shop.json`.
+- Staff choose jobs by utility when idle (role weight per kind − distance + age + `npcDecide` jitter); no per-tick scan for busy workers.
+- `Cups`: fixed pool, `place u8`, `drink u8`, `tile Int32`.
+
 ### Paths (`sim/path/`, M2.3)
 
 - `WalkGrid`: `cost: Uint8Array` per tile from the floor type (`src/data/walk.json`, min 10) or 255 when floor-standing furniture covers it, plus `moves: Uint8Array`, an 8-direction mask per tile (no wall on the edge, no corner cutting). `SimWorld` keeps a walk dirty rect from footprints of floor-standing furniture; `Game.syncWalk()` rebuilds only that rect (masks one tile further out) and bumps `version`. Walls change only on area load (the first full update covers them).
@@ -226,7 +255,11 @@ Database `laphat`:
 - `saves`: `slot0` → binary save (`sim/save/format.ts`). An unreadable save is moved to `slot0.broken.<time>`, never overwritten.
 - `meta`: device tier and settings (main thread).
 
-Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats. Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
+Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats.
+
+Binary save v3 (M2.5, planned) = v2 plus the staff roster (role key, hired day, day-off flag). Migration 2→3 adds missing fixtures (counter, kettle, sink, stove) and moves furniture that now stands on a wall line, in the kitchen or outside the allowed zones into the inventory — never deletes it. Workers, tasks and cups are not saved (cups reset to clean).
+
+Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 
 - To change the format: add `PARSERS[n]` and `MIGRATIONS[n-1]`; never edit old ones.
 - Autosave every game hour, 5 s after building, after `sleep`, on `visibilitychange: hidden` and `pagehide`.

@@ -9,8 +9,8 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
-| **M3 Neighbourhood** | **next — not planned yet** | DESIGN.md §11 |
-| M4–M6 | not started | DESIGN.md §11 |
+| **M2.5 Shop, service and street** | **in progress — S1 (docs) done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
+| M3–M6 | not started | DESIGN.md §11 (M3 is lighter after M2.5) |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
 
@@ -67,12 +67,13 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M3 Neighbourhood — plan mode first
+## Next step: M2.5 — continue at S2 (walkable zones and walls)
 
-DESIGN.md §11: 3 streets, tap-to-walk A*, 4 shops with daily stock, carrying and delivery. Start in plan mode: read DESIGN.md (neighbourhood, market, player avatar), docs/ARCHITECTURE.md (§2 protocol v8, §3 paths and NPC SoA), docs/RISKS.md and BACKLOG.md.
+The M2 review (22 Nov 2026) found that the game doesn't play like a tea shop yet, so M2.5 comes before M3. Read docs/M2_5.md: decisions 1–9 at the top, then steps S2–S9. DESIGN.md and ARCHITECTURE.md already describe the M2.5 target (ARCHITECTURE marks protocol v9 and save v3 as planned).
 
-Carried over from M2 for M3:
-- The A* core (`sim/path/`, 700 nodes per tick, same on all tiers) and the customer SoA (`sim/npc/customers.ts`) are ready to reuse for the player avatar and more streets. Flow fields were deferred to M3/M4.
-- Ingredients are unlimited and free until M3 (the wet market adds stock). The paint stall (floor/wall painting) and the furniture shop (adds to the inventory) are M3.
-- `rng.market` stream is unused so far — it's meant for daily stock.
-- Multi-tile depth sorting worked for M1 objects and customers without sprite slicing; recheck it with an avatar that walks behind furniture.
+- **CLAUDE.md is not updated yet:** the edit was blocked by a permission check. The planned lines: the default zoom is one step in (~200 px world height, characters ~40 CSS px on a phone; 270 px is the widest view); walk access rules live only in `shared/rules/access.ts`; service is done by people from the task board, never auto-serve.
+- What moves between milestones is in the table at the end of docs/M2_5.md (avatar + tap-to-walk and building fronts from M3, debug UI from M6; helper → M4, tea sayar and cook → M5, vehicles → M4).
+
+Carried over for M3 (after M2.5):
+- `rng.market` is unused so far; it's meant for daily stock.
+- Multi-tile depth sorting worked without sprite slicing so far; recheck it with the player avatar walking behind the counter.
