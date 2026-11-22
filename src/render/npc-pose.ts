@@ -24,6 +24,11 @@ export function poseFrameName(look: number, view: number, pose: number): string 
   return `npc/c${look}_${VIEWS[view]}_${POSES[pose]}`;
 }
 
+/** Worker frames (M2.5): npc/k<role>_<view>_<pose>, role 0 = the player, 1 = the waiter. */
+export function workerFrameName(role: number, view: number, pose: number): string {
+  return `npc/k${role}_${VIEWS[view]}_${POSES[pose]}`;
+}
+
 /**
  * Depth for a standing or walking customer on tile (tx, ty): after the furniture of its row
  * (render/objects.ts objectDepth: row·16 + 4…7) and before ceiling items (row·16 + 12) and the next row.

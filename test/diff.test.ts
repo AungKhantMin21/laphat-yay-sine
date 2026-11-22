@@ -51,8 +51,8 @@ describe('frame diff', () => {
     w.npcOrder(0xfffe0003, 3, 2);
     w.task(0x00050007, 3, 2, true, 0xfffe0003);
     w.task(0x00050008, 6, 0, false, 0);
-    w.cup(64, 4, 2, 3071, 1, true);
-    w.cup(1, 0, 0, -1, 0, false);
+    w.cup(64, 4, 2, 3071, 1, true, 0xfffe0003);
+    w.cup(1, 0, 0, -1, 0, false, 0);
     const buf = w.finish();
 
     const r = recorder();
@@ -76,8 +76,8 @@ describe('frame diff', () => {
       ['npcOrder', 0xfffe0003, 3, 2],
       ['task', 0x00050007, 3, 2, true, 0xfffe0003],
       ['task', 0x00050008, 6, 0, false, 0],
-      ['cup', 64, 4, 2, 3071, 1, true],
-      ['cup', 1, 0, 0, -1, 0, false],
+      ['cup', 64, 4, 2, 3071, 1, true, 0xfffe0003],
+      ['cup', 1, 0, 0, -1, 0, false, 0],
     ]);
   });
 

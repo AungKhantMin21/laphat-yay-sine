@@ -28,7 +28,15 @@ interface Look {
   check: string;
   skin: string;
   hair: string;
+  /** Workers wear an apron over the front (M2.5). */
+  apron?: string;
 }
+
+/** Workers (M2.5): npc/k<role>_…, role 0 = the player, 1 = the waiter. Clear, distinct silhouettes. */
+const WORKERS: Look[] = [
+  { shirt: 'f0c060', longyi: '2c3440', check: '44505c', skin: 'd9a05b', hair: '1b1411', apron: 'fff8ea' },
+  { shirt: '5e9a8e', longyi: '4a3a5a', check: '6a7884', skin: 'c8a46e', hair: '2a1d18', apron: 'ecd3a5' },
+];
 
 const LOOKS: Look[] = [
   { shirt: 'fff8ea', longyi: '3c6e6a', check: '5e9a8e', skin: 'd9a05b', hair: '1b1411' },
@@ -101,6 +109,7 @@ function person(look: Look, back: boolean, step: number, sit: boolean): Canvas {
   c.set(12, s0 + 6, SHADE[look.skin] ?? look.skin);
   // Longyi (checked), then feet.
   const l0 = s0 + 7;
+  const apron = look.apron && !back ? look.apron : '';
   if (sit) {
     // Lap and shins: the longyi folds forward over the seat, feet hang down.
     c.rect(4, l0, 11, l0 + 2, look.longyi, 9);
@@ -110,10 +119,12 @@ function person(look: Look, back: boolean, step: number, sit: boolean): Canvas {
   } else {
     c.rect(5, l0, 10, 22, look.longyi, 9);
     for (let y = l0; y <= 22; y++) for (let x = 5; x <= 10; x++) if ((x + y) % 3 === 0) c.set(x, y, look.check);
+    if (apron) c.rect(5, s0 + 3, 9, l0 + 5, apron, 9); // bib and skirt over the front
     const [a, b] = step ? [5, 9] : [6, 8];
     c.rect(a, 23, a + 1, 23, SHOE);
     c.rect(b, 23, b + 1, 23, SHOE);
   }
+  if (apron && sit) c.rect(5, s0 + 3, 9, s0 + 6, apron, 9);
   c.outline();
   if (!sit) {
     // Dithered drop shadow at the feet, offset right (light from the top left); only into empty pixels.
@@ -164,6 +175,48 @@ export function drawCharacters(): Array<[string, Raw]> {
     ]);
   }
   out.push(['ui/bubble_pour', bubble((c) => [3, 6, 9].forEach((x) => c.rect(x, 5, x + 1, 6, '6a7884')))]);
+  // "?": wants to order (M2.5).
+  out.push([
+    'ui/bubble_ask',
+    bubble((c) => {
+      c.rect(4, 2, 8, 3, '9a3a30');
+      c.rect(8, 3, 8, 5, '9a3a30');
+      c.rect(6, 5, 7, 6, '9a3a30');
+      c.rect(6, 8, 7, 8, '9a3a30');
+    }),
+  ]);
+  WORKERS.forEach((look, r) => {
+    for (const back of [false, true]) {
+      const v = back ? 'b' : 'f';
+      out.push([`npc/k${r}_${v}_w0`, person(look, back, 0, false)]);
+      out.push([`npc/k${r}_${v}_w1`, person(look, back, 1, false)]);
+      out.push([`npc/k${r}_${v}_s`, person(look, back, 0, true)]);
+    }
+  });
+  // Cups (5×6): a glass of each drink, an empty one with tea stains; a tray (12×4); kettle steam (3 frames).
+  for (const d of drinks.presets) {
+    const c = new Canvas(5, 6);
+    c.rect(0, 1, 4, 5, CUP[d.key] ?? 'a98258', 3);
+    c.rect(0, 0, 4, 0, 'f6ead0');
+    out.push([`fx/cup_${d.key}`, c]);
+  }
+  const empty = new Canvas(5, 6);
+  empty.rect(0, 0, 4, 5, '9aa6ae', 3);
+  empty.rect(1, 4, 3, 5, 'a98258');
+  out.push(['fx/cup_empty', empty]);
+  const tray = new Canvas(12, 4);
+  tray.rect(1, 0, 10, 0, '9aa6ae');
+  tray.rect(0, 1, 11, 2, '6a7884', 8);
+  tray.rect(1, 3, 10, 3, '44505c');
+  out.push(['fx/tray', tray]);
+  for (let f = 0; f < 3; f++) {
+    const s = new Canvas(7, 10);
+    for (let y = 0; y < 10; y++) {
+      const x = 3 + Math.round(Math.sin((y + f * 3) * 0.9) * 1.5);
+      if ((y + f) % 4 !== 3) s.set(x, y, y < 4 ? 'ecd3a5' : 'fff8ea');
+    }
+    out.push([`fx/steam${f}`, s]);
+  }
   return out;
 }
 

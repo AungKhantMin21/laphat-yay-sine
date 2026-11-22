@@ -9,7 +9,7 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
-| **M2.5 Shop, service and street** | **in progress — S1–S5 done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
+| **M2.5 Shop, service and street** | **in progress — S1–S6 done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
 | M3–M6 | not started | DESIGN.md §11 (M3 is lighter after M2.5) |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
@@ -67,14 +67,12 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M2.5 — continue at S6 (render and UI for service)
+## Next step: M2.5 — continue at S7 (the waiter)
 
-S1–S5 committed, not pushed (push at milestone end). The sim side of service is complete and tested; the browser can't take orders yet. S6 handoff (22 Nov 2026):
-- Render the player/waiter (NPC defs 1/2 arrive via NPC_SPAWN in slots ≥ `WORKER_SLOT0`; `render/npcs.ts` currently draws every NPC as a customer look). Needs player and waiter sprites in `tools/placeholder-characters.ts`, an "ask" (?) bubble sprite for `ORDER.ask`, cups on tables/tray/counter/sink from `view.cup*` (new `render/service.ts`), kettle steam.
-- Taps (`main.ts` → currently `pickOrder` opens the pour UI): resolve a tap to a task on the board (`view.taskKind/taskTarget`): customer (order or serve job for that customer), a cup on a table (clear), the counter (oldest brew), the sink (wash); a tap on a queued marker cancels. Send `queueTask` / `cancelTask`.
-- Pour UI: open on the `brewReady` event (customer `id`, `drink`); `serve` / `cancelPour` as before; `startPour` is a local no-op now.
-- Queue markers 1–3: DOM, `ui/hud/queue.ts`, from `PlayerState.queue` + positions of each task's target.
-- Toasts for `text` events (`serve.err.*`).
+S1–S6 committed, not pushed (push at milestone end, after S9). The full service loop plays in the browser (`tools/dev/service.js`). Remaining:
+- **S7 waiter:** `sim/npc/staff.ts` utility choice over the board (kinds order/serve/clear; role weight − distance + age + `npcDecide` jitter; re-score only when idle), `src/data/staff.json` (4 roles defined, waiter hireable: unlock 60,000 kyat savings + 6 seats, wage 3,000/day), actions `hire`/`dismiss` (evening), wages at Sleep (day off if the tin is short, no money moves), save v3 (roster), evening-panel hire row. Worker index 2+ (`Workers.spawn(w, ROLE.waiter, home)`); `queueTask` already takes jobs over from staff (`release`).
+- **S8 debug UI:** perf overlay, music buttons, font sample only with `?debug=1` (F3 too); one small collapsible box inside the safe area.
+- **S9 gate:** perf gate with crowd + player working, browser scripts, docs (ARCHITECTURE save v3), STATUS, push, check live.
 
 (Older notes below.)
 

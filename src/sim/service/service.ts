@@ -166,7 +166,7 @@ export class Service implements CustomerHooks {
 
   private writeCup(out: FrameWriter, c: number): void {
     const cups = this.cups;
-    out.cup(c, cups.place[c]!, cups.drink[c]!, cups.tile[c]!, cups.holder[c]!, cups.dirty[c] === 1);
+    out.cup(c, cups.place[c]!, cups.drink[c]!, cups.tile[c]!, cups.holder[c]!, cups.dirty[c] === 1, cups.forCustomer[c]!);
   }
 
   /** Worker `w` puts cup `c` (on their tray) down for its customer, who pays. */

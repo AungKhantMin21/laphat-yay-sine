@@ -63,6 +63,8 @@ export class WorldView implements FrameHandler {
   readonly npcDir = new Uint8Array(MAX_NPCS);
   readonly npcAnim = new Uint8Array(MAX_NPCS);
   readonly npcLook = new Uint8Array(MAX_NPCS);
+  /** NPC_SPAWN def: customer, player or waiter (shared/npc.ts). */
+  readonly npcDef = new Uint8Array(MAX_NPCS);
   readonly npcDrink = new Uint8Array(MAX_NPCS);
   /** shared/npc.ts ORDER */
   readonly npcOrderState = new Uint8Array(MAX_NPCS);
@@ -83,6 +85,8 @@ export class WorldView implements FrameHandler {
   readonly cupTile = new Int32Array(MAX_CUPS + 1).fill(-1);
   readonly cupHolder = new Uint8Array(MAX_CUPS + 1);
   readonly cupDirty = new Uint8Array(MAX_CUPS + 1);
+  /** Customer handle each cup was brewed for (0 none). */
+  readonly cupFor = new Uint32Array(MAX_CUPS + 1);
   /** Highest cup id seen. */
   cupCount = 0;
   /** Set when any cup moved; the cup renderer clears it. */
@@ -162,10 +166,11 @@ export class WorldView implements FrameHandler {
   npcHandle(i: number): number {
     return this.npcLive[i] ? makeHandle(i, this.npcGen[i]!) : 0;
   }
-  npcSpawn(handle: number, _def: number, _area: number, look: number, x: number, y: number): void {
+  npcSpawn(handle: number, def: number, _area: number, look: number, x: number, y: number): void {
     const i = handleIndex(handle);
     if (i === 0 || i >= MAX_NPCS) return;
     this.npcLive[i] = 1;
+    this.npcDef[i] = def;
     this.npcGen[i] = handleGen(handle);
     this.npcX[i] = this.npcPrevX[i] = x / POS_SCALE;
     this.npcY[i] = this.npcPrevY[i] = y / POS_SCALE;
@@ -198,8 +203,9 @@ export class WorldView implements FrameHandler {
   taskHandle(i: number): number {
     return this.taskKind[i] ? makeHandle(i, this.taskGen[i]!) : 0;
   }
-  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void {
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean, forCustomer: number): void {
     if (id < 1 || id > MAX_CUPS) return;
+    this.cupFor[id] = forCustomer;
     this.cupPlace[id] = place;
     this.cupDrink[id] = drink;
     this.cupTile[id] = tile;

@@ -1,0 +1,51 @@
+/* Queued-job markers (M2.5): numbered pixel badges over each job's place; tap one to cancel it. */
+.qmark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 44px;
+  margin: -44px 0 0 -22px; /* anchored at the bottom centre: just above the head / cup */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 6;
+  touch-action: manipulation;
+}
+.qmark span {
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+  border-radius: 10px;
+  background: #f0c060;
+  color: #2a1d18;
+  box-shadow: 0 0 0 2px #2a1d18;
+  font-size: 13px;
+  font-weight: bold;
+}
+.qmark.current span {
+  background: #94b37a;
+}
+.qmark.hidden {
+  display: none;
+}
+.svc-toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(80vw, 420px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #2a1d18ee;
+  color: #fff8ea;
+  font-size: 15px;
+  z-index: 7;
+  pointer-events: none;
+}
+.svc-toast.hidden {
+  display: none;
+}

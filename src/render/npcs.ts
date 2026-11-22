@@ -1,19 +1,20 @@
-// Customer sprites: one pooled body sprite per NPC slot in the objects' sortable container, so
-// customers and furniture share one depth order, plus an order bubble above the head.
+// NPC sprites (customers, and the player and staff from M2.5): one pooled body sprite per NPC slot in
+// the objects' sortable container, so people and furniture share one depth order, plus an order bubble
+// above a customer's head.
 // Positions interpolate between the last two sim frames and snap to whole pixels.
 // Only the first `maxAnimated` on-screen walkers animate (tier cap); the rest hold a still frame.
 import { Container, Sprite, Texture } from 'pixi.js';
 import { CATALOG } from '../shared/catalog';
 import { DRINKS } from '../shared/drinks';
 import { HALF_H, HALF_W } from '../shared/iso';
-import { ANIM, ORDER } from '../shared/npc';
+import { ANIM, NPC_DEF_CUSTOMER, ORDER } from '../shared/npc';
 import { MAX_NPCS } from '../shared/layout';
 import { handleIndex } from '../shared/ids';
 import { TICK_MS } from '../shared/protocol';
 import type { WorldView } from '../game/view';
 import type { Atlas } from './atlas';
 import { objectDepth } from './objects-depth';
-import { POSES, VIEWS, poseFlipped, poseFrameName, poseIndex, standingDepth } from './npc-pose';
+import { POSES, VIEWS, poseFlipped, poseFrameName, poseIndex, standingDepth, workerFrameName } from './npc-pose';
 
 /** A seated customer is drawn this many px up, onto the seat. */
 const SIT_LIFT = 4;
@@ -33,6 +34,9 @@ export class NpcLayer {
   private readonly looks: number;
   private readonly drinkBubble: Texture[] = [];
   private readonly pourBubble: Texture;
+  private readonly askBubble: Texture;
+  /** Worker poses by role, same layout as customer looks. */
+  private readonly workerPoses: Texture[] = [];
   /** Customers drawn last frame (perf overlay). */
   visible = 0;
   animated = 0;
@@ -50,6 +54,16 @@ export class NpcLayer {
     }
     for (const d of DRINKS.defs) this.drinkBubble.push(atlas.get(`ui/bubble_${d.key}`) ?? Texture.EMPTY);
     this.pourBubble = atlas.get('ui/bubble_pour') ?? Texture.EMPTY;
+    this.askBubble = atlas.get('ui/bubble_ask') ?? Texture.EMPTY;
+    for (let r = 0; r < 2; r++) {
+      for (let v = 0; v < VIEWS.length; v++) for (let p = 0; p < POSES.length; p++) this.workerPoses.push(atlas.get(workerFrameName(r, v, p)) ?? Texture.EMPTY);
+    }
+  }
+
+  /** The drawn body sprite of NPC slot i (on screen), or null. */
+  bodyOf(i: number): Sprite | null {
+    const sp = this.body[i];
+    return sp && sp.visible ? sp : null;
   }
 
   /**
@@ -98,7 +112,10 @@ export class NpcLayer {
         step = Math.floor(now / STEP_MS + i * 0.37) & 1; // phase per customer so feet don't sync
       }
       const dir = v.npcDir[i]!;
-      sp.texture = this.poses[poseIndex(v.npcLook[i]! % this.looks, dir, anim, step)] ?? Texture.EMPTY;
+      sp.texture =
+        v.npcDef[i] === NPC_DEF_CUSTOMER
+          ? (this.poses[poseIndex(v.npcLook[i]! % this.looks, dir, anim, step)] ?? Texture.EMPTY)
+          : (this.workerPoses[poseIndex(v.npcLook[i]! & 1, dir, anim, step)] ?? Texture.EMPTY);
       sp.scale.x = poseFlipped(dir) ? -1 : 1;
       sp.position.set(sx, sy);
       sp.visible = true;
@@ -114,7 +131,7 @@ export class NpcLayer {
       sp.zIndex = z;
 
       const order = v.npcOrderState[i]!;
-      if (order === ORDER.waiting || order === ORDER.pouring) {
+      if (order === ORDER.waiting || order === ORDER.pouring || order === ORDER.ask) {
         let b = bub;
         if (!b) {
           b = new Sprite();
@@ -123,7 +140,7 @@ export class NpcLayer {
           this.bubble[i] = b;
           this.bubbles.addChild(b);
         }
-        b.texture = order === ORDER.pouring ? this.pourBubble : (this.drinkBubble[v.npcDrink[i]!] ?? Texture.EMPTY);
+        b.texture = order === ORDER.pouring ? this.pourBubble : order === ORDER.ask ? this.askBubble : (this.drinkBubble[v.npcDrink[i]!] ?? Texture.EMPTY);
         b.position.set(sx, sy - sp.texture.frame.height - BUBBLE_GAP);
         b.visible = true;
       } else if (bub) {
@@ -149,8 +166,8 @@ export class NpcLayer {
   }
 
   /**
-   * The customer with an open order under a world-pixel point (their bubble, with some slop, or
-   * their body box), front-most first. Returns the NPC handle or 0.
+   * The customer with an open order (asking, waiting or being poured for) under a world-pixel point
+   * (their bubble, with some slop, or their body box), front-most first. Returns the NPC handle or 0.
    */
   pickOrder(wx: number, wy: number): number {
     const v = this.view;
@@ -158,7 +175,7 @@ export class NpcLayer {
     let bestZ = -Infinity;
     for (let i = 1; i < MAX_NPCS; i++) {
       const o = v.npcOrderState[i];
-      if (!v.npcLive[i] || (o !== ORDER.waiting && o !== ORDER.pouring)) continue;
+      if (!v.npcLive[i] || v.npcDef[i] !== NPC_DEF_CUSTOMER || (o !== ORDER.waiting && o !== ORDER.pouring && o !== ORDER.ask)) continue;
       const sp = this.body[i];
       if (!sp || !sp.visible) continue;
       const b = this.bubble[i];

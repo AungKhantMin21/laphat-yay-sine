@@ -22,7 +22,7 @@ export const SEC = {
 type SectionKind = (typeof SEC)[keyof typeof SEC];
 
 /** Fixed item size per section kind (patches are variable). */
-const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4, 9: 8, 10: 12, 11: 8 };
+const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4, 9: 8, 10: 12, 11: 12 };
 
 /** Positions travel as 1/32 tile in i16. */
 export const POS_SCALE = 32;
@@ -48,8 +48,11 @@ export interface FrameHandler {
    * cup id), the player's queue position (0 none, 1–3) and whether it still exists.
    */
   task(handle: number, kind: number, queuePos: number, live: boolean, target: number): void;
-  /** A cup moved (M2.5): place (CUP), drink, tile (−1 none), worker carrying it (0 none), dirty. */
-  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void;
+  /**
+   * A cup moved (M2.5): place (CUP), drink, tile (−1 none), worker carrying it (0 none), dirty, and
+   * the customer handle it was brewed for (0 none).
+   */
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean, forCustomer: number): void;
 }
 
 export class FrameWriter {
@@ -161,7 +164,7 @@ export class FrameWriter {
     dv.setUint32(o + 8, target, true);
   }
 
-  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void {
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean, forCustomer: number): void {
     const o = this.item(SEC.CUP);
     const dv = this.dv;
     dv.setUint16(o, id, true);
@@ -170,6 +173,7 @@ export class FrameWriter {
     dv.setUint16(o + 4, tile < 0 ? 0xffff : tile, true);
     dv.setUint8(o + 6, holder);
     dv.setUint8(o + 7, dirty ? 1 : 0);
+    dv.setUint32(o + 8, forCustomer, true);
   }
 
   npcOrder(handle: number, drink: number, state: number): void {
@@ -318,9 +322,9 @@ export function readFrame(buf: ArrayBuffer, h: FrameHandler): boolean {
         for (let i = 0; i < count; i++, p += 12) h.task(dv.getUint32(p, true), dv.getUint8(p + 4), dv.getUint8(p + 5), dv.getUint8(p + 6) === 1, dv.getUint32(p + 8, true));
         break;
       case SEC.CUP:
-        for (let i = 0; i < count; i++, p += 8) {
+        for (let i = 0; i < count; i++, p += 12) {
           const t = dv.getUint16(p + 4, true);
-          h.cup(dv.getUint16(p, true), dv.getUint8(p + 2), dv.getUint8(p + 3), t === 0xffff ? -1 : t, dv.getUint8(p + 6), dv.getUint8(p + 7) === 1);
+          h.cup(dv.getUint16(p, true), dv.getUint8(p + 2), dv.getUint8(p + 3), t === 0xffff ? -1 : t, dv.getUint8(p + 6), dv.getUint8(p + 7) === 1, dv.getUint32(p + 8, true));
         }
         break;
       default:

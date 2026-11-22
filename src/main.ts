@@ -8,6 +8,10 @@ import floorFrames from './data/floors.json';
 import { FLOOR_TYPES } from './shared/layout';
 import { FACADE_FRAMES } from './shared/street';
 import { ShopFront } from './render/shopfront';
+import { ServiceLayer } from './render/service';
+import { TASK_KIND, findTask, firstTask, taskForCustomer } from './game/service-taps';
+import { installQueue } from './ui/hud/queue';
+import { MAX_TASKS } from './shared/layout';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
 import { NpcLayer } from './render/npcs';
@@ -25,7 +29,7 @@ import { installDayEnd } from './ui/hud/day-end';
 import { installPourUi } from './ui/pour/pour';
 import { installReactions } from './ui/pour/reactions';
 import { requestPersistentStorage } from './platform/persist';
-import { CATALOG, spriteFrame } from './shared/catalog';
+import { CATALOG, SERVICE, spriteFrame } from './shared/catalog';
 import { tileAtX, tileAtY } from './shared/iso';
 import { handleIndex } from './shared/ids';
 import { Camera } from './render/camera';
@@ -67,6 +71,7 @@ const ghost = new Ghost(objects, objects.layer);
 const heat = new HeatLayer(view);
 const npcs = new NpcLayer(view, atlas, objects.layer);
 const shopFront = new ShopFront(atlas, objects.layer);
+const serviceProps = new ServiceLayer(view, atlas, objects.layer, npcs);
 stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npcs.bubbles);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
 const music = new MusicPlayer({ sampleRate: () => TIER_SETTINGS[device.tier].audioSampleRate });
@@ -89,6 +94,8 @@ const bridge: SimBridge = new SimBridge(view, {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
     for (const e of list) {
       if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
+      else if (e.k === 'brewReady') pour.open(e.id, e.drink);
+      else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
     }
@@ -167,6 +174,61 @@ const pour = installPourUi({
   onChange: (open) => document.body.classList.toggle('pouring', open),
 });
 const headAt = { x: 0, y: 0 };
+/** World px → CSS px (the inverse of toWorld), in place. */
+function worldToCss(p: { x: number; y: number }): void {
+  const k = stage.size.devPerCss / stage.size.scale;
+  p.x = (p.x + stage.world.x) / k;
+  p.y = (p.y + stage.world.y) / k;
+}
+
+/**
+ * A tap outside build mode (M2.5): a customer (take the order / bring the cup / brew it), a used cup
+ * on a table (clear it), the counter or kettle (brew the next order), the sink (wash). A tap on a job
+ * already queued cancels it. Refusals show a short toast.
+ */
+async function tapService(wx: number, wy: number): Promise<void> {
+  let task = 0;
+  const customer = npcs.pickOrder(wx, wy);
+  if (customer) task = taskForCustomer(view, customer, handleIndex(customer));
+  if (!task) {
+    const cup = serviceProps.pickCup(wx, wy);
+    if (cup) task = findTask(view, TASK_KIND.clear, cup);
+  }
+  if (!task) {
+    const o = objects.pick(wx, wy);
+    const svc = o ? CATALOG.defs[view.state.objects.type[o]!]!.service : 0;
+    if (svc === SERVICE.counter || svc === SERVICE.kettle) task = firstTask(view, TASK_KIND.brew);
+    else if (svc === SERVICE.sink) task = firstTask(view, TASK_KIND.wash);
+  }
+  if (!task) return;
+  const queued = bridge.player?.queue.includes(task) ?? false;
+  const r = await bridge.act(queued ? { k: 'cancelTask', task } : { k: 'queueTask', task });
+  if (!r.ok && r.reason) queueUi.toast(r.reason);
+}
+
+const queueAt = { x: 0, y: 0 };
+const queueUi = installQueue({
+  queue: () => bridge.player?.queue ?? [],
+  anchor: (task, out) => {
+    // Find the task in the mirror and put the marker over the place the job happens.
+    let ok = false;
+    for (let i = 1; i < MAX_TASKS && !ok; i++) {
+      if (!view.taskKind[i] || view.taskHandle(i) !== task) continue;
+      const kind = view.taskKind[i]!;
+      const target = view.taskTarget[i]!;
+      if (kind === TASK_KIND.order || kind === TASK_KIND.brew) ok = npcs.headOf(target, queueAt);
+      else if (kind === TASK_KIND.serve) ok = npcs.headOf(view.cupFor[target]!, queueAt) || serviceProps.cupPoint(target, queueAt);
+      else if (kind === TASK_KIND.clear) ok = serviceProps.cupPoint(target, queueAt);
+      else if (kind === TASK_KIND.wash) ok = serviceProps.fixturePoint(SERVICE.sink, queueAt);
+    }
+    if (!ok) return false;
+    worldToCss(queueAt);
+    out.x = queueAt.x;
+    out.y = queueAt.y;
+    return true;
+  },
+  cancel: (task) => void bridge.act({ k: 'cancelTask', task }).then((r) => !r.ok && r.reason && queueUi.toast(r.reason)),
+});
 const reactions = installReactions({
   anchor: (id) => {
     if (!npcs.headOf(id, headAt)) return null;
@@ -190,8 +252,7 @@ installGestures(stageEl, {
     if (build.open) return build.tap(x, y, type);
     if (pour.isOpen) return;
     const [wx, wy] = toWorld(x, y);
-    const customer = npcs.pickOrder(wx, wy);
-    if (customer) pour.open(customer, view.npcDrink[handleIndex(customer)]!);
+    void tapService(wx, wy);
   },
   hover: (x, y) => build.hover(x, y),
   dragStart: (x, y) => build.dragStart(x, y),
@@ -219,6 +280,8 @@ const loop = new FrameLoop({
     chunks.update(v.x0, v.y0, v.x1, v.y1);
     npcs.update(now, TIER_SETTINGS[device.tier].maxAnimatedNpcs, v.x0, v.y0, v.x1, v.y1);
     shopFront.update(bridge.player?.phase ?? 0);
+    serviceProps.update(now, bridge.player?.phase ?? 0);
+    queueUi.update();
     stage.render();
     draws?.endFrame();
   },
@@ -282,4 +345,4 @@ if (debug) {
 
 // ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it).
 if (debug) Object.assign(window, { __debug: { bridge } });
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi } });

@@ -60,6 +60,7 @@
   "serve.err.carrying": "ခွက် ကိုင်ထားဆဲမို့ ဖျက်လို့ မရပါ",
   "serve.err.cantReach": "အဲဒီနေရာကို မရောက်နိုင်ပါ",
   "serve.err.trayFull": "ဗန်းပေါ်မှာ နေရာ မရှိတော့ပါ",
+  "queue.cancel": "ဒီအလုပ်ကို ဖျက်မယ်",
   "error.notYet": "ဒါက နောက်မှ ရပါမယ်",
   "heat.title": "နေရာ အခြေအနေ",
   "heat.off": "ပိတ်",
