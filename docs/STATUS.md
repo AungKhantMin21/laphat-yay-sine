@@ -9,7 +9,7 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
-| **M2.5 Shop, service and street** | **in progress — S1 (docs) done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
+| **M2.5 Shop, service and street** | **in progress — S1–S3 done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
 | M3–M6 | not started | DESIGN.md §11 (M3 is lighter after M2.5) |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
@@ -67,7 +67,18 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M2.5 — continue at S2 (walkable zones and walls)
+## Next step: M2.5 — continue at S4 (task board, cups, customer flow; sim only)
+
+S1–S3 are committed (not pushed: push at the milestone end). Handoff for S4 (22 Nov 2026):
+- Remove auto-serve from `sim/npc/customers.ts` (`autoServe`, `pourHold`, `CS.waiting` timers; shop.json `service`), add states wantsOrder → ordered → served → drinking → leaving, and leave the cup on the table.
+- New `sim/service/task-board.ts` (SoA, 128, handles) and `sim/service/cups.ts` (fixed pool, `shop.json` cups = 10). Fixtures are found by `ObjectDef.service` (SERVICE.counter/kettle/sink/stove in `shared/catalog.ts`).
+- Tip = pour tip × wait factor (1.25 … 0) in `shared/drinks.ts`; price always full.
+- Replace `test/m2-gate.test.ts` and the auto-serve tests in `test/customers.test.ts` with a headless bot player (greedy over the board) — S5 adds the real worker; for S4 the bot can complete tasks directly through a test-only API.
+- Tests that build their own layout use `Game.create(seed, false)` (empty shop); `Game.create(seed)` places `start.json` layout.
+
+(Older notes below.)
+
+### M2.5 — S2 notes
 
 The M2 review (22 Nov 2026) found that the game doesn't play like a tea shop yet, so M2.5 comes before M3. Read docs/M2_5.md: decisions 1–9 at the top, then steps S2–S9. DESIGN.md and ARCHITECTURE.md already describe the M2.5 target (ARCHITECTURE marks protocol v9 and save v3 as planned).
 
