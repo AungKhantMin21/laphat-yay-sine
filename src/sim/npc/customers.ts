@@ -10,12 +10,14 @@ import { CATALOG, LAYER, footH, footW } from '../../shared/catalog';
 import { CUSTOMERS, pickOrder, type CustomerRules } from '../../shared/customers';
 import { POS_SCALE, type FrameWriter } from '../../shared/diff';
 import { IndexQueue, NONE, handleGen, handleIndex, makeHandle } from '../../shared/ids';
-import { LEVEL, MAX_NPCS, PROP } from '../../shared/layout';
+import { LEVEL, MAX_NPCS, PROP, WORKER_SLOT0 } from '../../shared/layout';
 import { ANIM, DIR, NPC_DEF_CUSTOMER, ORDER } from '../../shared/npc';
 import { TICK_HZ } from '../../shared/protocol';
 import type { Rng } from '../../shared/rng';
 import { SHOP, arrivalRate, type ShopRules } from '../../shared/shop';
-import { PATH, type PathFinder } from '../path/pathfinder';
+import type { PathFinder } from '../path/pathfinder';
+import { ACCESS } from '../../shared/rules/access';
+import { ARRIVED, FAILED, WALKING, drop, walkStep } from './walker';
 import { DX, DY, type WalkGrid } from '../path/walk-grid';
 import type { SimWorld } from '../world';
 
@@ -35,9 +37,6 @@ export const CS = {
   asking: 6,
 } as const;
 
-const WALKING = 0;
-const ARRIVED = 1;
-const FAILED = 2;
 
 /** What the service (sim/service/service.ts) hears from customers. Indexes, not handles. */
 export interface CustomerHooks {
@@ -146,7 +145,8 @@ export class Customers {
     this.dir = new Uint8Array(n);
     this.anim = new Uint8Array(n);
     this.free = new Uint16Array(n);
-    for (let i = n - 1; i >= 1; i--) this.free[this.freeTop++] = i;
+    // The top MAX_WORKERS slots belong to workers (shared/layout.ts WORKER_SLOT0).
+    for (let i = WORKER_SLOT0 - 1; i >= 1; i--) this.free[this.freeTop++] = i;
     this.stateDirty = new IndexQueue(n);
     this.orderDirty = new IndexQueue(n);
     this.spawned = new Uint32Array(n * 2);
@@ -485,55 +485,11 @@ export class Customers {
     this.setAnim(i, ANIM.walk);
   }
 
-  /** One tick of walking toward goal[i]. */
+  /** One tick of walking toward goal[i] (sim/npc/walker.ts). */
   private walkStep(i: number): number {
-    const paths = this.paths;
-    if (++this.walkT[i]! >= this.t.stuck) return FAILED;
-    let h = this.path[i]!;
-    if (h === NONE) {
-      h = paths.request(this.tile[i]!, this.goal[i]!);
-      if (h === NONE) return WALKING; // pool full: try again next tick
-      this.path[i] = h;
-      this.pathStep[i] = 0;
-    }
-    const st = paths.statusOf(h);
-    if (st === PATH.queued) return WALKING;
-    if (st !== PATH.done) return FAILED;
-    const len = paths.length(h);
-    const k = this.pathStep[i]!;
-    if (k >= len) return this.arriveAtGoal(i);
-    const next = paths.tileAt(h, k);
-    if (!paths.canStep(this.tile[i]!, next, this.goal[i]!)) {
-      this.dropPath(i); // something was built in the way: search again next tick
-      return WALKING;
-    }
-    const W = this.walk.w;
-    const nx = next % W;
-    const ny = (next - nx) / W;
-    const dx = nx + 0.5 - this.x[i]!;
-    const dy = ny + 0.5 - this.y[i]!;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const sp = this.speed;
-    if (d <= sp) {
-      this.x[i] = nx + 0.5;
-      this.y[i] = ny + 0.5;
-      this.tile[i] = next;
-      this.pathStep[i] = k + 1;
-    } else {
-      this.x[i] = this.x[i]! + (dx / d) * sp;
-      this.y[i] = this.y[i]! + (dy / d) * sp;
-    }
-    const ax = dx < 0 ? -dx : dx;
-    const ay = dy < 0 ? -dy : dy;
-    this.setDir(i, ax >= ay ? (dx > 0 ? DIR.east : DIR.west) : dy > 0 ? DIR.south : DIR.north);
+    const r = walkStep(this, i, this.paths, this.walk.w, this.speed, this.t.stuck, ACCESS.people, false);
     this.stateDirty.push(i);
-    if (this.pathStep[i]! >= len) return this.arriveAtGoal(i);
-    return WALKING;
-  }
-
-  private arriveAtGoal(i: number): number {
-    this.dropPath(i);
-    return ARRIVED;
+    return r;
   }
 
   // ---- service (called by sim/service/service.ts) ----
@@ -608,20 +564,13 @@ export class Customers {
   }
 
   private dropPath(i: number): void {
-    const h = this.path[i]!;
-    if (h !== NONE) this.paths.release(h);
-    this.path[i] = NONE;
-    this.pathStep[i] = 0;
+    drop(this, i, this.paths);
   }
 
   private setAnim(i: number, a: number): void {
     if (this.anim[i] === a) return;
     this.anim[i] = a;
     this.stateDirty.push(i);
-  }
-
-  private setDir(i: number, d: number): void {
-    this.dir[i] = d;
   }
 
   private setOrder(i: number, o: number): void {

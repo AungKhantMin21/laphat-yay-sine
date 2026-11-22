@@ -18,6 +18,8 @@ function recorder(): FrameHandler & { log: unknown[] } {
     tilePatch: patch('tile'),
     world: (...a) => log.push(['world', ...a]),
     npcOrder: (...a) => log.push(['npcOrder', ...a]),
+    task: (...a) => log.push(['task', ...a]),
+    cup: (...a) => log.push(['cup', ...a]),
   };
 }
 
@@ -47,6 +49,10 @@ describe('frame diff', () => {
     w.npcDespawn(0xffff0001);
     w.world(1, 2, 300);
     w.npcOrder(0xfffe0003, 3, 2);
+    w.task(0x00050007, 3, 2, true, 0xfffe0003);
+    w.task(0x00050008, 6, 0, false, 0);
+    w.cup(64, 4, 2, 3071, 1, true);
+    w.cup(1, 0, 0, -1, 0, false);
     const buf = w.finish();
 
     const r = recorder();
@@ -68,6 +74,10 @@ describe('frame diff', () => {
       ['npcDespawn', 0xffff0001],
       ['world', 1, 2, 300],
       ['npcOrder', 0xfffe0003, 3, 2],
+      ['task', 0x00050007, 3, 2, true, 0xfffe0003],
+      ['task', 0x00050008, 6, 0, false, 0],
+      ['cup', 64, 4, 2, 3071, 1, true],
+      ['cup', 1, 0, 0, -1, 0, false],
     ]);
   });
 

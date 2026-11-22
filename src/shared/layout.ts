@@ -3,6 +3,15 @@
 
 export const MAX_OBJECTS = 4096;
 export const MAX_NPCS = 256;
+/**
+ * NPC slots MAX_NPCS − MAX_WORKERS … MAX_NPCS − 1 belong to workers (the player and staff, M2.5);
+ * customers use the slots below. Worker index w (1-based) ↔ NPC slot WORKER_SLOT0 + w − 1.
+ */
+export const MAX_WORKERS = 8;
+export const WORKER_SLOT0 = MAX_NPCS - MAX_WORKERS;
+/** Task board slots and the most cups a shop can have (mirrored on the main thread). */
+export const MAX_TASKS = 128;
+export const MAX_CUPS = 64;
 
 /** Largest area grid. Grid index = y * w + x. */
 export const MAX_AREA_W = 128;

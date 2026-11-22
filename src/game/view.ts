@@ -2,7 +2,7 @@
 // build mode validates its ghost against the same WorldState the worker uses.
 import type { FrameHandler } from '../shared/diff';
 import { IndexQueue, handleGen, handleIndex, makeHandle } from '../shared/ids';
-import { MAX_NPCS, MAX_OBJECTS, PROP_COUNT, TILE_LAYER } from '../shared/layout';
+import { MAX_CUPS, MAX_NPCS, MAX_OBJECTS, MAX_TASKS, PROP_COUNT, TILE_LAYER } from '../shared/layout';
 import { POS_SCALE } from '../shared/diff';
 import { AreaGrids, markOccupancy, WorldState } from '../shared/world-state';
 
@@ -69,6 +69,25 @@ export class WorldView implements FrameHandler {
   /** performance.now() when the latest frame arrived (interpolation clock). */
   frameAt = 0;
 
+  // Task board mirror by slot (M2.5): kind 0 = no task in the slot.
+  readonly taskGen = new Uint16Array(MAX_TASKS);
+  readonly taskKind = new Uint8Array(MAX_TASKS);
+  readonly taskQueue = new Uint8Array(MAX_TASKS);
+  readonly taskTarget = new Uint32Array(MAX_TASKS);
+  /** Set when any task changed; the queue markers clear it. */
+  tasksChanged = false;
+
+  // Cups by id (1-based).
+  readonly cupPlace = new Uint8Array(MAX_CUPS + 1);
+  readonly cupDrink = new Uint8Array(MAX_CUPS + 1);
+  readonly cupTile = new Int32Array(MAX_CUPS + 1).fill(-1);
+  readonly cupHolder = new Uint8Array(MAX_CUPS + 1);
+  readonly cupDirty = new Uint8Array(MAX_CUPS + 1);
+  /** Highest cup id seen. */
+  cupCount = 0;
+  /** Set when any cup moved; the cup renderer clears it. */
+  cupsChanged = false;
+
   get area(): AreaGrids {
     return this.state.area;
   }
@@ -82,6 +101,10 @@ export class WorldView implements FrameHandler {
     this.objChanged.clear();
     this.objRemovedCount = 0;
     this.npcLive.fill(0);
+    this.taskKind.fill(0);
+    this.tasksChanged = true;
+    this.cupCount = 0;
+    this.cupsChanged = true;
     // A new area or a loaded game: renderers drop everything they had and rebuild.
     this.objResync = true;
     this.gridsDirty.add(0, 0, w, h);
@@ -161,6 +184,29 @@ export class WorldView implements FrameHandler {
     this.npcY[slot] = y / POS_SCALE;
     this.npcDir[slot] = dir;
     this.npcAnim[slot] = anim;
+  }
+  task(handle: number, kind: number, queuePos: number, live: boolean, target: number): void {
+    const i = handleIndex(handle);
+    if (i === 0 || i >= MAX_TASKS) return;
+    this.taskGen[i] = handleGen(handle);
+    this.taskKind[i] = live ? kind : 0;
+    this.taskQueue[i] = live ? queuePos : 0;
+    this.taskTarget[i] = target;
+    this.tasksChanged = true;
+  }
+  /** Handle of the live task in slot i (0 if none). */
+  taskHandle(i: number): number {
+    return this.taskKind[i] ? makeHandle(i, this.taskGen[i]!) : 0;
+  }
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void {
+    if (id < 1 || id > MAX_CUPS) return;
+    this.cupPlace[id] = place;
+    this.cupDrink[id] = drink;
+    this.cupTile[id] = tile;
+    this.cupHolder[id] = holder;
+    this.cupDirty[id] = dirty ? 1 : 0;
+    if (id > this.cupCount) this.cupCount = id;
+    this.cupsChanged = true;
   }
   npcOrder(handle: number, drink: number, state: number): void {
     const i = handleIndex(handle);

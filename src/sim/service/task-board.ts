@@ -2,6 +2,7 @@
 // The player and staff take jobs from it (sim/npc/workers.ts). Struct of arrays, fixed capacity,
 // index + generation handles; no allocation after construction.
 import { IndexQueue, NONE, handleGen, handleIndex, makeHandle } from '../../shared/ids';
+import { MAX_TASKS } from '../../shared/layout';
 
 export const TASK = {
   /** Take the order at the table. target = customer handle. */
@@ -19,7 +20,7 @@ export const TASK = {
 } as const;
 export const TASK_KINDS = 7;
 
-export const TASK_CAPACITY = 128;
+export const TASK_CAPACITY = MAX_TASKS;
 
 export class TaskBoard {
   readonly capacity = TASK_CAPACITY;

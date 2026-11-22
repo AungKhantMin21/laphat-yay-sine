@@ -335,6 +335,8 @@ describe('customers', () => {
       gridPatch() {},
       tilePatch() {},
       world() {},
+      task() {},
+      cup() {},
     } as FrameHandler;
     for (let k = 0; k < 2000 && !log.includes(`order ${ORDER.ask}`); k++) {
       writer.begin(buf, g.sim.tick, g.sim.gameMinute);

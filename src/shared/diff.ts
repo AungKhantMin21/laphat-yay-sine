@@ -16,11 +16,13 @@ export const SEC = {
   TILE_PATCH: 7,
   WORLD: 8,
   NPC_ORDER: 9,
+  TASK: 10,
+  CUP: 11,
 } as const;
 type SectionKind = (typeof SEC)[keyof typeof SEC];
 
 /** Fixed item size per section kind (patches are variable). */
-const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4, 9: 8 };
+const ITEM_BYTES: Record<number, number> = { 1: 12, 2: 4, 3: 8, 4: 16, 5: 4, 8: 4, 9: 8, 10: 12, 11: 8 };
 
 /** Positions travel as 1/32 tile in i16. */
 export const POS_SCALE = 32;
@@ -41,6 +43,13 @@ export interface FrameHandler {
   world(weather: number, season: number, day: number): void;
   /** A customer's order bubble: drink id and ORDER state (shared/npc.ts). */
   npcOrder(handle: number, drink: number, state: number): void;
+  /**
+   * A job on the task board changed (M2.5): kind (sim/service TASK), its target (customer handle or
+   * cup id), the player's queue position (0 none, 1–3) and whether it still exists.
+   */
+  task(handle: number, kind: number, queuePos: number, live: boolean, target: number): void;
+  /** A cup moved (M2.5): place (CUP), drink, tile (−1 none), worker carrying it (0 none), dirty. */
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void;
 }
 
 export class FrameWriter {
@@ -139,6 +148,28 @@ export class FrameWriter {
     this.dv.setUint8(o, weather);
     this.dv.setUint8(o + 1, season);
     this.dv.setUint16(o + 2, day, true);
+  }
+
+  task(handle: number, kind: number, queuePos: number, live: boolean, target: number): void {
+    const o = this.item(SEC.TASK);
+    const dv = this.dv;
+    dv.setUint32(o, handle, true);
+    dv.setUint8(o + 4, kind);
+    dv.setUint8(o + 5, queuePos);
+    dv.setUint8(o + 6, live ? 1 : 0);
+    dv.setUint8(o + 7, 0);
+    dv.setUint32(o + 8, target, true);
+  }
+
+  cup(id: number, place: number, drink: number, tile: number, holder: number, dirty: boolean): void {
+    const o = this.item(SEC.CUP);
+    const dv = this.dv;
+    dv.setUint16(o, id, true);
+    dv.setUint8(o + 2, place);
+    dv.setUint8(o + 3, drink);
+    dv.setUint16(o + 4, tile < 0 ? 0xffff : tile, true);
+    dv.setUint8(o + 6, holder);
+    dv.setUint8(o + 7, dirty ? 1 : 0);
   }
 
   npcOrder(handle: number, drink: number, state: number): void {
@@ -282,6 +313,15 @@ export function readFrame(buf: ArrayBuffer, h: FrameHandler): boolean {
         break;
       case SEC.NPC_ORDER:
         for (let i = 0; i < count; i++, p += 8) h.npcOrder(dv.getUint32(p, true), dv.getUint8(p + 4), dv.getUint8(p + 5));
+        break;
+      case SEC.TASK:
+        for (let i = 0; i < count; i++, p += 12) h.task(dv.getUint32(p, true), dv.getUint8(p + 4), dv.getUint8(p + 5), dv.getUint8(p + 6) === 1, dv.getUint32(p + 8, true));
+        break;
+      case SEC.CUP:
+        for (let i = 0; i < count; i++, p += 8) {
+          const t = dv.getUint16(p + 4, true);
+          h.cup(dv.getUint16(p, true), dv.getUint8(p + 2), dv.getUint8(p + 3), t === 0xffff ? -1 : t, dv.getUint8(p + 6), dv.getUint8(p + 7) === 1);
+        }
         break;
       default:
         break; // unknown section: skip by length
