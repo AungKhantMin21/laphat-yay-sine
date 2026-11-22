@@ -29,10 +29,17 @@ async function run(label, ctxOpts, cpu, q, buildMode) {
     await p.click('.settings-box .row .hud-btn:last-child');
   }
   if (crowd > 0) {
+    // The player works too: the autoplayer queues jobs and pours (tools/dev/autoplay.js).
+    await p.evaluate((noplay) => {
+      window.__game = window.__game ?? window.__debug;
+      window.__noplay = noplay;
+    }, !!process.env.GATE_NOPLAY);
+    await p.addScriptTag({ content: readFileSync('tools/dev/autoplay.js', 'utf8') });
     await p.evaluate((n) => {
       const b = window.__debug.bridge;
       void b.act({ k: 'openShop' });
       b.crowd(n);
+      if (!window.__noplay) window.__autoplay.start();
     }, crowd);
     await p.waitForTimeout(35000); // walk in from both street edges (~30 s), sit, order
   }

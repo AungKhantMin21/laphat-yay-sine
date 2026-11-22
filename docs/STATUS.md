@@ -9,8 +9,9 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
-| **M2.5 Shop, service and street** | **in progress — S1–S8 done** | plan approved 22 Nov 2026; docs/M2_5.md (steps S1–S9 + progress) |
-| M3–M6 | not started | DESIGN.md §11 (M3 is lighter after M2.5) |
+| M2.5 Shop, service and street | ✅ done, deployed | docs/M2_5.md (steps, progress, gate table) |
+| **M3 Neighbourhood** | **next — not planned yet** | DESIGN.md §11 (lighter after M2.5) |
+| M4–M6 | not started | DESIGN.md §11 |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
 
@@ -67,11 +68,15 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M2.5 — continue at S9 (gate + docs)
+## Next step: M3 Neighbourhood — plan mode first
 
-S1–S7 committed, not pushed (push at milestone end, after S9). Remaining:
-- **S8 debug UI:** perf overlay, music buttons, font sample only with `?debug=1` (F3 too); one small collapsible box inside the safe area.
-- **S9 gate:** perf gate with crowd + player working, browser scripts, docs (ARCHITECTURE save v3), STATUS, push, check live.
+DESIGN.md §11: 3 streets (reuse the M2.5 walk zones, access classes and `shared/street.ts` pattern; real areas from `src/data`), walking the neighbourhood (the player worker already walks with A*), 4 shops with daily stock (`rng.market` is unused so far), carrying and delivery (the tray/cup carrying in `sim/npc/workers.ts` is a model). Neighbouring building fronts are decor (`BUILDINGS`); M3 turns some into real shops.
+
+M2.5 open items:
+- **Re-run the perf gate fps columns on an idle machine** (23 Nov the machine was busy: Spotlight at 100 % CPU; an A/B with the M2 build dropped the same way). Frame time, draws, texture and heap all passed with wide margins.
+- New Burmese strings from M2.5 for the end review: `build.err.walkway|seatOutside|blocksWay|fixed|kitchenOnly`, `obj.kettle|sink|stove`, `serve.err.*` (8), `queue.cancel`, `staff.*` (17), changed `evening.poured`; `react.auto` removed.
+- Hiring is in the evening panel; only the waiter in M2.5 (helper M4, tea sayar and cook M5).
+- The autoplayer's pours score "ok" (Space timing); fine for checks, not a balance signal.
 
 (Older notes below.)
 

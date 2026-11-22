@@ -82,7 +82,7 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
-The source of truth for message shapes is `src/shared/protocol.ts` (protocol **v8** as of M2.9; v5 added the shop day, v6 customers and pouring with frame section NPC_ORDER, v7 the teaser event and debug `jump`, v8 debug `crowd`). Summary:
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol **v9** as of M2.5; v5 added the shop day, v6 customers and pouring with frame section NPC_ORDER, v7 the teaser event and debug `jump`, v8 debug `crowd`, v9 walk zones, the task board, workers, staff and the TASK/CUP sections). Summary:
 
 ### Main → Worker
 
@@ -143,8 +143,8 @@ kind 6 GRID_PATCH   8 B head: u8 prop | u8 _ | u8 x | u8 y | u8 w | u8 h | u16 _
 kind 7 TILE_PATCH   same shape as GRID_PATCH; prop = 0 floor, 1 wall
 kind 8 WORLD         4 B: u8 weather | u8 season | u16 day
 kind 9 NPC_ORDER     8 B each: u32 handle | u8 drink | u8 order state (shared/npc.ts ORDER) | u16 pad   (changed only)
-kind 10 TASK        12 B each: u32 task handle | u8 kind | u8 queuePos (0 none, 1–3 player queue, 4 staff) | u8 state | u8 _ | i16 x | i16 y   (M2.5, changed only; state 0 = gone)
-kind 11 CUP          8 B each: u16 cup id | u8 place (shelf, tray, table, sink) | u8 drink | i16 x | i16 y   (M2.5, changed only)
+kind 10 TASK        12 B each: u32 task handle | u8 kind | u8 queuePos (0 none, 1–3) | u8 live | u8 _ | u32 target (customer handle or cup id)   (M2.5, changed only)
+kind 11 CUP         12 B each: u16 cup id | u8 place (shelf, counter, tray, table, sink) | u8 drink | u16 tile (0xffff none) | u8 holder | u8 dirty | u32 forCustomer   (M2.5, changed only)
 ```
 
 Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick with no changes still sends the 16-byte header so the interpolation clock keeps moving.

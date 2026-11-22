@@ -1,7 +1,8 @@
-// Reload mid-day keeps the day: furnishes a small shop on the dev server, opens it, waits for a
-// cup to be auto-served, reloads straight after the payment and compares money, day, phase and
+// Reload mid-day keeps the day: opens the start shop on the dev server, lets the autoplayer serve
+// two cups, reloads straight after the payment and compares money, day, phase and
 // today's stats. Customers are not saved, so the shop reopens empty (by design).
 // Usage: npm run dev, then node tools/dev/reload.mjs http://localhost:5173/games/laphat-yay-sine/
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const [url] = process.argv.slice(2);
@@ -26,13 +27,13 @@ const snap = () =>
 
 await p.goto(url);
 await ready();
+// M2.5: the start shop has 8 seats; the autoplayer (tools/dev/autoplay.js) serves like a player.
+await p.addScriptTag({ content: readFileSync('tools/dev/autoplay.js', 'utf8') });
 await p.evaluate(async () => {
-  const act = (a) => window.__game.bridge.act(a);
-  // Catalog order from objects.json: 0 stool, 3 table.
-  for (const [type, x, y] of [[3, 27, 12], [0, 27, 11], [0, 27, 13], [0, 26, 12]]) await act({ k: 'place', type, x, y, rot: 0, colour: 0 });
-  await act({ k: 'openShop' });
+  await window.__game.bridge.act({ k: 'openShop' });
+  window.__autoplay.start();
 });
-// Wait for two payments (customers arrive at random; auto-serve takes ~45 s of game time).
+// Wait for two payments (customers arrive at random; each cup is ordered, poured and carried).
 await p.waitForFunction(() => window.__game.bridge.player.today.served >= 2, null, { timeout: 240000, polling: 200 });
 const before = await snap(); // an hourly autosave may also have run before the reload
 await p.reload();

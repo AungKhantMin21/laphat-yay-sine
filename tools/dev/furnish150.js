@@ -23,6 +23,11 @@
   for (let y = 10; y <= 18; y++) await go(y % 2 ? 'poster' : 'wall_clock', 24, y, 0, y % 8);
   for (let x = 24; x <= 35; x++) for (let y = 19; y <= 21; y++) await go((x + y) % 3 ? 'stool' : 'pot_plant', x, y, 0, (x + y) % 8);
   for (let y = 10; y <= 18; y++) await go('pot_plant', 24, y, 0, y % 8);
+  // M2.5: the pavement and kitchen rows above are refused now; top up to 150 with kitchen shelves
+  // and ceiling lamps and fans (any roofed shop tile), like a richly decorated shop.
+  for (let x = 24; x <= 35; x++) if (g.view.state.objects.count < 150) await go('shelf', x, 10, 0, x % 8);
+  for (let y = 9; y <= 18 && g.view.state.objects.count < 150; y++)
+    for (let x = 24; x <= 35 && g.view.state.objects.count < 150; x++) await go((x + y) % 2 ? 'hanging_lamp' : 'ceiling_fan', x, y, 0, (x + y) % 8);
   await new Promise((r) => setTimeout(r, 300));
   return JSON.stringify({ placed: ok, objs: g.view.state.objects.count, code: await g.bridge.exportSave() });
 })();

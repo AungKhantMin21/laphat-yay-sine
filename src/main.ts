@@ -355,6 +355,6 @@ if (debug) {
   showFontSample(panel.body);
 }
 
-// ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it).
-if (debug) Object.assign(window, { __debug: { bridge } });
+// ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it, play).
+if (debug) Object.assign(window, { __debug: { bridge, view, pour } });
 if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi } });

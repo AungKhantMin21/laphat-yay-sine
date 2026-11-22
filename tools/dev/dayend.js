@@ -1,4 +1,4 @@
-// Probe script (M2.8): furnish, open, serve a while, jump to closing time, wait for the evening
+// Probe script (M2.8; M2.5: run after tools/dev/autoplay.js): open, serve a while, jump to closing time, wait for the evening
 // panel, sleep, read the teaser line on the sleep screen, then wake. Set window.__shot = 'evening'
 // or 'sleep' to stop there for the screenshot.
 (async () => {
@@ -13,11 +13,8 @@
     }
     return true;
   };
-  const plan = [
-    [3, 27, 12], [0, 27, 11], [0, 27, 13], [0, 26, 12],
-    [3, 31, 12], [0, 31, 11], [0, 31, 13], [0, 32, 12],
-  ];
-  for (const [type, x, y] of plan) await act({ k: 'place', type, x, y, rot: 0, colour: 0 });
+  // M2.5: the start shop has 8 seats; cups are served by the autoplayer (load tools/dev/autoplay.js first).
+  window.__autoplay.start();
   await act({ k: 'openShop' });
   await until(() => g.bridge.player.today.served >= 2, 90000);
   const day = Math.floor(g.view.gameMinute / 1440);

@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const [url, shot, exprArg] = process.argv.slice(2);
-const expr = exprArg?.startsWith('@') ? readFileSync(exprArg.slice(1), 'utf8') : exprArg;
+// @a.js,b.js loads several files in order (e.g. tools/dev/autoplay.js before a probe script).
+const expr = exprArg?.startsWith('@') ? exprArg.slice(1).split(',').map((f) => readFileSync(f, 'utf8')).join('\n') : exprArg;
 const b = await chromium.launch({
   executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
