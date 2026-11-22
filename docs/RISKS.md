@@ -33,6 +33,7 @@ Risks for low-end phones and iOS Safari, with the milestone that handles each. P
 | Low Power Mode caps rAF at 30 fps | the fixed-step loop already handles it | M0 |
 | No `performance.memory` | overlay shows "n/a"; measure with Web Inspector over a cable | M0 |
 | Service-worker cache quota and stale caches | cache only the music format in use; versioned caches; protocol version check | M6 |
+| A killed tab loses the last game hour (the `pagehide`/hidden save is an async IndexedDB write in the worker) | hourly + post-build + post-sleep autosaves; check on devices: background mid-day, kill the tab, reopen — money and stats must match | M6 |
 
 ## Deploy (all devices)
 

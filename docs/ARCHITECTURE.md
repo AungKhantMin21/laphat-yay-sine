@@ -82,7 +82,7 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
-The source of truth for message shapes is `src/shared/protocol.ts` (protocol v6 as of M2.4: actions `startPour`/`cancelPour`/`serve`, events `served`/`money`, frame section NPC_ORDER). Summary:
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol **v8** as of M2.9; v5 added the shop day, v6 customers and pouring with frame section NPC_ORDER, v7 the teaser event and debug `jump`, v8 debug `crowd`). Summary:
 
 ### Main → Worker
 
@@ -97,6 +97,8 @@ type ToSim =
   | { t: 'save'; reason: 'auto' | 'hidden' | 'manual' }
   | { t: 'exportSave' } | { t: 'importSave'; code }
   | { t: 'give'; type; qty }             // debug
+  | { t: 'jump'; minute }                // debug: move the game clock forward (never back)
+  | { t: 'crowd'; n }                    // debug (perf gate): n customers arrive at once
   | { t: 'recycle'; buf: ArrayBuffer };  // transferred back
 
 type Action =
@@ -104,8 +106,10 @@ type Action =
   | { k: 'move'; id; x; y; rot } | { k: 'rotate'; id; rot } | { k: 'recolour'; id; colour }
   | { k: 'pickup'; id } | { k: 'sell'; id } | { k: 'undo' } | { k: 'redo' }
   | { k: 'openShop' } | { k: 'sleep' }                       // shop day (M2)
+  | { k: 'startPour'; id } | { k: 'cancelPour'; id }         // pour UI open/closed: holds the auto-serve
+  | { k: 'serve'; id; tea; milk }                            // a poured cup (cup fractions)
   | { k: 'walkTo'; x; y } | { k: 'interact'; id } | { k: 'buy'; shop; item; qty }; // M2+
-// ids on the wire are object handles (index + generation).
+// ids on the wire are object handles (index + generation); pour/serve ids are NPC handles.
 ```
 
 ### Worker → Main
@@ -118,7 +122,8 @@ type FromSim =
   | { t: 'state'; state: PlayerState }     // money, inventory, canUndo, canRedo, day phase, day, today's stats — on change
   | { t: 'loaded'; fresh; awayDays; skipped }
   | { t: 'exported'; code } | { t: 'imported'; ok; reason? }
-  | { t: 'events'; list: SimEvent[] }      // dayEnd {day, stats} (M2.2); money, served, teaser (M2+)
+  | { t: 'events'; list: SimEvent[] }      // money {delta,total}, served {id,drink,poured,price,tip,reaction},
+                                          // dayEnd {day,stats} then teaser {key,drink} on sleep
   | { t: 'catchup'; done; total } | { t: 'away'; summary }
   | { t: 'saved'; reason; ok } | { t: 'error'; msg; fatal? };
 ```
@@ -145,6 +150,8 @@ Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick wi
 ### Game clock and the shop day (M2)
 
 `Sim.tick` counts every step; `Sim.clock` is game time in ticks and **stands still** while the shop day holds it: in the morning until `openShop`, and in the evening (after closing time, once the shop is empty) until `sleep`, which jumps it to the next opening time (`shared/day.ts`, hours in `src/data/shop.json`). The frame header carries the game minute, so the main thread sees the hold.
+
+On `sleep`, `ShopDay` sends `dayEnd` with today's stats, then picks tomorrow's **teaser** (`shared/teasers.ts`, `src/data/teasers.json`) with two `events` draws every night, among the kinds whose condition the day's stats meet (at least one kind has no condition). The pick is saved and has a real effect the next day, applied in `Game.step`: extra arrivals for a time window, extra appeal, or a promised guest who arrives a set time after opening and orders a named drink. Customers pay when served (poured: full price + tip by pour score; auto-served after `service.autoServe`: 70 %, no tip).
 
 ### Protocol rules
 
@@ -205,7 +212,7 @@ Eight properties: comfort, light, noise, warmth, shade, beauty, smell, cover.
 ### Paths (`sim/path/`, M2.3)
 
 - `WalkGrid`: `cost: Uint8Array` per tile from the floor type (`src/data/walk.json`, min 10) or 255 when floor-standing furniture covers it, plus `moves: Uint8Array`, an 8-direction mask per tile (no wall on the edge, no corner cutting). `SimWorld` keeps a walk dirty rect from footprints of floor-standing furniture; `Game.syncWalk()` rebuilds only that rect (masks one tile further out) and bumps `version`. Walls change only on area load (the first full update covers them).
-- `PathFinder`: A* (octile heuristic, diagonal = 1.4×, binary heap on typed arrays with decrease-key). Requests queue FIFO; one search runs at a time within `nodesPerTick` expansions per tick (a node count, not a timer, so results are deterministic; 1,000 ≈ 0.3 ms on a desktop, ≈ 2 ms at 6× throttle). A search restarts if the walk grid changed mid-flight. Results go into a fixed pool (`pathSlots` × `maxPathLen` Uint16 tile indices) addressed by handles; paths exclude the start and end at the goal. A blocked goal (a seat) can be the destination but is never walked through. `canStep(a, b, goal)` re-checks a step against the current grid, so walkers notice furniture placed after their path was found.
+- `PathFinder`: A* (octile heuristic, diagonal = 1.4×, binary heap on typed arrays with decrease-key). Requests queue FIFO; one search runs at a time within `nodesPerTick` expansions per tick (a node count, not a timer, so results are deterministic; 700 ≈ 0.3 ms warm on an Apple-silicon desktop, so ≤ 2 ms at 6× throttle; lowered from 1,000 in the M2 gate. It is the same on every tier, because it decides when paths finish). A search restarts if the walk grid changed mid-flight. Results go into a fixed pool (`pathSlots` × `maxPathLen` Uint16 tile indices) addressed by handles; paths exclude the start and end at the goal. A blocked goal (a seat) can be the destination but is never walked through. `canStep(a, b, goal)` re-checks a step against the current grid, so walkers notice furniture placed after their path was found.
 - No allocation after construction. Flow fields to common destinations wait for M3/M4.
 
 ### RNG
@@ -219,8 +226,8 @@ Database `laphat`:
 - `saves`: `slot0` → binary save (`sim/save/format.ts`). An unreadable save is moved to `slot0.broken.<time>`, never overwritten.
 - `meta`: device tier and settings (main thread).
 
-Binary save v2 = the v1 layout plus a shop-day block (game clock, shutters, today's stats, tomorrow's teaser); v1 saves migrate with clock = tick and the shutters open. Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
+Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats. Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 
 - To change the format: add `PARSERS[n]` and `MIGRATIONS[n-1]`; never edit old ones.
-- Autosave every game hour, 5 s after building, on `visibilitychange: hidden` and `pagehide`.
+- Autosave every game hour, 5 s after building, after `sleep`, on `visibilitychange: hidden` and `pagehide`.
 - Save code = `LYS1.` + base64url of the binary save (≈ 24 bytes per object). Share links (M6) need compression to meet DESIGN's 2,000-character target.

@@ -8,10 +8,11 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | --- | --- | --- |
 | M0 Foundation | ✅ done, deployed | docs/M0.md |
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
-| **M2 Shop day** | **in progress — M2.1–M2.8 done** | plan approved; docs/M2.md (steps + progress) |
-| M3–M6 | not started | DESIGN.md §11 |
+| M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
+| **M3 Neighbourhood** | **next — not planned yet** | DESIGN.md §11 |
+| M4–M6 | not started | DESIGN.md §11 |
 
-Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample).
+Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
 
 ## Decisions made with the user (not all are in DESIGN.md)
 
@@ -23,6 +24,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - **M1 scope:** objects come from an **inventory** (start stock in `src/data/start.json`; the M3 furniture shop adds to it). Floor/wall painting is deferred to M3 (paint stall).
 - **Menu (22 Nov 2026):** three paid drinks — ပုံမှန်, ချိုဆိမ့်, ကျဆိမ့်. "plain" was dropped; free ရေနွေးကြမ်း on the tables is a BACKLOG idea (atmosphere, not poured or paid). Prices stay as first set (1,000 / 1,200 / 1,200 kyat; tip ≤ 30 %, auto-serve 70 %).
 - **Customers pay when served** (not after drinking) — accepted 22 Nov 2026.
+- **Shop day (21 Nov 2026):** shutters open 06:00 (clock waits until Open) → shop hours to 17:00 → last customers finish → evening waits for Sleep → next 06:00. The player pours every cup they choose to, with an auto-serve fallback (70 %, no tip). Ingredients unlimited and free until M3.
 - **The user tests the app only after all milestones are finished.** Burmese strings Claude writes are accepted for now; list new ones in each milestone's notes so they can be reviewed together at the end.
 - Each milestone: plan mode first → approval → build step by step → `npm run check` → commit after each working step → push to `main` (the deploy action publishes). Tell the user when something needs doing on GitHub.
 
@@ -32,7 +34,8 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Browser checks use system Chrome via `playwright-core` (no bundled browsers):
   - `node tools/dev/probe.mjs <dev-url> [shot.png] [expr | @file.js]` — evaluate against `window.__game`, screenshot, report page errors.
   - `tools/dev/furnish150.js` — fills the shop with 150 objects and returns a save code.
-  - `node tools/dev/gate.mjs <preview-url> code.txt [dir]` — perf gate on a production build (imports the code through Settings).
+  - `node tools/dev/gate.mjs <preview-url> code.txt [dir|-] [crowd]` — perf gate on a production build (imports the code through Settings; `crowd` > 0 opens the shop, adds that many customers via debug `crowd` and waits 35 s for them to sit). M2 gate used `40`.
+  - `node tools/dev/reload.mjs <dev-url>` — furnishes, opens, waits for 2 payments, reloads, compares money/day/phase/stats.
   - `tools/dev/pour.js` — opens a furnished shop, taps a seated customer's bubble, pours with Space and reports the payment and reaction (leaves a second pour open for the screenshot).
   - `tools/dev/tin.js` — opens a furnished shop and reports the savings tin (size, fill, label) after a few payments, and the tin ↔ readout swap in build mode.
   - `tools/dev/dayend.js` — serves a few cups, jumps to 17:00 (`bridge.jump`, debug), checks the evening panel, sleeps, reads the teaser, wakes. Prefix `window.__shot='evening'|'sleep';` to stop there for a screenshot.
@@ -43,14 +46,14 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 
 ## Code map (what exists now)
 
-- `src/shared/` — protocol (v7), customers (`customers.ts`, `npc.ts`), shop day (`day.ts`, `shop.ts`, `drinks.ts`, `teasers.ts`), binary frame codec (`diff.ts`), catalog (`objects.json` → defs), world state (area grids, object store with slots/generations/uids, occupancy), placement rules, RNG streams, IndexedDB helper, base64url, iso math.
+- `src/shared/` — protocol (v8), customers (`customers.ts`, `npc.ts`), shop day (`day.ts`, `shop.ts`, `drinks.ts`, `teasers.ts`), binary frame codec (`diff.ts`), catalog (`objects.json` → defs), world state (area grids, object store with slots/generations/uids, occupancy), placement rules, RNG streams, IndexedDB helper, base64url, iso math.
 - `src/sim/` (worker) — `worker.ts` (timing, saving, messages), `game.ts` (Sim + world + builder, toSave/fromSave), `world.ts` (change tracking, grid streaming), `build/builder.ts` (commands + undo), `day/shop-day.ts`, `path/` (walk grid + A*), `npc/customers.ts` (arrivals, seat utility, serve/pay), `grids/property-grids.ts`, `save/` (format v1 + migrations, IDB store, save codes), `area.ts` (M1 street + shop), `catchup.ts`.
 - `src/game/` — `bridge.ts` (only Worker contact; promise acks), `view.ts` (mirror), `loop.ts`, `build-mode.ts` (build state machine + ghost logic).
 - `src/render/` — pixel stage, chunks (floors + back walls), objects (depth, picking), npcs (customers, order bubbles, `pickOrder`), recolour atlas, ghost, heat overlay, camera, atlas loader, gl-stats.
 - `src/ui/` — i18n (Myanmar digits, `{args}`), build HUD, savings tin (`ui/hud/tin.ts`), evening panel + sleep screen (`ui/hud/day-end.ts`), pour minigame + reaction bubbles (`ui/pour/`), settings (save code), perf overlay, title card, music debug.
 - `src/platform/` — tiers (benchmark v2, thresholds calibrated), orientation, touch guard, persist.
 - `src/audio/` — music player + policy.
-- Tests: 189 in `test/` (Vitest, own tsconfig).
+- Tests: 193 in `test/` (Vitest, own tsconfig); `test/m2-gate.test.ts` runs three seeded days twice (determinism).
 
 ## Open items carried forward
 
@@ -59,23 +62,17 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Share links (M6) need compression; save codes are uncompressed (~24 bytes/object).
 - Multi-tile depth sorting may need sprite slicing once characters walk around (M2/M3).
 - BACKLOG.md holds deferred ideas.
-- Flaky test: `test/builder.test.ts` "any random sequence fully undoes…" failed once in a full parallel run on 22 Nov 2026 and passes alone and in every rerun. It looks like a timeout under load. Look at it in M2.9 if it recurs.
+- Flaky test: `test/builder.test.ts` "any random sequence fully undoes…" failed once in a full parallel run on 22 Nov 2026; it did not recur in 4 full runs during M2.9. Probably a timeout under load; look again if it comes back.
+- The mid-day reload check passed, but it can't tell whether the `pagehide` save or the hourly autosave kept the data. Add an M6 device check: background a phone mid-day and kill the tab (RISKS.md).
+- Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
+- **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M2 Shop day — continue at M2.9 gate + docs (see docs/M2.md)
+## Next step: M3 Neighbourhood — plan mode first
 
-### Handoff notes for M2.9 (written before a context clear, 22 Nov 2026)
+DESIGN.md §11: 3 streets, tap-to-walk A*, 4 shops with daily stock, carrying and delivery. Start in plan mode: read DESIGN.md (neighbourhood, market, player avatar), docs/ARCHITECTURE.md (§2 protocol v8, §3 paths and NPC SoA), docs/RISKS.md and BACKLOG.md.
 
-M2.1–M2.8 are built, committed and pushed (last code commit `0f25767`). M2.9 = the gate + docs step in docs/M2.md:
-- **Determinism test:** run 3 full seeded days headless (open → run to close → evening → sleep, ×3) twice and compare money, today's stats, teasers and RNG states. Check that no NPC is stuck and that money only goes up. Helpers to copy: `runTo`/`steps` in `test/day-cycle.test.ts` and `test/teasers.test.ts`, and the furnished-day setup in `test/customers.test.ts`.
-- **Perf gate:** `npm run build` + `npx vite preview`, then `node tools/dev/gate.mjs <preview-url> code.txt [dir]` (headed Chrome, 6× throttle Low / 4× Mid). Make the code with `tools/dev/furnish150.js` and add a full room of customers at peak. Budgets: ≤ 25 ms frame, ≤ 40 draws, texture ≤ 48 MB, heap ≤ 100 MB; worker tick time on the overlay; pathfinding ≤ 2 ms per tick. gate.mjs may need a step that opens the shop and waits for customers. `bridge.jump(minute)` (debug) skips time.
-- **Browser flow** (already scripted): `tools/dev/pour.js`, `tools/dev/tin.js`, `tools/dev/dayend.js` (prefix `window.__shot='evening'|'sleep';` for screenshots). Still to check: reload mid-day keeps the day (money, stats, phase).
-- **Docs:** docs/ARCHITECTURE.md still describes older versions. Update it to protocol **v7** (actions openShop/sleep/startPour/cancelPour/serve; events money/served/dayEnd/teaser; debug `jump`), save **v2** (phase, today's stats, teaser `{key, arg}`), frame section NPC_ORDER (kind 9), `sim/path/` and `sim/npc/`. Then the gate table in docs/M2.md, this file, and BACKLOG for anything deferred.
-- **New my.json keys in M2.6–M2.8** (for the user's end-of-project review): `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
-- **Data added in M2.6–M2.8:** `drinks.json` `flow` (pour speeds), `shop.json` `tin` (sizes), `src/data/teasers.json`.
-
-Decided 21 Nov 2026: day = shutters open 06:00 (clock waits until Open) → shop hours to 17:00 → last customers finish → evening waits for Sleep → next 06:00. Player pours every cup, with an auto-serve fallback (lower price, no tip). A* core built in M2. Ingredients unlimited and free until M3.
-
-### Original M2 brief
-
-Done when: customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser.
-Start in plan mode: read DESIGN §2, §6, §8; reuse property grids (`value` arrays), object `seat` counts in objects.json, RNG streams, the NPC SoA layout in ARCHITECTURE §3, and the NPC_* frame sections already defined in `shared/diff.ts`.
+Carried over from M2 for M3:
+- The A* core (`sim/path/`, 700 nodes per tick, same on all tiers) and the customer SoA (`sim/npc/customers.ts`) are ready to reuse for the player avatar and more streets. Flow fields were deferred to M3/M4.
+- Ingredients are unlimited and free until M3 (the wet market adds stock). The paint stall (floor/wall painting) and the furniture shop (adds to the inventory) are M3.
+- `rng.market` stream is unused so far — it's meant for daily stock.
+- Multi-tile depth sorting worked for M1 objects and customers without sprite slicing; recheck it with an avatar that walks behind furniture.
