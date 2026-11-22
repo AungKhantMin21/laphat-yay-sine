@@ -3,7 +3,7 @@ import { Game } from '../src/sim/game';
 import { CATALOG } from '../src/shared/catalog';
 import { FrameWriter, readFrame, type FrameHandler } from '../src/shared/diff';
 import { PHASE } from '../src/shared/day';
-import { DRINKS, REACTION, tipFor } from '../src/shared/drinks';
+import { DRINKS, REACTION } from '../src/shared/drinks';
 import { NONE } from '../src/shared/ids';
 import { CUP } from '../src/sim/service/cups';
 import { TASK } from '../src/sim/service/task-board';
@@ -209,37 +209,6 @@ describe('customers', () => {
     expect(mid.tip).toBeGreaterThan(slow.tip);
     expect(slow.tip).toBe(0);
     expect(fast.price).toBe(slow.price);
-  });
-
-  it('the player pours at the counter through the pour actions; a poured cup pays full price plus tip', () => {
-    const g = game();
-    place(g, 'stool', 30, 15);
-    const h = g.npcs.spawn();
-    const i = g.npcs.indexOf(h);
-    until(g, () => g.npcs.state[i] === CS.asking);
-    expect(g.act({ k: 'startPour', id: h }).ok).toBe(false); // the order hasn't been taken
-    g.service.takeOrder(h);
-    expect(g.act({ k: 'startPour', id: h }).ok).toBe(true);
-    expect(g.npcs.order[i]).toBe(ORDER.pouring);
-    expect(g.act({ k: 'cancelPour', id: h }).ok).toBe(true);
-    expect(g.npcs.order[i]).toBe(ORDER.waiting);
-    g.act({ k: 'startPour', id: h });
-    const drink = DRINKS.defs[g.npcs.drink[i]!]!;
-    const target = Math.min(1, Math.max(0, drink.milk + g.npcs.milkShift[i]!));
-    expect(g.act({ k: 'serve', id: h, tea: 0.9 * (1 - target), milk: 0.9 * target }).ok).toBe(true);
-    const cup = g.service.cups.forCustomer.indexOf(h);
-    expect(g.service.cups.score[cup]).toBe(1);
-    g.service.pickUp(cup, 1);
-    g.events.length = 0;
-    const money0 = g.builder.money;
-    g.service.serve(cup, 1);
-    const tip = tipFor(drink, 1, 0);
-    expect(tip).toBeGreaterThan(0);
-    expect(g.builder.money - money0).toBe(drink.price + tip);
-    expect(g.events[0]).toMatchObject({ k: 'served', poured: true, price: drink.price, tip, reaction: REACTION.great });
-    // Brewing twice, or for a gone customer, is refused.
-    expect(g.act({ k: 'serve', id: h, tea: 0.5, milk: 0.4 })).toEqual({ ok: false, reason: 'serve.err.gone' });
-    expect(g.act({ k: 'startPour', id: 12345 }).ok).toBe(false);
   });
 
   it('no clean cup: brewing waits until someone washes', () => {

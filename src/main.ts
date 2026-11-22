@@ -160,7 +160,8 @@ const dayEnd = installDayEnd({
 });
 const tin = installTin();
 const pour = installPourUi({
-  startPour: (id) => bridge.act({ k: 'startPour', id }),
+  // The sim marks the order as pouring itself when the player reaches the counter (M2.5).
+  startPour: () => Promise.resolve({ ok: true }),
   cancelPour: (id) => void bridge.act({ k: 'cancelPour', id }),
   serve: (id, tea, milk) => bridge.act({ k: 'serve', id, tea, milk }),
   onChange: (open) => document.body.classList.toggle('pouring', open),

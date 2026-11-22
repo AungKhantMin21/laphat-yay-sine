@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WORKER_SLOT0 } from '../src/shared/layout';
 import atlasJson from '../assets/atlas/atlas-0.json';
 import { Game } from '../src/sim/game';
 import { WorldView } from '../src/game/view';
@@ -83,7 +84,7 @@ describe('NPC mirror', () => {
     expect(v.npcDrink[i]).toBe(g.npcs.drink[i]);
     // Standing still: prev catches up with cur, so there is no drift.
     expect(v.npcPrevX[i]).toBe(v.npcX[i]);
-    g.act({ k: 'startPour', id: h });
+    g.service.pouring(h, true);
     pump(g, v, 1);
     expect(v.npcOrderState[i]).toBe(ORDER.pouring);
     g.npcs.clear();
@@ -91,7 +92,7 @@ describe('NPC mirror', () => {
     expect(v.npcHandle(i)).toBe(0);
   });
 
-  it('a snapshot rebuilds customers already in the shop', () => {
+  it('a snapshot rebuilds customers already in the shop, and the player', () => {
     const g = Game.create(2);
     g.npcs.spawn();
     const w = new FrameWriter();
@@ -100,6 +101,7 @@ describe('NPC mirror', () => {
     const v = new WorldView();
     v.setArea(0, 64, 48);
     readFrame(w.finish(), v);
-    expect(Array.from(v.npcLive).filter(Boolean)).toHaveLength(1);
+    expect(Array.from(v.npcLive.subarray(0, WORKER_SLOT0)).filter(Boolean)).toHaveLength(1);
+    expect(v.npcLive[WORKER_SLOT0]).toBe(1); // the player (worker 1)
   });
 });

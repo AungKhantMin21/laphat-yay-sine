@@ -30,9 +30,13 @@ export function dayPhase(gameMinute: number, shuttersOpen: boolean, customers: n
   return customers > 0 ? PHASE.closing : PHASE.evening;
 }
 
-/** Whether the game clock stands still in this phase. */
+/**
+ * Whether the game clock stands still in this phase. Closing holds it too (M2.5): customers wait as
+ * long as it takes to be served, so the clock stops at closing time until the last one has left,
+ * instead of running into the night.
+ */
 export function clockHolds(phase: Phase): boolean {
-  return phase === PHASE.morning || phase === PHASE.evening;
+  return phase !== PHASE.open;
 }
 
 /**

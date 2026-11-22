@@ -4,12 +4,11 @@ import { CATALOG, SERVICE } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
-import { createM1Area, SPAWN_ROWS } from './area';
+import { createM1Area, SEATING, SPAWN_ROWS } from './area';
 import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
-import { NONE } from '../shared/ids';
 import { Service } from './service/service';
-import { TASK } from './service/task-board';
+import { PLAYER, ROLE, Workers } from './npc/workers';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
@@ -36,6 +35,8 @@ export class Game {
   readonly npcs: Customers;
   /** Task board, cups and the rules of each service job. */
   readonly service: Service;
+  /** The player character and staff. */
+  readonly workers: Workers;
   /** Last game minute an arrival was rolled for (one roll per minute). */
   private arrivalMinute = -1;
 
@@ -52,6 +53,9 @@ export class Game {
     this.paths = new PathFinder([this.walk, this.walkStaff]);
     this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS });
     this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
+    this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e));
+    const home = this.workers.homeTile();
+    this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
   }
 
   /**
@@ -228,23 +232,21 @@ export class Game {
         }
         this.npcs.clear(); // the last passers-by go home too
         this.service.endOfDay(); // cups washed overnight, no jobs left
+        this.workers.reset(); // everyone back beside the counter
         return { ok: true };
       }
-      // The player's brew at the counter (S5 routes these through the player's worker).
-      case 'startPour': {
-        if (!this.npcs.indexOf(a.id) || this.service.board.find(TASK.brew, a.id) === NONE) return { ok: false, reason: 'pour.err.gone' };
-        if (!this.service.canBrew()) return { ok: false, reason: 'serve.err.noCups' };
-        this.service.pouring(a.id, true);
-        return { ok: true };
-      }
+      case 'queueTask':
+        return res(this.workers.queueTask(PLAYER, a.task));
+      case 'cancelTask':
+        return res(this.workers.cancelTask(PLAYER, a.task));
+      // The player's pour at the counter (the worker opened it with a brewReady event).
       case 'cancelPour':
-        this.service.pouring(a.id, false);
-        return { ok: true };
+        return res(this.workers.cancelBrew(PLAYER, a.id));
       case 'serve': {
         const i = this.npcs.indexOf(a.id);
-        if (!i || !Number.isFinite(a.tea) || !Number.isFinite(a.milk)) return { ok: false, reason: 'pour.err.gone' };
+        if (!i || !Number.isFinite(a.tea) || !Number.isFinite(a.milk)) return { ok: false, reason: 'serve.err.gone' };
         const score = pourScore(DRINKS.defs[this.npcs.drink[i]!]!, a.tea, a.milk, this.npcs.milkShift[i]!);
-        return res(this.service.brew(a.id, score, true));
+        return res(this.workers.brewDone(PLAYER, a.id, score));
       }
       default:
         return { ok: false, reason: 'error.notYet' };
@@ -262,13 +264,15 @@ export class Game {
       phase: d.phase,
       day: this.sim.day,
       today: { ...d.today },
+      queue: this.workers.playerQueue(),
+      brewing: this.workers.brewFor[PLAYER]!,
     };
   }
 
   /** True once after anything in the player state changed. */
   takeChanged(): boolean {
-    const c = this.builder.changed || this.day.changed;
-    this.builder.changed = this.day.changed = false;
+    const c = this.builder.changed || this.day.changed || this.workers.changed;
+    this.builder.changed = this.day.changed = this.workers.changed = false;
     return c;
   }
 
@@ -296,15 +300,20 @@ export class Game {
     }
     this.service.tick(this.sim.tick);
     this.npcs.tick(this.sim.tick);
+    this.workers.tick();
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);
+    this.workers.writeChanges(w);
+    this.service.writeChanges(w, this.workers);
   }
 
   /** Full state for a new main-thread mirror. */
   writeSnapshot(w: FrameWriter): void {
     this.world.writeSnapshot(w);
     this.npcs.writeSnapshot(w);
+    this.workers.writeSnapshot(w);
+    this.service.writeSnapshot(w, this.workers);
   }
 }
 

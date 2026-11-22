@@ -20,3 +20,6 @@ export const ORDER = {
 
 /** NPC_SPAWN def id for a generic customer (named NPCs come in M5). */
 export const NPC_DEF_CUSTOMER = 0;
+/** NPC_SPAWN def ids for workers (M2.5). */
+export const NPC_DEF_PLAYER = 1;
+export const NPC_DEF_WAITER = 2;

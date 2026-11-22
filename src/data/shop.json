@@ -11,14 +11,14 @@
   "tin": [50000, 100000, 250000, 500000, 1000000, 2500000, 5000000],
   "arrivals": {
     "perHour": [
-      { "from": "06:00", "rate": 9 },
-      { "from": "09:00", "rate": 5 },
-      { "from": "12:00", "rate": 7 },
-      { "from": "14:00", "rate": 5 }
+      { "from": "06:00", "rate": 4 },
+      { "from": "09:00", "rate": 2.5 },
+      { "from": "12:00", "rate": 3.5 },
+      { "from": "14:00", "rate": 2.5 }
     ],
     "appeal": { "base": 0.6, "perSeat": 0.06, "seatCap": 12, "comfort": 0.1, "beauty": 0.1, "min": 0.5, "max": 2 }
   },
-  "service": { "orderDelay": 3, "drink": 40, "stuck": 120, "takeOrder": 1.5, "pickUp": 0.5, "serve": 1, "clear": 1, "wash": 2, "brew": 4 },
+  "service": { "orderDelay": 3, "drink": 40, "stuck": 120, "walkSpeed": 3.5, "takeOrder": 1.2, "pickUp": 0.5, "serve": 1, "clear": 1, "wash": 1.5, "brew": 4 },
   "kitchen": { "cups": 10, "tray": 2 },
   "seat": {
     "comfort": 1,

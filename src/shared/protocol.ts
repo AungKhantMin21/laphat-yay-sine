@@ -22,10 +22,13 @@ export type Action =
   | { k: 'openShop' }
   /** Evening: end the day; the clock jumps to the next opening time and the game saves. */
   | { k: 'sleep' }
-  /** The pour minigame opened for customer `id` (NPC handle): their auto-serve waits. */
-  | { k: 'startPour'; id: number }
+  /** Queue a job from the task board for the player (task handle); up to 3. */
+  | { k: 'queueTask'; task: number }
+  /** Take a job off the player's queue (not once a cup is in hand). */
+  | { k: 'cancelTask'; task: number }
+  /** The pour minigame for customer `id` (NPC handle) was closed without pouring. */
   | { k: 'cancelPour'; id: number }
-  /** Serve customer `id` a poured cup: tea and condensed milk as cup fractions. */
+  /** The player poured customer `id`'s cup at the counter: tea and condensed milk as cup fractions. */
   | { k: 'serve'; id: number; tea: number; milk: number }
   | { k: 'walkTo'; x: number; y: number }
   | { k: 'interact'; id: number }
@@ -62,6 +65,8 @@ export type SimEvent =
    * brewed it); `reaction` = shared/drinks.ts REACTION.
    */
   | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number; wait: number }
+  /** The player reached the counter to brew customer `id`'s `drink`: open the pour minigame. */
+  | { k: 'brewReady'; id: number; drink: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
   | { k: 'teaser'; key: string; drink: number };
 
@@ -100,6 +105,10 @@ export interface PlayerState {
   /** Game day number, from 0. */
   day: number;
   today: DayStats;
+  /** The player's queued jobs (task handles, first = in progress), M2.5. */
+  queue: number[];
+  /** Customer handle the player is pouring for at the counter (0 = not brewing). */
+  brewing: number;
 }
 
 export type FromSim =

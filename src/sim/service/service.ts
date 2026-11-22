@@ -6,12 +6,18 @@
 //   SERVE ─pickUp─▶ cup on the tray ─serve─▶ cup on the table, customer pays and drinks
 //   customer leaves ─▶ CLEAR ─pickUpDirty─▶ tray ─dropAtSink─▶ sink, WASH ─washOne─▶ shelf
 import { CATALOG, SERVICE } from '../../shared/catalog';
+import type { FrameWriter } from '../../shared/diff';
 import { NONE } from '../../shared/ids';
 import { SHOP, type ShopRules } from '../../shared/shop';
 import type { Customers, CustomerHooks } from '../npc/customers';
 import type { SimWorld } from '../world';
 import { CUP, Cups } from './cups';
 import { TASK, TaskBoard } from './task-board';
+
+/** Where each task sits in the player's queue (sim/npc/workers.ts). */
+export interface QueuePositions {
+  queuePos(task: number): number;
+}
 
 /** The shop takes the money: customer handle, drink id, pour score 0…1, wait in game minutes, poured by the player. */
 export type OnPaid = (customer: number, drink: number, score: number, wait: number, poured: boolean) => void;
@@ -133,6 +139,36 @@ export class Service implements CustomerHooks {
     return '';
   }
 
+  /** Task-board and cup changes for the frame (TASK and CUP sections). */
+  writeChanges(out: FrameWriter, q: QueuePositions): void {
+    const b = this.board;
+    const d = b.dirty;
+    for (let k = 0; k < d.length; k++) {
+      const i = d.list[k]!;
+      const h = b.handle(i);
+      out.task(h, b.kind[i]!, b.live[i] ? q.queuePos(h) : 0, b.live[i] === 1, b.target[i]!);
+    }
+    d.clear();
+    const c = this.cups;
+    const ch = c.changed;
+    for (let k = 0; k < ch.length; k++) this.writeCup(out, ch.list[k]!);
+    ch.clear();
+  }
+
+  /** Every live task and every cup, for a new mirror. */
+  writeSnapshot(out: FrameWriter, q: QueuePositions): void {
+    const b = this.board;
+    for (let i = 1; i < b.capacity; i++) if (b.live[i]) out.task(b.handle(i), b.kind[i]!, q.queuePos(b.handle(i)), true, b.target[i]!);
+    b.dirty.clear();
+    for (let c = 1; c <= this.cups.count; c++) this.writeCup(out, c);
+    this.cups.changed.clear();
+  }
+
+  private writeCup(out: FrameWriter, c: number): void {
+    const cups = this.cups;
+    out.cup(c, cups.place[c]!, cups.drink[c]!, cups.tile[c]!, cups.holder[c]!, cups.dirty[c] === 1);
+  }
+
   /** Worker `w` puts cup `c` (on their tray) down for its customer, who pays. */
   serve(c: number, w: number): string {
     const cups = this.cups;
@@ -154,7 +190,7 @@ export class Service implements CustomerHooks {
     const cups = this.cups;
     if (c < 1 || c > cups.count || cups.place[c] !== CUP.table || cups.dirty[c] !== 1) return 'serve.err.gone';
     if (cups.carried(w) >= this.rules.kitchen.tray) return 'serve.err.trayFull';
-    cups.move(c, CUP.tray, -1, w);
+    cups.move(c, CUP.tray, cups.tile[c]!, w); // remembers its table, in case it has to go back
     return '';
   }
 

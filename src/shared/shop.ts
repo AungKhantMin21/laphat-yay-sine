@@ -38,6 +38,8 @@ export interface ShopRules {
     drink: number;
     /** A walker who hasn't reached their goal after this long gives up (leaves, or vanishes if leaving). */
     stuck: number;
+    /** Workers' walking speed in tiles per game minute (= real second). */
+    walkSpeed: number;
     /** How long each job takes once the worker is there. `brew` is for staff (the player pours by hand). */
     takeOrder: number;
     pickUp: number;

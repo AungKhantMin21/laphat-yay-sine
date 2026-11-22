@@ -155,13 +155,14 @@ Positions are fixed-point **1/32 tile** in `i16` (range ±1023 tiles). A tick wi
 
 On `sleep`, `ShopDay` sends `dayEnd` with today's stats, then picks tomorrow's **teaser** (`shared/teasers.ts`, `src/data/teasers.json`) with two `events` draws every night, among the kinds whose condition the day's stats meet (at least one kind has no condition). The pick is saved and has a real effect the next day, applied in `Game.step`: extra arrivals for a time window, extra appeal, or a promised guest who arrives a set time after opening and orders a named drink. Customers pay when served (poured: full price + tip by pour score; auto-served after `service.autoServe`: 70 %, no tip).
 
-### Service (M2.5, protocol v9 — planned, see docs/M2_5.md)
+### Service (M2.5, protocol v9)
 
 Every cup is made by a person; there is no auto-serve. The worker keeps a **task board** (`sim/service/task-board.ts`) of open jobs: `order` (take the order), `brew`, `serve`, `clear`, `wash`, `cook` (no producer until M5 snacks). The player avatar and staff are **workers** (`sim/npc/workers.ts`) that take jobs from it.
 
 - Actions: `queueTask {task}` / `cancelTask {task}` (task handles; the player queue holds ≤ 3, in `PlayerState`); `hire {role}` / `dismiss {role}` (evening only). `startPour` / `cancelPour` / `serve` now belong to the player's brew at the counter: the sim sends `brewReady {task, drink}` when the avatar arrives, the UI opens the pour overlay, `serve` puts the filled cup on the tray (2 slots), cancel puts the brew back on the board.
 - A job the player queues is theirs; a staff member holding it drops it and re-chooses.
-- Customers: toSeat → wantsOrder (`order` task, "?" bubble) → ordered (`brew` task) → served (pays: full price + pour tip × wait factor 1.25…0) → drinking → leaving; the cup stays on the table (`clear` task) → the sink (`wash`). They never leave unserved; after closing time no one new comes, and the evening starts when the shop is empty.
+- Customers: toSeat → asking (`order` task, "?" bubble, `ORDER.ask`) → waiting (`brew` task, drink bubble) → served (pays: full price + pour tip × wait factor 1.25…0) → drinking → leaving; the cup stays on the table (`clear` task) → the sink (`wash`). They never leave unserved; after closing time no one new comes and **the clock holds at closing time** until the shop is empty, then the evening starts.
+- Path following is shared (`sim/npc/walker.ts`): customers walk with the `people` class, workers with `staff` and stop beside their goal (a seat, the counter, the sink).
 - Cups are a fixed pool (`shop.json`); with no clean cup, `brew` waits for a wash. Cups reset to clean on load.
 - Workers and customers use NPC_SPAWN/STATE with def ids `NPC_DEF_CUSTOMER`, `NPC_DEF_PLAYER`, `NPC_DEF_WAITER` (shared/npc.ts); markers and cups come from the TASK and CUP sections.
 - Events: `brewReady`, `served` (now with `wait`), `wages {paid, dayOff}` at sleep.

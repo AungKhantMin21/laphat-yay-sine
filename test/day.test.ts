@@ -25,7 +25,7 @@ describe('shop day', () => {
   it('the clock holds only in the morning and the evening', () => {
     expect(clockHolds(PHASE.morning)).toBe(true);
     expect(clockHolds(PHASE.open)).toBe(false);
-    expect(clockHolds(PHASE.closing)).toBe(false);
+    expect(clockHolds(PHASE.closing)).toBe(true); // M2.5: the clock waits at closing time for the last customers
     expect(clockHolds(PHASE.evening)).toBe(true);
   });
 
