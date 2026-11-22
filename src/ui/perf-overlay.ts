@@ -28,33 +28,13 @@ function pct(a: Float32Array, n: number, p: number): number {
   return sorted[Math.min(n - 1, Math.floor(n * p))]!;
 }
 
-export function installPerfOverlay(src: PerfSource): void {
+export function installPerfOverlay(src: PerfSource, parent: HTMLElement): void {
   const el = document.createElement('pre');
   el.id = 'perf';
-  el.style.cssText = [
-    'position:fixed',
-    'top:calc(env(safe-area-inset-top,0px) + 4px)',
-    'left:calc(env(safe-area-inset-left,0px) + 4px)',
-    'margin:0',
-    'padding:6px 8px',
-    'font:11px/1.35 ui-monospace,Menlo,monospace',
-    'color:#f3e6cf',
-    'background:rgba(20,14,12,.78)',
-    'border-radius:4px',
-    'pointer-events:none',
-    'z-index:50',
-    'white-space:pre',
-  ].join(';');
-  document.body.appendChild(el);
-
-  let visible = true;
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'F3') {
-      visible = !visible;
-      el.style.display = visible ? '' : 'none';
-      e.preventDefault();
-    }
-  });
+  // Inside the debug panel (ui/debug-panel.ts), which F3 opens and closes. It keeps updating while
+  // collapsed (4× a second) so the perf gate can read it.
+  el.style.cssText = 'margin:0;font:inherit;white-space:pre;pointer-events:none';
+  parent.appendChild(el);
 
   // Sim rate is measured over 2 s windows: at 10 Hz a 250 ms window would read 8 or 12.
   let lastSimFrames = src.simFramesReceived();
@@ -63,7 +43,6 @@ export function installPerfOverlay(src: PerfSource): void {
   const mark = (ok: boolean, s: string): string => (ok ? s : `${s} ✗`);
 
   setInterval(() => {
-    if (!visible) return;
     const st = src.stats;
     const n = Math.min(st.count, STATS_SIZE);
     const b = src.budget();

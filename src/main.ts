@@ -47,6 +47,7 @@ import { showFontSample, showTitleCard } from './ui/title-card';
 import { MusicPlayer } from './audio/music';
 import { trackFor, type TrackId } from './audio/music-policy';
 import { installMusicDebug } from './ui/music-debug';
+import { installDebugPanel } from './ui/debug-panel';
 
 translateDom();
 installTouchGuard();
@@ -326,11 +327,7 @@ if (tierState.needsBench) {
 }
 
 if (debug) {
-  showFontSample();
-  installMusicDebug(music, (id) => {
-    musicPinned = id;
-    pickMusic();
-  });
+  const panel = installDebugPanel();
   installPerfOverlay({
     stats: loop.stats,
     drawCalls: () => draws?.last ?? 0,
@@ -346,7 +343,16 @@ if (debug) {
       `npcs    ${npcs.visible} on screen, ${npcs.animated} animated (cap ${TIER_SETTINGS[device.tier].maxAnimatedNpcs})`,
       `chunks  ${chunks.liveTextures} live · day ${view.day} ${String(Math.floor(view.gameMinute / 60) % 24).padStart(2, '0')}:${String(view.gameMinute % 60).padStart(2, '0')}`,
     ],
-  });
+  }, panel.body);
+  installMusicDebug(
+    music,
+    (id) => {
+      musicPinned = id;
+      pickMusic();
+    },
+    panel.body,
+  );
+  showFontSample(panel.body);
 }
 
 // ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it).

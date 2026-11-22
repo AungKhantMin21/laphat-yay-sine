@@ -13,11 +13,9 @@ export function showTitleCard(holdMs = 2500): void {
 }
 
 /** Debug: a line of hard Myanmar shaping cases to eyeball on each device. */
-export function showFontSample(): void {
-  const ui = document.getElementById('ui');
-  if (!ui) return;
+export function showFontSample(parent: HTMLElement): void {
   const el = document.createElement('p');
-  el.className = 'font-sample debug-only';
+  el.className = 'font-sample';
   el.textContent = t('debug.fontSample');
-  ui.appendChild(el);
+  parent.appendChild(el);
 }
