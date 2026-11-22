@@ -1,6 +1,6 @@
 import rawShop from '../src/data/shop.json';
 import { describe, expect, it } from 'vitest';
-import { DRINKS, REACTION, REACTION_NAMES, autoPrice, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, type RawDrinks } from '../src/shared/drinks';
+import { DRINKS, REACTION, REACTION_NAMES, autoPrice, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, type DrinkDef, type RawDrinks } from '../src/shared/drinks';
 import { SHOP, buildShopRules, parseClock, toCoins, type RawShop } from '../src/shared/shop';
 import rawDrinks from '../src/data/drinks.json';
 import my from '../src/ui/i18n/my.json';
@@ -10,9 +10,12 @@ const drink = (key: string) => DRINKS.byKey.get(key)!;
 /** Pours a full-to-target cup with the given milk share. */
 const pourAt = (share: number, fill = DRINKS.pour.fillTarget) => [fill * (1 - share), fill * share] as const;
 
+/** A milk-free drink (none on the menu since 22 Nov 2026) still scores sensibly. */
+const noMilk: DrinkDef = { id: 99, key: 'no_milk', name: 'drink.no_milk', price: 500, milk: 0 };
+
 describe('drink data', () => {
   it('loads the four classic presets with Myanmar names', () => {
-    for (const key of ['pon_man', 'cho_seint', 'kya_seint', 'plain']) expect(DRINKS.byKey.has(key), key).toBe(true);
+    for (const key of ['pon_man', 'cho_seint', 'kya_seint']) expect(DRINKS.byKey.has(key), key).toBe(true);
     for (const d of DRINKS.defs) expect(names[d.name], d.name).toBeTruthy();
   });
 
@@ -70,8 +73,8 @@ describe('pour score', () => {
     expect(pourScore(d, ...pourAt(d.milk, 0.45))).toBeLessThan(pourScore(d, ...pourAt(d.milk)));
   });
 
-  it('plain tea wants no milk at all', () => {
-    const d = drink('plain');
+  it('a no-milk drink wants no milk at all', () => {
+    const d = noMilk;
     expect(pourScore(d, 0.9, 0)).toBe(1);
     expect(pourScore(d, 0.6, 0.3)).toBeLessThan(0.5);
   });
@@ -84,7 +87,7 @@ describe('pour score', () => {
   });
 
   it('negative inputs are treated as nothing poured', () => {
-    expect(pourScore(drink('plain'), 0.9, -0.2)).toBe(1);
+    expect(pourScore(noMilk, 0.9, -0.2)).toBe(1);
   });
 });
 

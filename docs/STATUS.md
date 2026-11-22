@@ -21,6 +21,9 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - **Font:** subset by whole Unicode ranges (Myanmar, Ext-A, Ext-B, Basic Latin, punctuation) with all GSUB/GPOS; never by my.json text. The font has no Latin glyphs, so Latin falls back to the system font.
 - **Music** loads from Vite-hashed URLs; names in music.json are labels only.
 - **M1 scope:** objects come from an **inventory** (start stock in `src/data/start.json`; the M3 furniture shop adds to it). Floor/wall painting is deferred to M3 (paint stall).
+- **Menu (22 Nov 2026):** three paid drinks — ပုံမှန်, ချိုဆိမ့်, ကျဆိမ့်. "plain" was dropped; free ရေနွေးကြမ်း on the tables is a BACKLOG idea (atmosphere, not poured or paid). Prices stay as first set (1,000 / 1,200 / 1,200 kyat; tip ≤ 30 %, auto-serve 70 %).
+- **Customers pay when served** (not after drinking) — accepted 22 Nov 2026.
+- **The user tests the app only after all milestones are finished.** Burmese strings Claude writes are accepted for now; list new ones in each milestone's notes so they can be reviewed together at the end.
 - Each milestone: plan mode first → approval → build step by step → `npm run check` → commit after each working step → push to `main` (the deploy action publishes). Tell the user when something needs doing on GitHub.
 
 ## How to work in this repo
@@ -48,7 +51,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 
 ## Open items carried forward
 
-- Burmese wording written by Claude needs the user's review (`src/ui/i18n/my.json`), incl. `pour.err.gone` (M2.4).
+- Burmese wording written by Claude is accepted for now; the user reviews all of `src/ui/i18n/my.json` when testing after the last milestone.
 - M2.6 hook: main.ts `tap` → `npcs.pickOrder(wx, wy)` returns the customer handle (dev log only now); open the pour UI there, send `startPour`/`serve`/`cancelPour`.
 - Light heat-overlay contrast is low on the placeholder floor.
 - Share links (M6) need compression; save codes are uncompressed (~24 bytes/object).

@@ -10,7 +10,6 @@
   "presets": [
     { "key": "pon_man", "price": 1000, "milk": 0.35 },
     { "key": "cho_seint", "price": 1200, "milk": 0.5 },
-    { "key": "kya_seint", "price": 1200, "milk": 0.22 },
-    { "key": "plain", "price": 500, "milk": 0 }
+    { "key": "kya_seint", "price": 1200, "milk": 0.22 }
   ]
 }

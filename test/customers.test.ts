@@ -52,12 +52,13 @@ describe('customer data', () => {
     expect(pickOrder(0)).toBe(0);
     expect(pickOrder(0.9999)).toBe(DRINKS.defs.length - 1);
     const counts = new Array<number>(DRINKS.defs.length).fill(0);
-    for (let k = 0; k < 1000; k++) counts[pickOrder(k / 1000)]!++;
-    CUSTOMERS.orderWeight.forEach((w, id) => expect(counts[id]).toBe((1000 * w) / CUSTOMERS.orderTotal));
-    const ok = { walkSpeed: 1, looks: 2, milkShift: [0, 0] as [number, number], noiseTaste: [0, 0] as [number, number], orders: { plain: 1 } };
+    const n = CUSTOMERS.orderTotal * 100;
+    for (let k = 0; k < n; k++) counts[pickOrder(k / n)]!++;
+    CUSTOMERS.orderWeight.forEach((w, id) => expect(counts[id]).toBe(100 * w));
+    const ok = { walkSpeed: 1, looks: 2, milkShift: [0, 0] as [number, number], noiseTaste: [0, 0] as [number, number], orders: { pon_man: 1 } };
     expect(() => buildCustomers({ ...ok, orders: { nope: 1 } })).toThrow(/unknown drink/);
     expect(() => buildCustomers({ ...ok, noiseTaste: [1, -1] })).toThrow(/noiseTaste/);
-    expect(() => buildCustomers({ ...ok, orders: { plain: 0 } })).toThrow(/at least one/);
+    expect(() => buildCustomers({ ...ok, orders: { pon_man: 0 } })).toThrow(/at least one/);
   });
 
   it('arrival rate is piecewise by hour, zero before the first entry', () => {

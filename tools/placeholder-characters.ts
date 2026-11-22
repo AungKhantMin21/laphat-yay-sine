@@ -119,7 +119,7 @@ function person(look: Look, back: boolean, step: number, sit: boolean): Canvas {
 }
 
 /** Drink colour in the bubble's cup, by drink key. */
-const CUP: Record<string, string> = { pon_man: 'd9a05b', cho_seint: 'ecd3a5', kya_seint: 'a98258', plain: '8a6644' };
+const CUP: Record<string, string> = { pon_man: 'd9a05b', cho_seint: 'ecd3a5', kya_seint: 'a98258' };
 
 function bubble(inner: (c: Canvas) => void): Canvas {
   const c = new Canvas(13, 13);
