@@ -1,6 +1,7 @@
-// Customers (M2): arrive on the street, choose a seat by utility, order, wait for a cup (poured by
-// the player, or auto-served after a delay), drink, and walk off. Struct of arrays, fixed capacity,
-// handles = index + generation. No allocation per tick: queues and grids are preallocated.
+// Customers: arrive on the street, choose a seat by utility, ask to order, wait for their cup
+// (a person takes the order, brews and serves it: sim/service/), drink, and walk off, leaving the cup.
+// They wait as long as it takes and never leave angry; waiting only lowers the tip.
+// Struct of arrays, fixed capacity, handles = index + generation. No allocation per tick.
 //
 // Seats are the footprint tiles of floor-standing furniture with `seat > 0` (a bench gives 2).
 // A customer reserves one seat tile; if the seat is moved, picked up or sold, they stand and choose
@@ -23,26 +24,37 @@ export const CS = {
   free: 0,
   /** Walking to a reserved seat. */
   toSeat: 1,
-  /** Seated, about to order. */
+  /** Seated, settling in before asking to order. */
   ordering: 2,
-  /** Order bubble up, waiting for a cup. */
+  /** Ordered: drink bubble up, waiting for the cup. */
   waiting: 3,
   drinking: 4,
-  /** Walking off the street (served, displaced after paying, or no free seat). */
+  /** Walking off the street (done, displaced after being served, or no free seat). */
   leaving: 5,
+  /** "?" bubble: waiting for someone to take the order. */
+  asking: 6,
 } as const;
 
 const WALKING = 0;
 const ARRIVED = 1;
 const FAILED = 2;
 
-/** Called when a customer gets a cup; the game takes the payment. `score` is 0 for auto-served cups. */
-export type OnServed = (handle: number, drink: number, poured: boolean, score: number) => void;
+/** What the service (sim/service/service.ts) hears from customers. Indexes, not handles. */
+export interface CustomerHooks {
+  /** Seated and wants to order: post the order job. */
+  asked(i: number): void;
+  /** Done drinking (or displaced after being served): the cup stays at `tile` to be cleared. */
+  finished(i: number, tile: number): void;
+  /** Leaving or vanishing without having been served: drop their jobs, put any cup back. */
+  gone(i: number): void;
+}
 
 export interface Street {
   /** Pavement rows customers walk along; they enter and leave at x = 0 and x = w − 1. Row 0 is the shop side. */
   rows: readonly number[];
 }
+
+const NO_HOOKS: CustomerHooks = { asked() {}, finished() {}, gone() {} };
 
 export class Customers {
   readonly capacity = MAX_NPCS;
@@ -67,8 +79,8 @@ export class Customers {
   readonly exit: Int32Array;
   readonly drink: Uint8Array;
   readonly order: Uint8Array;
-  /** Ticks the current pour has held the auto-serve. */
-  readonly pourT: Uint16Array;
+  /** Sim tick they asked to order (wait time → tip). */
+  readonly askedAt: Uint32Array;
   readonly milkShift: Float32Array;
   readonly noiseTaste: Float32Array;
   readonly look: Uint8Array;
@@ -94,7 +106,11 @@ export class Customers {
   private seatVersion = -1;
 
   private readonly speed: number;
-  private readonly t: { orderDelay: number; autoServe: number; drink: number; pourHold: number; stuck: number };
+  private readonly t: { orderDelay: number; drink: number; stuck: number };
+  /** Current sim tick (set by tick()). */
+  private now = 0;
+  /** Service hooks; set by the game once the service exists. */
+  hooks: CustomerHooks = NO_HOOKS;
 
   constructor(
     private readonly world: SimWorld,
@@ -103,7 +119,6 @@ export class Customers {
     private readonly decide: Rng,
     private readonly cosmetic: Rng,
     private readonly street: Street,
-    private readonly onServed: OnServed,
     private readonly rules: ShopRules = SHOP,
     private readonly cust: CustomerRules = CUSTOMERS,
   ) {
@@ -124,7 +139,7 @@ export class Customers {
     this.exit = new Int32Array(n);
     this.drink = new Uint8Array(n);
     this.order = new Uint8Array(n);
-    this.pourT = new Uint16Array(n);
+    this.askedAt = new Uint32Array(n);
     this.milkShift = new Float32Array(n);
     this.noiseTaste = new Float32Array(n);
     this.look = new Uint8Array(n);
@@ -143,7 +158,7 @@ export class Customers {
     this.speed = cust.walkSpeed / TICK_HZ;
     const s = rules.service;
     const ticks = (min: number): number => Math.max(1, Math.round(min * TICK_HZ));
-    this.t = { orderDelay: ticks(s.orderDelay), autoServe: ticks(s.autoServe), drink: ticks(s.drink), pourHold: ticks(s.pourHold), stuck: ticks(s.stuck) };
+    this.t = { orderDelay: ticks(s.orderDelay), drink: ticks(s.drink), stuck: ticks(s.stuck) };
   }
 
   get count(): number {
@@ -241,7 +256,7 @@ export class Customers {
     this.anim[i] = ANIM.walk;
     this.drink[i] = drink;
     this.order[i] = ORDER.none;
-    this.pourT[i] = 0;
+    this.askedAt[i] = 0;
     this.milkShift[i] = milkShift;
     this.noiseTaste[i] = noiseTaste;
     this.look[i] = this.cosmetic.int(this.cust.looks);
@@ -396,14 +411,18 @@ export class Customers {
       if (!this.alive[i] || this.seat[i]! < 0) continue;
       const o = objs.indexOf(this.seatObj[i]!);
       if (o !== 0 && furn[this.seat[i]!] === o) continue;
-      if (this.order[i] === ORDER.served) this.leave(i);
-      else this.choose(i);
+      if (this.order[i] === ORDER.served) {
+        // Their cup stays where they sat, to be cleared.
+        this.hooks.finished(i, this.seat[i]!);
+        this.leave(i);
+      } else this.choose(i);
     }
   }
 
   // ---- per tick ----
 
-  tick(): void {
+  tick(now: number): void {
+    this.now = now;
     this.checkSeats();
     for (let i = 1; i < this.capacity; i++) {
       if (!this.alive[i]) continue;
@@ -416,20 +435,18 @@ export class Customers {
         }
         case CS.ordering:
           if (++this.stateT[i]! >= this.t.orderDelay) {
-            this.state[i] = CS.waiting;
+            this.state[i] = CS.asking;
             this.stateT[i] = 0;
-            this.setOrder(i, ORDER.waiting);
-          }
-          break;
-        case CS.waiting:
-          if (this.order[i] === ORDER.pouring) {
-            if (++this.pourT[i]! >= this.t.pourHold) this.setOrder(i, ORDER.waiting);
-          } else if (++this.stateT[i]! >= this.t.autoServe) {
-            this.serveIndex(i, false, 0);
+            this.askedAt[i] = this.now;
+            this.setOrder(i, ORDER.ask);
+            this.hooks.asked(i);
           }
           break;
         case CS.drinking:
-          if (++this.stateT[i]! >= this.t.drink) this.leave(i);
+          if (++this.stateT[i]! >= this.t.drink) {
+            this.hooks.finished(i, this.seat[i]!);
+            this.leave(i);
+          }
           break;
         case CS.leaving: {
           const r = this.walkStep(i);
@@ -449,14 +466,18 @@ export class Customers {
     const o = this.order[i];
     if (o === ORDER.served) this.state[i] = CS.drinking;
     else if (o === ORDER.none) this.state[i] = CS.ordering;
+    else if (o === ORDER.ask) this.state[i] = CS.asking;
     else this.state[i] = CS.waiting;
   }
 
   /** Starts walking off the street. Keeps any order state (a served customer stays served). */
   leave(i: number): void {
+    if (this.order[i] !== ORDER.none && this.order[i] !== ORDER.served) {
+      this.hooks.gone(i);
+      this.setOrder(i, ORDER.none);
+    }
     this.releaseSeat(i);
     this.dropPath(i);
-    if (this.order[i] === ORDER.waiting || this.order[i] === ORDER.pouring) this.setOrder(i, ORDER.none);
     this.state[i] = CS.leaving;
     this.stateT[i] = 0;
     this.goal[i] = this.exit[i]!;
@@ -515,45 +536,54 @@ export class Customers {
     return ARRIVED;
   }
 
-  // ---- pouring and serving (player actions) ----
+  // ---- service (called by sim/service/service.ts) ----
 
-  /** The pour minigame opened: the customer's auto-serve waits. Returns an error key or ''. */
-  startPour(h: number): string {
-    const i = this.indexOf(h);
-    if (!i || (this.order[i] !== ORDER.waiting && this.order[i] !== ORDER.pouring)) return 'pour.err.gone';
-    this.pourT[i] = 0;
-    this.setOrder(i, ORDER.pouring);
-    return '';
+  /** The order was taken: the drink bubble shows. Returns false if they aren't asking. */
+  orderTaken(i: number): boolean {
+    if (this.order[i] !== ORDER.ask) return false;
+    this.setOrder(i, ORDER.waiting);
+    if (this.state[i] === CS.asking) {
+      this.state[i] = CS.waiting;
+      this.stateT[i] = 0;
+    }
+    return true;
   }
 
-  cancelPour(h: number): string {
-    const i = this.indexOf(h);
-    if (!i) return 'pour.err.gone';
-    if (this.order[i] === ORDER.pouring) this.setOrder(i, ORDER.waiting);
-    return '';
+  /** Their cup is being poured (true) or the pour stopped (false). */
+  pouring(i: number, on: boolean): void {
+    const o = this.order[i];
+    if (on && o === ORDER.waiting) this.setOrder(i, ORDER.pouring);
+    else if (!on && o === ORDER.pouring) this.setOrder(i, ORDER.waiting);
   }
 
-  /** Serves a poured cup scored `score` (0…1). Returns an error key or ''. */
-  servePoured(h: number, score: number): string {
-    const i = this.indexOf(h);
-    if (!i || (this.order[i] !== ORDER.waiting && this.order[i] !== ORDER.pouring)) return 'pour.err.gone';
-    this.serveIndex(i, true, score);
-    return '';
+  /** Has ordered and not been served yet (the cup can be brought). */
+  awaitingCup(i: number): boolean {
+    const o = this.order[i];
+    return o === ORDER.waiting || o === ORDER.pouring;
   }
 
-  private serveIndex(i: number, poured: boolean, score: number): void {
+  /** The cup arrives: they start drinking (if seated). Returns the wait in game minutes, or −1. */
+  served(i: number): number {
+    if (!this.awaitingCup(i)) return -1;
     this.setOrder(i, ORDER.served);
     if (this.state[i] === CS.waiting) {
       this.state[i] = CS.drinking;
       this.stateT[i] = 0;
     }
-    this.onServed(this.handle(i), this.drink[i]!, poured, score);
+    return (this.now - this.askedAt[i]!) / TICK_HZ;
+  }
+
+  /** Has a seat and is sitting on it (workers bring cups to seated customers only). */
+  seated(i: number): boolean {
+    const s = this.state[i];
+    return s === CS.asking || s === CS.waiting || s === CS.drinking || s === CS.ordering;
   }
 
   // ---- lifecycle ----
 
   despawn(i: number): void {
     if (!this.alive[i]) return;
+    if (this.order[i] !== ORDER.none && this.order[i] !== ORDER.served) this.hooks.gone(i);
     this.releaseSeat(i);
     this.dropPath(i);
     if (this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(i);

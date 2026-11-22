@@ -14,8 +14,14 @@ export interface ShopRules {
     tipFrom: number;
     /** Tip at a perfect pour, as a fraction of the price. */
     tipMax: number;
-    /** An auto-served cup pays this fraction of the price. */
-    autoFactor: number;
+    /**
+     * Tip multiplier by how long the customer waited from asking to order to getting the cup
+     * (game minutes = real seconds): `waitBonus` up to `waitFast`, falling to 0 at `waitSlow`.
+     * Waiting never costs the price, only the tip.
+     */
+    waitFast: number;
+    waitSlow: number;
+    waitBonus: number;
   };
   arrivals: {
     /** Customers per game hour from each start minute (sorted; before the first = 0). */
@@ -26,17 +32,23 @@ export interface ShopRules {
   };
   /** Service timings in game minutes (= real seconds). */
   service: {
-    /** Seated → order bubble. */
+    /** Seated → asks to order. */
     orderDelay: number;
-    /** Order bubble → auto-served cup, unless a pour is in progress. */
-    autoServe: number;
     /** Served → leaves. */
     drink: number;
-    /** A pour in progress holds the auto-serve at most this long (a lost pour UI can't stall the day). */
-    pourHold: number;
     /** A walker who hasn't reached their goal after this long gives up (leaves, or vanishes if leaving). */
     stuck: number;
+    /** How long each job takes once the worker is there. `brew` is for staff (the player pours by hand). */
+    takeOrder: number;
+    pickUp: number;
+    serve: number;
+    clear: number;
+    /** Per cup. */
+    wash: number;
+    brew: number;
   };
+  /** Cups in the shop (a fixed set: washing keeps them coming) and how many a tray carries. */
+  kitchen: { cups: number; tray: number };
   /** Savings tin sizes in kyat, increasing: savings move to the next tin once a tin is full. */
   tin: number[];
   /** Seat utility weights, per design level of each property near the seat. */
@@ -48,6 +60,7 @@ export interface RawShop {
   pay: ShopRules['pay'];
   arrivals: { perHour: { from: string; rate: number }[]; appeal: ShopRules['arrivals']['appeal'] };
   service: ShopRules['service'];
+  kitchen: ShopRules['kitchen'];
   tin: number[];
   seat: ShopRules['seat'];
 }
@@ -82,6 +95,7 @@ export function buildShopRules(d: RawShop): ShopRules {
   if (!(open < close && close < MINUTES_PER_DAY)) throw new Error('hours: open must be before close on the same day');
   const p = d.pay;
   if (!(Number.isInteger(p.coin) && p.coin > 0)) throw new Error('pay.coin: must be a whole number > 0');
+  if (!(p.waitFast < p.waitSlow)) throw new Error('pay: waitFast must be below waitSlow');
   return {
     open,
     close,
@@ -89,10 +103,13 @@ export function buildShopRules(d: RawShop): ShopRules {
       coin: p.coin,
       tipFrom: frac(p.tipFrom, 'pay.tipFrom'),
       tipMax: frac(p.tipMax, 'pay.tipMax'),
-      autoFactor: frac(p.autoFactor, 'pay.autoFactor'),
+      waitFast: num(p.waitFast, 'pay.waitFast', 0, 24 * 60),
+      waitSlow: num(p.waitSlow, 'pay.waitSlow', 0, 24 * 60),
+      waitBonus: num(p.waitBonus, 'pay.waitBonus', 1, 3),
     },
     arrivals: buildArrivals(d.arrivals),
     service: checkAll({ ...d.service }, 'service', 0, 24 * 60),
+    kitchen: buildKitchen(d.kitchen),
     tin: buildTin(d.tin),
     seat: checkAll({ ...d.seat }, 'seat', -100, 100),
   };
@@ -110,6 +127,12 @@ function buildArrivals(a: RawShop['arrivals']): ShopRules['arrivals'] {
   const ap = checkAll({ ...a.appeal }, 'arrivals.appeal', -10, 100);
   if (!(ap.min >= 0 && ap.min <= ap.max)) throw new Error('arrivals.appeal: need 0 ≤ min ≤ max');
   return { from, rate, appeal: ap };
+}
+
+function buildKitchen(k: RawShop['kitchen']): ShopRules['kitchen'] {
+  if (!(Number.isInteger(k.cups) && k.cups >= 1 && k.cups <= 64)) throw new Error('kitchen.cups: whole number 1…64');
+  if (!(Number.isInteger(k.tray) && k.tray >= 1 && k.tray <= 4)) throw new Error('kitchen.tray: whole number 1…4');
+  return { cups: k.cups, tray: k.tray };
 }
 
 function buildTin(t: number[]): number[] {

@@ -54,7 +54,7 @@ describe('NPC mirror', () => {
   }
 
   it('follows spawn, movement, order bubbles and despawn from worker frames', () => {
-    const g = Game.create(2);
+    const g = Game.create(2, false);
     g.builder.give(CATALOG.byKey.get('stool')!.id, 1);
     expect(g.act({ k: 'place', type: CATALOG.byKey.get('stool')!.id, x: 30, y: 15, rot: 0, colour: 0 }).ok).toBe(true);
     const v = new WorldView();
@@ -73,9 +73,12 @@ describe('NPC mirror', () => {
     const moved = Math.hypot(v.npcX[i]! - v.npcPrevX[i]!, v.npcY[i]! - v.npcPrevY[i]!);
     expect(moved).toBeGreaterThan(0);
     expect(moved).toBeLessThan(0.5);
-    for (let k = 0; k < 3000 && g.npcs.state[i] !== CS.waiting; k++) pump(g, v, 1);
+    for (let k = 0; k < 3000 && g.npcs.state[i] !== CS.asking; k++) pump(g, v, 1);
     pump(g, v, 1);
     expect(v.npcAnim[i]).toBe(ANIM.sit);
+    expect(v.npcOrderState[i]).toBe(ORDER.ask);
+    g.service.takeOrder(h);
+    pump(g, v, 1);
     expect(v.npcOrderState[i]).toBe(ORDER.waiting);
     expect(v.npcDrink[i]).toBe(g.npcs.drink[i]);
     // Standing still: prev catches up with cur, so there is no drift.

@@ -1,5 +1,5 @@
 // Evening panel and sleep screen (M2.8). Once the last customer leaves, a small panel shows the
-// day (served, poured vs auto, earnings, tips, the best reaction) with a Sleep button. Sleeping
+// day (served, cups the player poured, earnings, tips, the best reaction) with a Sleep button. Sleeping
 // saves (worker) and shows the sleep screen with one teaser line; "morning" closes it.
 import './day-end.css';
 import { DRINKS, REACTION_NAMES, reactionFor } from '../../shared/drinks';
@@ -56,7 +56,7 @@ export function installDayEnd(deps: DayEndDeps): DayEndUi {
     const s = p.today;
     const rows = [
       t('evening.served', { n: s.served }),
-      t('evening.poured', { poured: s.poured, auto: s.served - s.poured }),
+      t('evening.poured', { poured: s.poured }),
       t('evening.earned', { n: s.earned }),
     ];
     if (s.tips > 0) rows.push(t('evening.tips', { n: s.tips }));

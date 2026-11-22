@@ -1,6 +1,6 @@
 import rawShop from '../src/data/shop.json';
 import { describe, expect, it } from 'vitest';
-import { DRINKS, REACTION, REACTION_NAMES, autoPrice, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, type DrinkDef, type RawDrinks } from '../src/shared/drinks';
+import { DRINKS, REACTION, REACTION_NAMES, buildDrinks, pourScore, pouredPrice, reactionFor, tipFor, waitFactor, type DrinkDef, type RawDrinks } from '../src/shared/drinks';
 import { SHOP, buildShopRules, parseClock, tinLevel, toCoins, type RawShop } from '../src/shared/shop';
 import rawDrinks from '../src/data/drinks.json';
 import my from '../src/ui/i18n/my.json';
@@ -100,7 +100,7 @@ describe('payment', () => {
   it('tips: none below tipFrom, the most at a perfect pour, whole coins, never decreasing', () => {
     const d = drink('cho_seint');
     expect(tipFor(d, SHOP.pay.tipFrom - 0.01)).toBe(0);
-    expect(tipFor(d, 1)).toBe(toCoins(d.price * SHOP.pay.tipMax));
+    expect(tipFor(d, 1)).toBe(toCoins(d.price * SHOP.pay.tipMax * SHOP.pay.waitBonus)); // served at once
     let prev = 0;
     for (let s = 0; s <= 1.0001; s += 0.01) {
       const tip = tipFor(d, s);
@@ -110,12 +110,23 @@ describe('payment', () => {
     }
   });
 
-  it('auto-serve pays less than a poured cup, but still pays', () => {
-    for (const d of DRINKS.defs) {
-      expect(autoPrice(d)).toBeGreaterThan(0);
-      expect(autoPrice(d)).toBeLessThan(pouredPrice(d));
-      expect(autoPrice(d) % SHOP.pay.coin).toBe(0);
+  it('waiting only lowers the tip: a bonus when fast, falling to nothing, never negative', () => {
+    const { waitFast, waitSlow, waitBonus } = SHOP.pay;
+    expect(waitFactor(0)).toBe(waitBonus);
+    expect(waitFactor(waitFast)).toBe(waitBonus);
+    expect(waitFactor(waitSlow)).toBe(0);
+    expect(waitFactor(waitSlow * 10)).toBe(0);
+    let prev = Infinity;
+    for (let w = 0; w <= waitSlow + 10; w += 5) {
+      const f = waitFactor(w);
+      expect(f).toBeLessThanOrEqual(prev);
+      expect(f).toBeGreaterThanOrEqual(0);
+      prev = f;
     }
+    const d = drink('kya_seint');
+    expect(tipFor(d, 1, 0)).toBeGreaterThan(tipFor(d, 1, (waitFast + waitSlow) / 2));
+    expect(tipFor(d, 1, waitSlow)).toBe(0);
+    for (const dd of DRINKS.defs) expect(pouredPrice(dd)).toBe(dd.price); // the price never depends on the wait
   });
 
   it('reactions follow the score thresholds', () => {

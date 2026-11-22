@@ -118,23 +118,32 @@ export function pouredPrice(drink: DrinkDef): number {
   return drink.price;
 }
 
-/** Tip for a poured cup: 0 below `tipFrom`, rising to `tipMax` × price at a perfect pour. */
-export function tipFor(drink: DrinkDef, score: number, rules: ShopRules = SHOP): number {
+/**
+ * Tip multiplier for a wait of `waitMin` game minutes (= real seconds) between asking to order and
+ * getting the cup: `waitBonus` when fast, falling linearly to 0 when slow. Never below 0.
+ */
+export function waitFactor(waitMin: number, rules: ShopRules = SHOP): number {
+  const { waitFast, waitSlow, waitBonus } = rules.pay;
+  if (waitMin <= waitFast) return waitBonus;
+  if (waitMin >= waitSlow) return 0;
+  return (waitBonus * (waitSlow - waitMin)) / (waitSlow - waitFast);
+}
+
+/**
+ * Tip for a cup: 0 below `tipFrom`, rising to `tipMax` × price at a perfect pour, times the wait
+ * factor (fast service raises it, a long wait lowers it to nothing; the price is always paid).
+ */
+export function tipFor(drink: DrinkDef, score: number, waitMin = 0, rules: ShopRules = SHOP): number {
   const { tipFrom, tipMax } = rules.pay;
   if (score < tipFrom || tipFrom >= 1) return 0;
   const k = (Math.min(1, score) - tipFrom) / (1 - tipFrom);
-  return toCoins(drink.price * tipMax * k, rules);
-}
-
-/** An auto-served cup (the player didn't pour): a lower price, no tip. */
-export function autoPrice(drink: DrinkDef, rules: ShopRules = SHOP): number {
-  return toCoins(drink.price * rules.pay.autoFactor, rules);
+  return toCoins(drink.price * tipMax * k * waitFactor(waitMin, rules), rules);
 }
 
 /** Customer reaction on the wire (i18n keys `react.<name>`). */
-export const REACTION = { great: 0, good: 1, ok: 2, auto: 3 } as const;
+export const REACTION = { great: 0, good: 1, ok: 2 } as const;
 export type Reaction = (typeof REACTION)[keyof typeof REACTION];
-export const REACTION_NAMES = ['great', 'good', 'ok', 'auto'] as const;
+export const REACTION_NAMES = ['great', 'good', 'ok'] as const;
 
 export function reactionFor(score: number, drinks: Drinks = DRINKS): Reaction {
   if (score >= drinks.reactions.great) return REACTION.great;

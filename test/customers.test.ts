@@ -3,7 +3,11 @@ import { Game } from '../src/sim/game';
 import { CATALOG } from '../src/shared/catalog';
 import { FrameWriter, readFrame, type FrameHandler } from '../src/shared/diff';
 import { PHASE } from '../src/shared/day';
-import { DRINKS, REACTION, autoPrice, tipFor } from '../src/shared/drinks';
+import { DRINKS, REACTION, tipFor } from '../src/shared/drinks';
+import { NONE } from '../src/shared/ids';
+import { CUP } from '../src/sim/service/cups';
+import { TASK } from '../src/sim/service/task-board';
+import { Bot } from './bot';
 import { CUSTOMERS, buildCustomers, pickOrder } from '../src/shared/customers';
 import { SHOP, arrivalRate } from '../src/shared/shop';
 import { ORDER } from '../src/shared/npc';
@@ -131,67 +135,143 @@ describe('customers', () => {
     expect(g.npcs.state[g.npcs.indexOf(h)]).toBe(CS.leaving);
   });
 
-  it('walks in, sits, orders, is auto-served after the delay at the lower price, drinks and leaves', () => {
+  it('walks in, sits, asks, waits as long as it takes; a person takes the order, brews, serves; they pay, drink and leave the cup', () => {
     const g = game();
     place(g, 'stool', 30, 15);
+    const sv = g.service;
     const money0 = g.builder.money;
     const h = g.npcs.spawn();
     const i = g.npcs.indexOf(h);
     expect(g.npcs.state[i]).toBe(CS.toSeat);
     expect(g.customers()).toBe(1);
-    until(g, () => g.npcs.state[i] === CS.waiting);
+    until(g, () => g.npcs.state[i] === CS.asking);
     expect(g.npcs.tile[i]).toBe(tileOf(30, 15));
+    expect(g.npcs.order[i]).toBe(ORDER.ask);
+    expect(sv.board.find(TASK.order, h)).not.toBe(NONE);
+    // Nobody comes: they keep waiting, calmly, for a long time (no auto-serve, no leaving).
+    steps(g, 600 * TICK_HZ);
+    expect(g.npcs.state[i]).toBe(CS.asking);
+    expect(g.builder.money).toBe(money0);
+    // Take the order → brew job; brew → cup on the counter and a serve job.
+    expect(sv.takeOrder(h)).toBe('');
     expect(g.npcs.order[i]).toBe(ORDER.waiting);
+    expect(sv.board.find(TASK.order, h)).toBe(NONE);
+    expect(sv.board.find(TASK.brew, h)).not.toBe(NONE);
+    expect(sv.brew(h, 1, true)).toBe('');
+    expect(sv.cups.countIn(CUP.counter)).toBe(1);
+    const cup = sv.cups.forCustomer.indexOf(h);
+    expect(sv.board.find(TASK.serve, cup)).not.toBe(NONE);
+    // Carry and serve: full price, but no tip after waiting this long.
     g.events.length = 0;
-    const waited = until(g, () => g.npcs.state[i] !== CS.waiting);
-    expect(waited).toBe(SHOP.service.autoServe * TICK_HZ);
+    expect(sv.pickUp(cup, 1)).toBe('');
+    expect(sv.serve(cup, 1)).toBe('');
     const drink = DRINKS.defs[g.npcs.drink[i]!]!;
-    expect(g.builder.money - money0).toBe(autoPrice(drink));
-    expect(g.events[0]).toEqual({ k: 'served', id: h, drink: drink.id, poured: false, price: autoPrice(drink), tip: 0, reaction: REACTION.auto });
-    expect(g.events[1]).toEqual({ k: 'money', delta: autoPrice(drink), total: g.builder.money });
-    expect(g.day.today).toMatchObject({ served: 1, poured: 0, earned: autoPrice(drink) });
+    expect(g.builder.money - money0).toBe(drink.price);
+    expect(g.events[0]).toMatchObject({ k: 'served', id: h, drink: drink.id, poured: true, price: drink.price, tip: 0, reaction: REACTION.great });
+    expect((g.events[0] as Extract<SimEvent, { k: 'served' }>).wait).toBeGreaterThanOrEqual(600);
+    expect(g.day.today).toMatchObject({ served: 1, poured: 1, earned: drink.price, best: 100 });
     expect(g.npcs.state[i]).toBe(CS.drinking);
+    expect(sv.cups.place[cup]).toBe(CUP.table);
+    // Done drinking: they leave, the cup stays to be cleared to the sink and washed.
     until(g, () => g.npcs.state[i] === CS.leaving);
     expect(g.customers()).toBe(0);
+    expect(sv.board.find(TASK.clear, cup)).not.toBe(NONE);
+    expect(sv.pickUpDirty(cup, 1)).toBe('');
+    expect(sv.dropAtSink(cup, 1)).toBe('');
+    expect(sv.board.find(TASK.wash, 0)).not.toBe(NONE);
+    expect(sv.washOne()).toBe(true);
+    expect(sv.cups.place[cup]).toBe(CUP.shelf);
+    expect(sv.board.find(TASK.wash, 0)).toBe(NONE);
     until(g, () => !g.npcs.indexOf(h));
     expect(g.npcs.count).toBe(0);
   });
 
-  it('an open pour holds the auto-serve; a poured cup pays full price plus tip', () => {
+  it('fast service earns a bigger tip than a slow one; the price is always the same', () => {
+    const tipAfter = (waitSteps: number) => {
+      const g = game(3);
+      place(g, 'stool', 30, 15);
+      const h = g.npcs.spawn();
+      const i = g.npcs.indexOf(h);
+      until(g, () => g.npcs.state[i] === CS.asking);
+      steps(g, waitSteps);
+      g.service.takeOrder(h);
+      g.service.brew(h, 1, true);
+      const cup = g.service.cups.forCustomer.indexOf(h);
+      g.service.pickUp(cup, 1);
+      g.events.length = 0;
+      g.service.serve(cup, 1);
+      return g.events[0] as Extract<SimEvent, { k: 'served' }>;
+    };
+    const fast = tipAfter(5 * TICK_HZ);
+    const mid = tipAfter(80 * TICK_HZ);
+    const slow = tipAfter(400 * TICK_HZ);
+    expect(fast.tip).toBeGreaterThan(mid.tip);
+    expect(mid.tip).toBeGreaterThan(slow.tip);
+    expect(slow.tip).toBe(0);
+    expect(fast.price).toBe(slow.price);
+  });
+
+  it('the player pours at the counter through the pour actions; a poured cup pays full price plus tip', () => {
     const g = game();
     place(g, 'stool', 30, 15);
     const h = g.npcs.spawn();
     const i = g.npcs.indexOf(h);
-    until(g, () => g.npcs.state[i] === CS.waiting);
+    until(g, () => g.npcs.state[i] === CS.asking);
+    expect(g.act({ k: 'startPour', id: h }).ok).toBe(false); // the order hasn't been taken
+    g.service.takeOrder(h);
     expect(g.act({ k: 'startPour', id: h }).ok).toBe(true);
     expect(g.npcs.order[i]).toBe(ORDER.pouring);
-    steps(g, SHOP.service.autoServe * TICK_HZ + 10);
-    expect(g.npcs.state[i]).toBe(CS.waiting); // still waiting for the player's cup
+    expect(g.act({ k: 'cancelPour', id: h }).ok).toBe(true);
+    expect(g.npcs.order[i]).toBe(ORDER.waiting);
+    g.act({ k: 'startPour', id: h });
     const drink = DRINKS.defs[g.npcs.drink[i]!]!;
     const target = Math.min(1, Math.max(0, drink.milk + g.npcs.milkShift[i]!));
-    const money0 = g.builder.money;
-    g.events.length = 0;
     expect(g.act({ k: 'serve', id: h, tea: 0.9 * (1 - target), milk: 0.9 * target }).ok).toBe(true);
-    const tip = tipFor(drink, 1);
+    const cup = g.service.cups.forCustomer.indexOf(h);
+    expect(g.service.cups.score[cup]).toBe(1);
+    g.service.pickUp(cup, 1);
+    g.events.length = 0;
+    const money0 = g.builder.money;
+    g.service.serve(cup, 1);
+    const tip = tipFor(drink, 1, 0);
     expect(tip).toBeGreaterThan(0);
     expect(g.builder.money - money0).toBe(drink.price + tip);
     expect(g.events[0]).toMatchObject({ k: 'served', poured: true, price: drink.price, tip, reaction: REACTION.great });
-    expect(g.day.today).toMatchObject({ served: 1, poured: 1, best: 100, tips: tip });
-    expect(g.npcs.state[i]).toBe(CS.drinking);
-    // Serving twice, or a gone customer, is refused.
-    expect(g.act({ k: 'serve', id: h, tea: 0.5, milk: 0.4 })).toEqual({ ok: false, reason: 'pour.err.gone' });
+    // Brewing twice, or for a gone customer, is refused.
+    expect(g.act({ k: 'serve', id: h, tea: 0.5, milk: 0.4 })).toEqual({ ok: false, reason: 'serve.err.gone' });
     expect(g.act({ k: 'startPour', id: 12345 }).ok).toBe(false);
   });
 
-  it('a lost pour UI cannot stall the customer forever', () => {
+  it('no clean cup: brewing waits until someone washes', () => {
     const g = game();
+    const sv = g.service;
+    // Every cup dirty in the sink.
+    for (let c = 1; c <= sv.cups.count; c++) sv.cups.move(c, CUP.sink, -1, 0);
     place(g, 'stool', 30, 15);
     const h = g.npcs.spawn();
-    const i = g.npcs.indexOf(h);
-    until(g, () => g.npcs.state[i] === CS.waiting);
-    g.act({ k: 'startPour', id: h });
-    const n = until(g, () => g.npcs.order[i] === ORDER.served);
-    expect(n).toBeLessThanOrEqual((SHOP.service.pourHold + SHOP.service.autoServe) * TICK_HZ + 1);
+    until(g, () => g.npcs.state[g.npcs.indexOf(h)] === CS.asking);
+    sv.takeOrder(h);
+    expect(sv.canBrew()).toBe(false);
+    expect(sv.brew(h, 1, true)).toBe('serve.err.noCups');
+    expect(sv.washOne()).toBe(true);
+    expect(sv.brew(h, 1, true)).toBe('');
+  });
+
+  it('a customer who leaves unserved (their seat was sold, no other seat) takes no cup: it goes back on the shelf', () => {
+    const g = game();
+    const sv = g.service;
+    const stool = place(g, 'stool', 30, 15);
+    const h = g.npcs.spawn();
+    until(g, () => g.npcs.state[g.npcs.indexOf(h)] === CS.asking);
+    sv.takeOrder(h);
+    sv.brew(h, 1, true);
+    const cup = sv.cups.forCustomer.indexOf(h);
+    expect(g.act({ k: 'sell', id: g.world.objects.handle(stool) }).ok).toBe(true);
+    steps(g, 1);
+    expect(g.npcs.state[g.npcs.indexOf(h)]).toBe(CS.leaving);
+    expect(sv.cups.place[cup]).toBe(CUP.shelf);
+    expect(sv.board.find(TASK.serve, cup)).toBe(NONE);
+    expect(sv.board.find(TASK.brew, h)).toBe(NONE);
   });
 
   it('picking up an occupied seat makes the customer choose again; a served one leaves instead', () => {
@@ -200,7 +280,9 @@ describe('customers', () => {
     place(g, 'stool', 32, 15);
     const h = g.npcs.spawn();
     const i = g.npcs.indexOf(h);
-    until(g, () => g.npcs.state[i] === CS.waiting);
+    until(g, () => g.npcs.state[i] === CS.asking);
+    g.service.takeOrder(h);
+    expect(g.npcs.state[i]).toBe(CS.waiting);
     const first = g.npcs.seat[i]!;
     const firstObj = g.world.state.occ.furniture[first]!;
     expect(g.act({ k: 'pickup', id: g.world.objects.handle(firstObj) }).ok).toBe(true);
@@ -209,13 +291,17 @@ describe('customers', () => {
     expect(g.npcs.order[i]).toBe(ORDER.waiting); // the order stands
     expect(g.npcs.seat[i]).not.toBe(first);
     until(g, () => g.npcs.state[i] === CS.waiting);
-    // Served and drinking: selling the seat sends them home.
-    g.act({ k: 'serve', id: h, tea: 0.6, milk: 0.3 });
+    // Served and drinking: selling the seat sends them home; their cup stays to be cleared.
+    g.service.brew(h, 0.8, true);
+    const cup = g.service.cups.forCustomer.indexOf(h);
+    g.service.pickUp(cup, 1);
+    expect(g.service.serve(cup, 1)).toBe('');
     expect(g.npcs.state[i]).toBe(CS.drinking);
     const second = g.world.state.occ.furniture[g.npcs.seat[i]!]!;
     expect(g.act({ k: 'sell', id: g.world.objects.handle(second) }).ok).toBe(true);
     steps(g, 1);
     expect(g.npcs.state[i]).toBe(CS.leaving);
+    expect(g.service.board.find(TASK.clear, cup)).not.toBe(NONE);
     expect(a).toBeGreaterThan(0);
   });
 
@@ -229,7 +315,7 @@ describe('customers', () => {
     // Wall off row 16 except one gap: the walker must go round.
     for (let x = 24; x < 36; x++) if (x !== 34) place(g, 'table', x, 16);
     expect(g.act({ k: 'move', id: g.world.objects.handle(s), x: 28, y: 13, rot: 0 }).ok).toBe(true);
-    until(g, () => g.npcs.state[i] === CS.waiting);
+    until(g, () => g.npcs.state[i] === CS.asking);
     expect(g.npcs.tile[i]).toBe(tileOf(28, 13));
   });
 
@@ -250,7 +336,7 @@ describe('customers', () => {
       tilePatch() {},
       world() {},
     } as FrameHandler;
-    for (let k = 0; k < 2000 && !log.includes(`order ${ORDER.waiting}`); k++) {
+    for (let k = 0; k < 2000 && !log.includes(`order ${ORDER.ask}`); k++) {
       writer.begin(buf, g.sim.tick, g.sim.gameMinute);
       g.step(writer);
       buf = writer.finish();
@@ -258,7 +344,7 @@ describe('customers', () => {
     }
     expect(log[0]).toBe('spawn true');
     expect(log).toContain('state');
-    expect(log).toContain(`order ${ORDER.waiting}`);
+    expect(log).toContain(`order ${ORDER.ask}`);
   });
 
   it('sleep sends everyone home', () => {
@@ -290,9 +376,11 @@ describe('a headless shop day', () => {
   function runDay(g: Game): { events: SimEvent[]; maxInShop: number } {
     const events: SimEvent[] = [];
     let maxInShop = 0;
+    const bot = new Bot(g, 15); // one job every 1.5 s, like a busy player
     expect(g.act({ k: 'openShop' }).ok).toBe(true);
     for (let k = 0; k < 24 * 60 * TICK_HZ && g.day.phase !== PHASE.evening; k++) {
       steps(g, 1);
+      bot.tick();
       maxInShop = Math.max(maxInShop, g.customers());
       events.push(...g.events.splice(0));
     }

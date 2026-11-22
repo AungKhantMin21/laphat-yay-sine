@@ -57,10 +57,11 @@ export type SimEvent =
   /** The day that just ended (sent on sleep). */
   | { k: 'dayEnd'; day: number; stats: DayStats }
   /**
-   * Customer `id` (NPC handle) got drink `drink` and paid `price` + `tip` kyat.
-   * `poured` = the player poured it (else auto-served); `reaction` = shared/drinks.ts REACTION.
+   * Customer `id` (NPC handle) got drink `drink` and paid `price` + `tip` kyat after waiting `wait`
+   * game minutes (= real seconds) since asking to order. `poured` = the player poured it (else staff
+   * brewed it); `reaction` = shared/drinks.ts REACTION.
    */
-  | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number }
+  | { k: 'served'; id: number; drink: number; poured: boolean; price: number; tip: number; reaction: number; wait: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
   | { k: 'teaser'; key: string; drink: number };
 

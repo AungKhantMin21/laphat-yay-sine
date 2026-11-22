@@ -6,7 +6,10 @@ import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
 import { createM1Area, SPAWN_ROWS } from './area';
 import { ACCESS } from '../shared/rules/access';
-import { DRINKS, REACTION, autoPrice, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
+import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
+import { NONE } from '../shared/ids';
+import { Service } from './service/service';
+import { TASK } from './service/task-board';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
@@ -31,6 +34,8 @@ export class Game {
   readonly walkStaff: WalkGrid;
   readonly paths: PathFinder;
   readonly npcs: Customers;
+  /** Task board, cups and the rules of each service job. */
+  readonly service: Service;
   /** Last game minute an arrival was rolled for (one roll per minute). */
   private arrivalMinute = -1;
 
@@ -45,16 +50,18 @@ export class Game {
     this.walk = new WalkGrid(world.state.area, world.state.occ, ACCESS.people);
     this.walkStaff = new WalkGrid(world.state.area, world.state.occ, ACCESS.staff);
     this.paths = new PathFinder([this.walk, this.walkStaff]);
-    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS }, (h, drink, poured, score) =>
-      this.pay(h, drink, poured, score),
-    );
+    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS });
+    this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
   }
 
-  /** A customer got a cup: money into the tin, today's stats, events for the main thread. */
-  private pay(id: number, drinkId: number, poured: boolean, score: number): void {
+  /**
+   * A customer got their cup: the full price plus a tip from the pour score and the wait, into the
+   * tin; today's stats; events for the main thread.
+   */
+  private pay(id: number, drinkId: number, score: number, wait: number, poured: boolean): void {
     const drink = DRINKS.defs[drinkId]!;
-    const price = poured ? pouredPrice(drink) : autoPrice(drink);
-    const tip = poured ? tipFor(drink, score) : 0;
+    const price = pouredPrice(drink);
+    const tip = tipFor(drink, score, wait);
     const b = this.builder;
     b.money += price + tip;
     b.changed = true;
@@ -67,8 +74,8 @@ export class Game {
     t.earned += price + tip;
     t.tips += tip;
     this.day.changed = true;
-    const reaction = poured ? reactionFor(score) : REACTION.auto;
-    this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction });
+    const reaction = reactionFor(score);
+    this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction, wait: Math.round(wait) });
     this.events.push({ k: 'money', delta: price + tip, total: b.money });
   }
 
@@ -220,17 +227,24 @@ export class Game {
           if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
         }
         this.npcs.clear(); // the last passers-by go home too
+        this.service.endOfDay(); // cups washed overnight, no jobs left
         return { ok: true };
       }
-      case 'startPour':
-        return res(this.npcs.startPour(a.id));
+      // The player's brew at the counter (S5 routes these through the player's worker).
+      case 'startPour': {
+        if (!this.npcs.indexOf(a.id) || this.service.board.find(TASK.brew, a.id) === NONE) return { ok: false, reason: 'pour.err.gone' };
+        if (!this.service.canBrew()) return { ok: false, reason: 'serve.err.noCups' };
+        this.service.pouring(a.id, true);
+        return { ok: true };
+      }
       case 'cancelPour':
-        return res(this.npcs.cancelPour(a.id));
+        this.service.pouring(a.id, false);
+        return { ok: true };
       case 'serve': {
         const i = this.npcs.indexOf(a.id);
         if (!i || !Number.isFinite(a.tea) || !Number.isFinite(a.milk)) return { ok: false, reason: 'pour.err.gone' };
         const score = pourScore(DRINKS.defs[this.npcs.drink[i]!]!, a.tea, a.milk, this.npcs.milkShift[i]!);
-        return res(this.npcs.servePoured(a.id, score));
+        return res(this.service.brew(a.id, score, true));
       }
       default:
         return { ok: false, reason: 'error.notYet' };
@@ -280,7 +294,8 @@ export class Game {
         if (guest >= 0) this.npcs.spawn(guest);
       }
     }
-    this.npcs.tick();
+    this.service.tick(this.sim.tick);
+    this.npcs.tick(this.sim.tick);
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);
