@@ -199,6 +199,14 @@ export class Customers {
     return n;
   }
 
+  /**
+   * Closing time (M3): anyone still on their way to a seat sees the shutters coming down and goes
+   * home (they haven't ordered; nothing is lost). Seated customers stay and are served as usual.
+   */
+  closing(): void {
+    for (let i = 1; i < this.capacity; i++) if (this.alive[i] && this.state[i] === CS.toSeat) this.leave(i);
+  }
+
   // ---- arrivals ----
 
   /** Seats in the shop (seat tiles of floor-standing seating furniture). */

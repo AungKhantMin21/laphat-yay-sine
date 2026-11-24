@@ -1,7 +1,7 @@
 // M3: a reload mid-errand keeps the shopping. Walks to the wet market, buys a pack to carry and
 // one to deliver, screenshots the parcel in hand, saves, reloads and compares. The player isn't
 // saved and wakes up in the shop, so the carried pack is put away at once: it must be on the shelf
-// (tea +1 pack), the delivery still on its way, money and today's market rows unchanged.
+// (tea +1 pack of 50), the delivery still on its way, money and today's market rows unchanged.
 // Usage: npm run dev, then node tools/dev/errand-reload.mjs http://localhost:5173/games/laphat-yay-sine/ [shot.png]
 import { chromium } from 'playwright-core';
 
@@ -49,7 +49,7 @@ const kept =
   JSON.stringify(A.deliveries) === JSON.stringify(B.deliveries) &&
   JSON.stringify(A.market) === JSON.stringify(B.market) &&
   A.carry.length === 0 &&
-  A.stock[0] === B.stock[0] + 20 * B.carry[0].qty;
+  A.stock[0] === B.stock[0] + 50 * B.carry[0].qty; // a tea pack holds 50 portions (ingredients.json)
 console.log(JSON.stringify({ bought, before: B, after: A, kept }));
 console.log(errs.length ? errs.join('\n') : 'no errors');
 await b.close();

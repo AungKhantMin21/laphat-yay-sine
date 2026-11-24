@@ -7,9 +7,9 @@
     "market": {
       "rows": 3,
       "pool": [
-        { "ingredient": "tea", "qty": [6, 10] },
-        { "ingredient": "condensed", "qty": [6, 10] },
-        { "ingredient": "evaporated", "qty": [3, 6] }
+        { "ingredient": "tea", "qty": [3, 6] },
+        { "ingredient": "condensed", "qty": [3, 6] },
+        { "ingredient": "evaporated", "qty": [2, 4] }
       ]
     },
     "books": {

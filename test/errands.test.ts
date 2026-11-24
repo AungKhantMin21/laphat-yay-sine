@@ -10,6 +10,7 @@ import { DIR } from '../src/shared/npc';
 import type { SimEvent } from '../src/shared/protocol';
 import { PLAYER, QUEUE_MAX, WS } from '../src/sim/npc/workers';
 import { TASK } from '../src/sim/service/task-board';
+import { Bot } from './bot';
 
 let buf = new ArrayBuffer(1 << 16);
 const writer = new FrameWriter();
@@ -117,5 +118,67 @@ describe('walking errands', () => {
       return out;
     };
     expect(run()).toEqual(run());
+  });
+});
+
+describe('three days with a morning market trip', () => {
+  /** Each morning: walk to the wet market, buy what the shelf needs (carry), walk back, open; a bot serves. */
+  function play(seed: number): { money: number; stock: number[]; served: number; trips: number }[] {
+    const g = Game.create(seed);
+    const bot = new Bot(g, 0);
+    const out: { money: number; stock: number[]; served: number; trips: number }[] = [];
+    for (let d = 0; d < 3; d++) {
+      let trips = 0;
+      untilIdle(g, 1);
+      expect(g.act({ k: 'visit', shop: market.id }).ok).toBe(true);
+      untilIdle(g, 3000);
+      // Two packs of each ingredient the shelf is lowest on, within the load cap.
+      const rows = g.market.rows[market.id]!;
+      const order = rows.map((r, k) => k).sort((a, b) => g.service.stock.count[rows[a]!.id]! - g.service.stock.count[rows[b]!.id]!);
+      for (const k of order) if (g.act({ k: 'buy', shop: market.id, item: k, qty: 1 }).ok) trips++;
+      expect(g.act({ k: 'walkTo', x: 31, y: 18 }).ok).toBe(true);
+      untilIdle(g, 3000);
+      expect(g.market.carry).toEqual([]);
+      expect(g.act({ k: 'openShop' }).ok).toBe(true);
+      for (let k = 0; k < 24 * 60 * 10 && g.day.phase !== PHASE.evening; k++) {
+        steps(g, 1);
+        bot.tick();
+      }
+      const served = g.day.today.served;
+      expect(g.act({ k: 'sleep' }).ok).toBe(true);
+      out.push({ money: g.builder.money, stock: Array.from(g.service.stock.count), served, trips });
+    }
+    return out;
+  }
+
+  it('is deterministic, serves every day and the shelf never runs dry', () => {
+    const a = play(8);
+    expect(play(8)).toEqual(a);
+    for (const d of a) {
+      expect(d.served).toBeGreaterThan(15);
+      expect(d.trips).toBeGreaterThan(0);
+      expect(Math.min(...d.stock)).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('closing time on a big map', () => {
+  it('customers still walking to a seat go home when the shop closes; seated ones are served first', () => {
+    const g = Game.create(9);
+    g.act({ k: 'openShop' });
+    for (let k = 0; k < 4; k++) g.npcs.spawn();
+    const states = (): number[] => Array.from({ length: g.npcs.capacity }, (_, i) => (g.npcs.alive[i] ? g.npcs.state[i]! : -1));
+    const seated = (st: number[]): number[] => st.flatMap((s, i) => (s >= 2 && s !== 5 ? [i] : []));
+    const walking = (st: number[]): number[] => st.flatMap((s, i) => (s === 1 ? [i] : []));
+    for (let k = 0; k < 3000 && !(seated(states()).length > 0 && walking(states()).length > 0); k++) steps(g, 1);
+    const sit = seated(states());
+    const walk = walking(states());
+    expect(sit.length).toBeGreaterThan(0);
+    expect(walk.length).toBeGreaterThan(0);
+    g.sim.jumpTo(g.sim.day * 1440 + 17 * 60);
+    steps(g, 2);
+    expect(g.day.phase).toBe(PHASE.closing);
+    for (const i of walk) expect(g.npcs.state[i]).toBe(5); // leaving
+    for (const i of sit) expect(g.npcs.state[i]).not.toBe(5);
   });
 });

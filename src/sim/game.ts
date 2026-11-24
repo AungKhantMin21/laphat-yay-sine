@@ -55,6 +55,8 @@ export class Game {
   staff: StaffMember[] = [];
   /** Last game minute an arrival was rolled for (one roll per minute). */
   private arrivalMinute = -1;
+  /** Day phase seen last step (closing starts: walkers still on their way go home). */
+  private lastPhase = -1;
   /** The neighbourhood shops: today's stock, goods in hand, deliveries (M3). */
   readonly market: Market;
 
@@ -561,6 +563,8 @@ export class Game {
     this.workers.tick(this.sim.tick);
     this.market.refresh(this.sim.day);
     this.goods(false);
+    if (day.phase === PHASE.closing && this.lastPhase !== PHASE.closing) this.npcs.closing();
+    this.lastPhase = day.phase;
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);
