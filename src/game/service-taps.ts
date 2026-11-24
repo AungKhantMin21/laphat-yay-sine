@@ -5,7 +5,7 @@ import { ORDER } from '../shared/npc';
 import type { WorldView } from './view';
 
 /** Task kinds (sim/service/task-board.ts TASK; they travel in the TASK frame section). */
-export const TASK_KIND = { order: 1, brew: 2, serve: 3, clear: 4, wash: 5 } as const;
+export const TASK_KIND = { order: 1, brew: 2, serve: 3, clear: 4, wash: 5, go: 7, visit: 8 } as const;
 
 /** CUP places (sim/service/cups.ts). */
 const CUP_COUNTER = 1;

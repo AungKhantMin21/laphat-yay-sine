@@ -17,7 +17,8 @@ import type { PathFinder } from '../path/pathfinder';
 import { DX, DY, type WalkGrid } from '../path/walk-grid';
 import { CUP } from '../service/cups';
 import type { Service } from '../service/service';
-import { TASK } from '../service/task-board';
+import { TASK, isErrand } from '../service/task-board';
+import { NEIGHBOURHOOD } from '../../shared/neighbourhood';
 import type { Customers } from './customers';
 import { ARRIVED, FAILED, drop, face, walkStep } from './walker';
 
@@ -65,6 +66,8 @@ export class Workers {
   readonly qLen: Uint8Array;
   /** Customer handle being brewed for (state brewing). */
   readonly brewFor: Uint32Array;
+  /** 1 = walk onto the goal tile itself (errands); 0 = stop beside it (a seat, the counter). */
+  readonly exact: Uint8Array;
   /** The player state (queue, brewing) changed: Game sends a new PlayerState. */
   changed = false;
   /** Staff role of each worker (null for the player). */
@@ -112,6 +115,7 @@ export class Workers {
     this.queue = new Uint32Array(n * QUEUE_MAX);
     this.qLen = new Uint8Array(n);
     this.brewFor = new Uint32Array(n);
+    this.exact = new Uint8Array(n);
     this.dirty = new IndexQueue(n);
     this.spawned = new Uint8Array(n);
     this.despawned = new Uint32Array(n * 2);
@@ -196,6 +200,35 @@ export class Workers {
     return '';
   }
 
+  /**
+   * The player taps the street or a shop (M3): an errand goes on the board and into their queue.
+   * `go` (target = tile) replaces any `go` already queued, so tapping around just changes where they
+   * walk; `visit` (target = shop id) is refused if that shop is already queued.
+   */
+  queueErrand(w: number, kind: number, target: number): string {
+    const b = this.service.board;
+    if (kind === TASK.go) {
+      if (target < 0 || target >= this.walk.w * this.walk.h || !this.walk.passable(target)) return 'walk.err.cantGo';
+      for (let k = this.qLen[w]! - 1; k >= 0; k--) {
+        const h = this.queue[w * QUEUE_MAX + k]!;
+        const i = b.indexOf(h);
+        if (i && b.kind[i] === TASK.go && !(this.task[w] === h && this.carrying(w))) this.release(w, h);
+      }
+    } else if (kind === TASK.visit) {
+      if (!NEIGHBOURHOOD.shops[target]) return 'serve.err.gone';
+      for (let k = 0; k < this.qLen[w]!; k++) {
+        const i = b.indexOf(this.queue[w * QUEUE_MAX + k]!);
+        if (i && b.kind[i] === TASK.visit && b.target[i] === target) return 'serve.err.queued';
+      }
+    } else return 'serve.err.gone';
+    if (this.qLen[w]! >= QUEUE_MAX) return 'serve.err.queueFull';
+    const h = b.add(kind, target, this.now);
+    if (h === NONE) return 'serve.err.queueFull';
+    const r = this.queueTask(w, h);
+    if (r) b.remove(h);
+    return r;
+  }
+
   /** Takes task `h` off worker w's queue. A job half done with a cup in hand can't be cancelled. */
   cancelTask(w: number, h: number): string {
     if (!this.inQueue(w, h)) return 'serve.err.gone';
@@ -253,7 +286,7 @@ export class Workers {
           if (this.qLen[w]! > 0) this.start(w, this.queue[w * QUEUE_MAX]!);
           break;
         case WS.walking: {
-          const r = walkStep(this, w, this.paths, this.walk.w, this.speed, this.stuck, ACCESS.staff, true);
+          const r = walkStep(this, w, this.paths, this.walk.w, this.speed, this.stuck, ACCESS.staff, this.exact[w] === 0);
           this.dirty.push(w);
           if (r === ARRIVED) this.arrived(w);
           else if (r === FAILED) this.giveUp(w, 'serve.err.cantReach');
@@ -306,8 +339,17 @@ export class Workers {
       case TASK.wash:
         goal = this.service.fixtureTile(SERVICE.sink);
         break;
+      case TASK.go:
+        goal = target;
+        break;
+      case TASK.visit: {
+        const shop = NEIGHBOURHOOD.shops[target];
+        goal = shop ? shop.visitY * this.walk.w + shop.visitX : -1;
+        break;
+      }
     }
     if (goal < 0) return this.giveUp(w, 'serve.err.gone');
+    this.exact[w] = isErrand(b.kind[i]!) ? 1 : 0;
     this.goal[w] = goal;
     this.walkT[w] = 0;
     drop(this, w, this.paths);
@@ -317,11 +359,24 @@ export class Workers {
 
   /** Next to the goal: start the job. */
   private arrived(w: number): void {
-    face(this, w, this.goal[w]!, this.walk.w);
-    this.setAnim(w, ANIM.stand);
     const b = this.service.board;
     const h = this.task[w]!;
     const i = b.indexOf(h);
+    if (this.exact[w]) {
+      // An errand: standing on the goal tile. A shop visit faces its counter and opens its panel.
+      this.setAnim(w, ANIM.stand);
+      if (i && b.kind[i] === TASK.visit) {
+        const shop = NEIGHBOURHOOD.shops[b.target[i]!];
+        if (shop) {
+          this.dir[w] = shop.edge === 'n' ? DIR.north : DIR.west;
+          this.dirty.push(w);
+          this.emit({ k: 'atShop', shop: shop.id });
+        }
+      }
+      return this.finish(w);
+    }
+    face(this, w, this.goal[w]!, this.walk.w);
+    this.setAnim(w, ANIM.stand);
     if (!i) return this.finish(w);
     const t = this.t;
     switch (b.kind[i]) {
@@ -407,6 +462,7 @@ export class Workers {
     for (let i = 1; i < b.capacity; i++) {
       if (!b.live[i] || b.claimedBy[i] !== 0) continue;
       const kind = b.kind[i]!;
+      if (isErrand(kind)) continue;
       const weight = role.weight[kind]!;
       if (weight <= 0) continue;
       const t = this.jobTile(kind, b.target[i]!);
@@ -511,8 +567,9 @@ export class Workers {
     if (this.task[w] === h) this.stop(w);
     const b = this.service.board;
     const i = b.indexOf(h);
-    if (i && b.claimedBy[i] === w) b.unclaim(h);
-    if (i) b.dirty.push(i); // queue positions changed
+    if (i && isErrand(b.kind[i]!)) b.remove(h); // errands are nobody else's
+    else if (i && b.claimedBy[i] === w) b.unclaim(h);
+    if (b.indexOf(h)) b.dirty.push(i); // queue positions changed
     this.changed = true;
   }
 

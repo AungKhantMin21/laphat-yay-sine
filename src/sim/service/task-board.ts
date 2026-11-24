@@ -1,4 +1,5 @@
-// The task board: every open job in the shop (take an order, brew, serve, clear, wash, cook).
+// The task board: every open job in the shop (take an order, brew, serve, clear, wash, cook), plus
+// the player's errands (go somewhere, visit a shop; M3).
 // The player and staff take jobs from it (sim/npc/workers.ts). Struct of arrays, fixed capacity,
 // index + generation handles; no allocation after construction.
 import { IndexQueue, NONE, handleGen, handleIndex, makeHandle } from '../../shared/ids';
@@ -17,8 +18,17 @@ export const TASK = {
   wash: 5,
   /** Snacks (M5). Nothing creates it yet. */
   cook: 6,
+  /** Errand (M3, player only): walk to a tile. target = tile index. */
+  go: 7,
+  /** Errand (M3, player only): walk to a neighbourhood shop's counter. target = shop id. */
+  visit: 8,
 } as const;
-export const TASK_KINDS = 7;
+export const TASK_KINDS = 9;
+
+/** Errands belong to the player who asked; staff never take them and they leave the board when done or cancelled. */
+export function isErrand(kind: number): boolean {
+  return kind === TASK.go || kind === TASK.visit;
+}
 
 export const TASK_CAPACITY = MAX_TASKS;
 

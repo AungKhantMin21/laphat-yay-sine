@@ -8,6 +8,7 @@ import { createArea, ENTRIES, SEATING } from './area';
 import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { Service } from './service/service';
+import { TASK } from './service/task-board';
 import { PLAYER, ROLE, Workers } from './npc/workers';
 import { STAFF, hireBlock } from '../shared/staff';
 import { MAX_WORKERS } from '../shared/layout';
@@ -320,6 +321,13 @@ export class Game {
         return res(this.workers.queueTask(PLAYER, a.task));
       case 'cancelTask':
         return res(this.workers.cancelTask(PLAYER, a.task));
+      case 'walkTo': {
+        const W = this.walkStaff.w;
+        if (!Number.isInteger(a.x) || !Number.isInteger(a.y) || a.x < 0 || a.y < 0 || a.x >= W || a.y >= this.walkStaff.h) return { ok: false, reason: 'walk.err.cantGo' };
+        return res(this.workers.queueErrand(PLAYER, TASK.go, a.y * W + a.x));
+      }
+      case 'visit':
+        return res(this.workers.queueErrand(PLAYER, TASK.visit, a.shop));
       // The player's pour at the counter (the worker opened it with a brewReady event).
       case 'cancelPour':
         return res(this.workers.cancelBrew(PLAYER, a.id));

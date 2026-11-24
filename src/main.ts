@@ -13,7 +13,7 @@ import { TASK_KIND, findTask, firstTask, taskForCustomer } from './game/service-
 import { installQueue } from './ui/hud/queue';
 import { NavButtons } from './ui/hud/nav';
 import { StreetShops } from './render/street-shops';
-import { isShopZone } from './shared/rules/access';
+import { ACCESS, isShopZone, mayEnter } from './shared/rules/access';
 import { MAX_TASKS, WORKER_SLOT0 } from './shared/layout';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
@@ -24,7 +24,9 @@ import { Ghost } from './render/ghost';
 import { HeatLayer } from './render/heat';
 import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
-import { installBuildKeys } from './input/keyboard';
+import { installBuildKeys, installWalkKeys } from './input/keyboard';
+import { NeighbourhoodMap } from './ui/hud/map';
+import { NEIGHBOURHOOD } from './shared/neighbourhood';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
 import { installTin } from './ui/hud/tin';
@@ -41,7 +43,7 @@ import { FrameLoop } from './game/loop';
 import { WorldView } from './game/view';
 import { SimBridge } from './game/bridge';
 import { isoX, isoY } from './shared/iso';
-import type { Tier } from './shared/protocol';
+import type { Action, Tier } from './shared/protocol';
 import { loadTier, runBenchmark, saveTier, deviceHints, decideTier } from './platform/tier';
 import { BUDGETS, TIER_NAMES, TIER_SETTINGS } from './platform/tier-policy';
 import { DrawCallCounter, estimateTextureBytes } from './render/gl-stats';
@@ -100,6 +102,7 @@ const bridge: SimBridge = new SimBridge(view, {
     for (const e of list) {
       if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
       else if (e.k === 'brewReady') pour.open(e.id, e.drink);
+      else if (e.k === 'atShop') queueUi.toast(`shop.${NEIGHBOURHOOD.shops[e.shop]?.key ?? ''}`); // S6: the shop panel
       else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
@@ -211,9 +214,27 @@ async function tapService(wx: number, wy: number): Promise<void> {
     if (svc === SERVICE.counter || svc === SERVICE.kettle) task = firstTask(view, TASK_KIND.brew);
     else if (svc === SERVICE.sink) task = firstTask(view, TASK_KIND.wash);
   }
-  if (!task) return;
+  if (!task) {
+    // M3: a shop stall visits it; open ground walks there.
+    const shop = streetShops.pick(wx, wy);
+    if (shop >= 0) {
+      task = findTask(view, TASK_KIND.visit, shop);
+      if (!task) return actToast({ k: 'visit', shop });
+    } else {
+      const tx = tileAtX(wx, wy);
+      const ty = tileAtY(wx, wy);
+      const a = view.area;
+      if (tx < 0 || ty < 0 || tx >= a.w || ty >= a.h || !mayEnter(ACCESS.staff, a.access[ty * a.w + tx]!)) return;
+      return actToast({ k: 'walkTo', x: tx, y: ty });
+    }
+  }
   const queued = bridge.player?.queue.includes(task) ?? false;
   const r = await bridge.act(queued ? { k: 'cancelTask', task } : { k: 'queueTask', task });
+  if (!r.ok && r.reason) queueUi.toast(r.reason);
+}
+
+async function actToast(a: Action): Promise<void> {
+  const r = await bridge.act(a);
   if (!r.ok && r.reason) queueUi.toast(r.reason);
 }
 
@@ -231,6 +252,21 @@ const queueUi = installQueue({
       else if (kind === TASK_KIND.serve) ok = npcs.headOf(view.cupFor[target]!, queueAt) || serviceProps.cupPoint(target, queueAt);
       else if (kind === TASK_KIND.clear) ok = serviceProps.cupPoint(target, queueAt);
       else if (kind === TASK_KIND.wash) ok = serviceProps.fixturePoint(SERVICE.sink, queueAt);
+      else if (kind === TASK_KIND.go) {
+        const W = view.area.w;
+        const tx = target % W;
+        const ty = (target - tx) / W;
+        queueAt.x = isoX(tx + 0.5, ty + 0.5);
+        queueAt.y = isoY(tx + 0.5, ty + 0.5) - 2;
+        ok = true;
+      } else if (kind === TASK_KIND.visit) {
+        const k = streetShops.keeperAt[target];
+        if (k) {
+          queueAt.x = k.x;
+          queueAt.y = k.y - 26;
+          ok = true;
+        }
+      }
     }
     if (!ok) return false;
     worldToCss(queueAt);
@@ -277,10 +313,38 @@ function followPlayer(now: number): void {
   if (followOff) return;
   camera.follow(body.x, body.y - 12, stage.size);
 }
+/** The player's tile from their sprite, or null. */
+function playerTile(): [number, number] | null {
+  const body = npcs.bodyOf(WORKER_SLOT0);
+  return body ? [tileAtX(body.x, body.y), tileAtY(body.x, body.y)] : null;
+}
+const nmap = new NeighbourhoodMap(document.getElementById('ui')!, {
+  area: () => view.area,
+  player: playerTile,
+  visit: (shop) => {
+    followOff = false;
+    void actToast({ k: 'visit', shop });
+  },
+});
 new NavButtons(document.getElementById('ui')!, {
   home: () => {
     followOff = true;
     centreOnShop();
+  },
+  map: () => nmap.open(),
+});
+// Desktop: WASD / arrows walk the player a couple of tiles at a time (screen up/left/down/right).
+installWalkKeys({
+  active: () => !build.open && !pour.isOpen && !nmap.isOpen,
+  step: (dx, dy) => {
+    const p = playerTile();
+    if (!p) return;
+    const x = p[0] + dx * 2;
+    const y = p[1] + dy * 2;
+    const a = view.area;
+    if (x < 0 || y < 0 || x >= a.w || y >= a.h || !mayEnter(ACCESS.staff, a.access[y * a.w + x]!)) return;
+    followOff = false;
+    void bridge.act({ k: 'walkTo', x, y });
   },
 });
 

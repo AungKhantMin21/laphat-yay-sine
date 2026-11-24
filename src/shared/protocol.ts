@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -33,8 +33,10 @@ export type Action =
   | { k: 'cancelPour'; id: number }
   /** The player poured customer `id`'s cup at the counter: tea and condensed milk as cup fractions. */
   | { k: 'serve'; id: number; tea: number; milk: number }
+  /** Errand (M3): walk the player to tile (x, y); replaces a walk already queued. */
   | { k: 'walkTo'; x: number; y: number }
-  | { k: 'interact'; id: number }
+  /** Errand (M3): walk the player to neighbourhood shop `shop` (shared/neighbourhood.ts id); `atShop` on arrival. */
+  | { k: 'visit'; shop: number }
   | { k: 'buy'; shop: number; item: number; qty: number };
 
 export type ToSim =
@@ -72,6 +74,8 @@ export type SimEvent =
   | { k: 'wages'; paid: number; dayOff: number; total: number }
   /** The player reached the counter to brew customer `id`'s `drink`: open the pour minigame. */
   | { k: 'brewReady'; id: number; drink: number }
+  /** The player reached shop `shop`'s counter (M3): open its panel. */
+  | { k: 'atShop'; shop: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
   | { k: 'teaser'; key: string; drink: number };
 
