@@ -61,6 +61,7 @@
   "serve.err.cantReach": "အဲဒီနေရာကို မရောက်နိုင်ပါ",
   "serve.err.trayFull": "ဗန်းပေါ်မှာ နေရာ မရှိတော့ပါ",
   "queue.cancel": "ဒီအလုပ်ကို ဖျက်မယ်",
+  "nav.home": "ဆိုင်",
   "serve.err.taken": "ဝန်ထမ်းက ယူသွားပြီးပါပြီ",
   "staff.waiter": "စားပွဲထိုး",
   "staff.helper": "အကူ",

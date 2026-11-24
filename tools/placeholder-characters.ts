@@ -38,6 +38,14 @@ const WORKERS: Look[] = [
   { shirt: '5e9a8e', longyi: '4a3a5a', check: '6a7884', skin: 'c8a46e', hair: '2a1d18', apron: 'ecd3a5' },
 ];
 
+/** Shopkeepers (M3): npc/s<shop>_f, standing behind their counters. Order = neighbourhood.json shops. */
+const KEEPERS: Look[] = [
+  { shirt: 'f6ead0', longyi: '6b8f5a', check: '94b37a', skin: 'a98258', hair: '1b1411', apron: '5e9a8e' },
+  { shirt: 'ecd3a5', longyi: '4a3a5a', check: '6a7884', skin: 'd9a05b', hair: '9aa6ae' },
+  { shirt: 'c85a44', longyi: '523a2c', check: '8a6644', skin: 'c8a46e', hair: '2a1d18', apron: 'a98258' },
+  { shirt: '6a7884', longyi: '2c3440', check: '44505c', skin: 'd9a05b', hair: '1b1411', apron: '9aa6ae' },
+];
+
 const LOOKS: Look[] = [
   { shirt: 'fff8ea', longyi: '3c6e6a', check: '5e9a8e', skin: 'd9a05b', hair: '1b1411' },
   { shirt: '5e9a8e', longyi: '4a3a5a', check: '6a7884', skin: 'c8a46e', hair: '2a1d18' },
@@ -163,6 +171,7 @@ export function drawCharacters(): Array<[string, Raw]> {
       out.push([`npc/c${i}_${v}_s`, person(look, back, 0, true)]);
     }
   });
+  KEEPERS.forEach((look, i) => out.push([`npc/s${i}_f`, person(look, false, 0, false)]));
   for (const d of drinks.presets) {
     const tea = CUP[d.key] ?? 'a98258';
     out.push([

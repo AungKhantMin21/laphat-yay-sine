@@ -22,6 +22,19 @@ export class Camera {
     this.y = y;
   }
 
+  /**
+   * Keeps world point (x, y) inside a dead zone around the centre (the middle 40 % of the view):
+   * the camera moves only as far as needed, so a walking player drags it along smoothly.
+   */
+  follow(x: number, y: number, size: StageSize): void {
+    const dx = size.w * 0.2;
+    const dy = size.h * 0.2;
+    if (x < this.x - dx) this.x = x + dx;
+    else if (x > this.x + dx) this.x = x - dx;
+    if (y < this.y - dy) this.y = y + dy;
+    else if (y > this.y + dy) this.y = y - dy;
+  }
+
   pan(dx: number, dy: number): void {
     this.x += dx;
     this.y += dy;

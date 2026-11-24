@@ -25,7 +25,7 @@
     ["farPavement", "pavement", "pavement"],
     ["marketWest", "pavement", "pavement"],
     ["marketEast", "pavement", "pavement"],
-    ["lane", "pavement", "pavement"]
+    ["lane", "lane", "pavement"]
   ],
   "buildings": [
     { "edge": "n", "at": 19, "from": 0, "to": 6, "tall": true, "variant": 0, "entry": false },

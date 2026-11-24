@@ -8,6 +8,7 @@
     "shopTile": 10,
     "dirt": 12,
     "crossing": 14,
-    "kitchen": 10
+    "kitchen": 10,
+    "lane": 10
   }
 }

@@ -5,7 +5,7 @@
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
 import { diamondHalf } from './png.ts';
-import { drawFacades, drawObjects, drawShopFront, drawWalls } from './placeholder-objects.ts';
+import { drawFacades, drawObjects, drawShopFront, drawStalls, drawWalls } from './placeholder-objects.ts';
 import { drawCharacters } from './placeholder-characters.ts';
 
 const hex = (h: string): [number, number, number] => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
@@ -69,6 +69,15 @@ const tiles: Record<string, Painter> = {
     if (e === 'br') return '44505c';
     return noise(x, y, 3) % 17 === 0 ? '44505c' : (x + y * 2) % 16 === 0 ? '9aa6ae' : '6a7884';
   },
+  lane: (x, y, e) => {
+    // Old cobbles: rounded stones in offset rows.
+    if (e === 'tl') return 'a98258';
+    if (e === 'br') return '523a2c';
+    const row = Math.floor(y / 3);
+    const col = Math.floor((x + (row % 2) * 3) / 6);
+    const edge = y % 3 === 0 || (x + (row % 2) * 3) % 6 === 0;
+    return edge ? '6e4e36' : (row + col) % 3 === 0 ? '8a6644' : 'a98258';
+  },
   dirt: (x, y, e) => {
     if (e === 'tl') return '6e4e36';
     if (e === 'br') return '3d2a22';
@@ -83,7 +92,7 @@ for (const [name, paint] of Object.entries(tiles)) {
   console.log(`art/sprites/floor/${name}.png`);
 }
 
-for (const [name, img] of [...drawWalls(), ...drawFacades(), ...drawShopFront(), ...drawObjects(), ...drawCharacters()]) {
+for (const [name, img] of [...drawWalls(), ...drawFacades(), ...drawShopFront(), ...drawStalls(), ...drawObjects(), ...drawCharacters()]) {
   const file = `art/sprites/${name}.png`;
   mkdirSync(file.slice(0, file.lastIndexOf('/')), { recursive: true });
   await sharp(img.px, { raw: { width: img.w, height: img.h, channels: 4 } }).png().toFile(file);

@@ -35,8 +35,8 @@ export const M0_AREA_W = 64;
 export const M0_AREA_H = 48;
 
 /** Floor tile types (grid values in the `floor` layer). */
-export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4, crossing: 5, kitchen: 6 } as const;
-export const FLOOR_TYPES = 7;
+export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4, crossing: 5, kitchen: 6, lane: 7 } as const;
+export const FLOOR_TYPES = 8;
 
 /** TILE_PATCH layer ids. */
 export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3, facade: 4 } as const;

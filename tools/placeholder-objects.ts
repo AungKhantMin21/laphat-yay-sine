@@ -289,3 +289,109 @@ export function drawShopFront(): Array<[string, IsoImage]> {
   out.push(['shop/sign', sign]);
   return out;
 }
+
+/**
+ * Neighbourhood shop stalls (M3): per front tile a back wall with shelves (`stall/<k>_back`) and
+ * a counter with goods under a striped awning (`stall/<k>_front_<a|b>`), plus one signboard per
+ * shop (`stall/<k>_sign`). Drawn facing +v (a south-facing front); src/render/street-shops.ts
+ * mirrors them for fronts on a −x edge. The keeper stands between the two.
+ */
+export function drawStalls(): Array<[string, IsoImage]> {
+  type Stall = { wall: string; trim: string; awning: [string, string]; goods: (img: IsoImage) => void; shelf: (img: IsoImage) => void; sign: string };
+  const STALLS: Record<string, Stall> = {
+    market: {
+      wall: '5e9a8e',
+      trim: '3c6e6a',
+      awning: ['94b37a', 'f6ead0'],
+      goods: (img) => {
+        img.box(0.08, 0.55, 0.45, 0.95, 12, 15, ['94b37a', '6b8f5a', '46573a']); // greens
+        img.box(0.55, 0.55, 0.92, 0.95, 12, 15, ['e98a5e', 'c85a44', '9a3a30']); // fruit
+        img.box(0.6, 0.6, 0.8, 0.8, 15, 17, ['f0c060', 'd9a05b', 'a98258']);
+      },
+      shelf: (img) => {
+        for (const [a, hex] of [[0.1, 'ecd3a5'], [0.4, 'c8a46e'], [0.7, 'ecd3a5']] as const) img.wallQuad('n', a, a + 0.22, 14, 24, hex); // sacks of tea
+        img.wallQuad('n', 0, 1, 13, 14, '2c3440');
+      },
+      sign: '46573a',
+    },
+    books: {
+      wall: 'ecd3a5',
+      trim: 'c8a46e',
+      awning: ['4a3a5a', 'f6ead0'],
+      goods: (img) => {
+        img.box(0.1, 0.6, 0.4, 0.9, 12, 16, ['fff8ea', 'c85a44', '9a3a30']);
+        img.box(0.5, 0.6, 0.85, 0.9, 12, 14, ['fff8ea', '3c6e6a', '2c3440']);
+      },
+      shelf: (img) => {
+        const spines = ['c85a44', '3c6e6a', 'f0c060', '4a3a5a', '94b37a', 'e98a5e'];
+        for (const z of [12, 24]) {
+          img.wallQuad('n', 0, 1, z - 1, z, '6e4e36');
+          spines.forEach((hex, k) => img.wallQuad('n', 0.06 + k * 0.15, 0.17 + k * 0.15, z, z + 9, hex));
+        }
+      },
+      sign: '4a3a5a',
+    },
+    furniture: {
+      wall: 'a98258',
+      trim: '6e4e36',
+      awning: ['c85a44', 'f6ead0'],
+      goods: (img) => {
+        img.box(0.15, 0.6, 0.45, 0.9, 12, 18, ['d9a05b', 'a98258', '8a6644']); // a stool
+        img.box(0.55, 0.55, 0.9, 0.95, 16, 18, ['d9a05b', 'a98258', '8a6644']); // a small table top
+        img.box(0.6, 0.6, 0.66, 0.66, 12, 16, ['8a6644', '6e4e36', '523a2c']);
+      },
+      shelf: (img) => {
+        img.wallQuad('n', 0.1, 0.45, 10, 30, '8a6644'); // a cupboard
+        img.wallQuad('n', 0.15, 0.4, 12, 28, '6e4e36');
+        img.wallQuad('n', 0.55, 0.9, 18, 22, '8a6644'); // a shelf
+      },
+      sign: '6e4e36',
+    },
+    hardware: {
+      wall: '9aa6ae',
+      trim: '6a7884',
+      awning: ['5e9a8e', 'f6ead0'],
+      goods: (img) => {
+        const cans: Array<[string, string, string]> = [
+          ['e98a5e', 'c85a44', '9a3a30'],
+          ['94b37a', '6b8f5a', '46573a'],
+          ['f0c060', 'd9a05b', 'a98258'],
+        ];
+        cans.forEach((r, k) => img.box(0.1 + k * 0.28, 0.65, 0.3 + k * 0.28, 0.85, 12, 17, r));
+      },
+      shelf: (img) => {
+        for (const [a, hex] of [[0.05, 'c85a44'], [0.3, 'f6ead0'], [0.55, '3c6e6a'], [0.8, 'c8a46e']] as const) img.wallQuad('n', a, a + 0.15, 16, 22, hex); // tiles
+        img.wallQuad('n', 0, 1, 15, 16, '44505c');
+        img.wallQuad('n', 0.2, 0.25, 26, 34, '44505c'); // hanging tools
+        img.wallQuad('n', 0.6, 0.66, 27, 33, '6e4e36');
+      },
+      sign: '44505c',
+    },
+  };
+  const out: Array<[string, IsoImage]> = [];
+  for (const [k, s] of Object.entries(STALLS)) {
+    const back = new IsoImage(1, 1, 46);
+    back.wallQuad('n', 0, 1, 0, 44, s.wall);
+    back.wallQuad('n', 0, 1, 0, 2, '3d2a22');
+    back.wallQuad('n', 0, 1, 41, 44, s.trim);
+    s.shelf(back);
+    back.box(0, 0, 1, 1, 0, 0, ['523a2c', '523a2c', '523a2c']); // stall floor
+    out.push([`stall/${k}_back`, back]);
+    for (const [ab, hex] of [['a', s.awning[0]], ['b', s.awning[1]]] as const) {
+      const front = new IsoImage(1, 1, 48);
+      const P = (u: number, v: number, z: number) => front.at(u, v, z);
+      front.box(0, 0.5, 1, 1, 0, 12, [s.trim, s.wall, s.trim]); // counter
+      front.box(0, 0.5, 1, 1, 11, 12, ['8a6644', '6e4e36', '523a2c']); // counter top
+      s.goods(front);
+      front.poly([P(0, 0, 44), P(1, 0, 44), P(1, 0.95, 34), P(0, 0.95, 34)], hex);
+      front.poly([P(0, 0.95, 34), P(1, 0.95, 34), P(1, 0.95, 31), P(0, 0.95, 31)], ab === 'a' ? s.trim : 'ecd3a5'); // valance
+      out.push([`stall/${k}_front_${ab}`, front]);
+    }
+    const sign = new IsoImage(1, 1, 58);
+    sign.wallQuad('n', 0, 1, 44, 56, s.sign);
+    sign.wallQuad('n', 0.06, 0.94, 45, 55, 'fff8ea');
+    for (let a = 0.15; a < 0.85; a += 0.18) sign.wallQuad('n', a, a + 0.1, 49, 51, s.sign); // lettering marks
+    out.push([`stall/${k}_sign`, sign]);
+  }
+  return out;
+}

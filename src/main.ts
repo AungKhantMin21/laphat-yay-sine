@@ -11,7 +11,10 @@ import { ShopFront } from './render/shopfront';
 import { ServiceLayer } from './render/service';
 import { TASK_KIND, findTask, firstTask, taskForCustomer } from './game/service-taps';
 import { installQueue } from './ui/hud/queue';
-import { MAX_TASKS } from './shared/layout';
+import { NavButtons } from './ui/hud/nav';
+import { StreetShops } from './render/street-shops';
+import { isShopZone } from './shared/rules/access';
+import { MAX_TASKS, WORKER_SLOT0 } from './shared/layout';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
 import { NpcLayer } from './render/npcs';
@@ -72,6 +75,7 @@ const ghost = new Ghost(objects, objects.layer);
 const heat = new HeatLayer(view);
 const npcs = new NpcLayer(view, atlas, objects.layer);
 const shopFront = new ShopFront(atlas, objects.layer);
+const streetShops = new StreetShops(atlas, objects.layer);
 const serviceProps = new ServiceLayer(view, atlas, objects.layer, npcs);
 stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npcs.bubbles);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
@@ -111,7 +115,7 @@ const bridge: SimBridge = new SimBridge(view, {
     if (!booted) {
       booted = true;
       showTitleCard();
-      camera.centreOn(isoX(30, 16), isoY(30, 16)); // the shop, with the pavement in front
+      centreOnShop();
       requestAnimationFrame(() => {
         pickMusic();
         setInterval(pickMusic, 5000); // follows the game clock (M5 adds weather)
@@ -249,9 +253,41 @@ build.onChange(() => {
   document.body.classList.toggle('building', build.open);
 });
 
+/** The shop, with the pavement in front. */
+function centreOnShop(): void {
+  camera.centreOn(isoX(30, 16), isoY(30, 16));
+}
+// The camera follows the player while they're out in the street, unless the player just panned.
+let lastPanAt = -1e9;
+let followOff = false;
+const FOLLOW_PAUSE_MS = 2500;
+function followPlayer(now: number): void {
+  if (build.open || now - lastPanAt < FOLLOW_PAUSE_MS) return;
+  const body = npcs.bodyOf(WORKER_SLOT0);
+  if (!body) return;
+  const a = view.area;
+  const tx = tileAtX(body.x, body.y);
+  const ty = tileAtY(body.x, body.y);
+  if (tx < 0 || ty < 0 || tx >= a.w || ty >= a.h) return;
+  const inShop = isShopZone(a.access[ty * a.w + tx]!);
+  if (inShop) {
+    followOff = false; // back home: follow again next time they go out
+    return;
+  }
+  if (followOff) return;
+  camera.follow(body.x, body.y - 12, stage.size);
+}
+new NavButtons(document.getElementById('ui')!, {
+  home: () => {
+    followOff = true;
+    centreOnShop();
+  },
+});
+
 installGestures(stageEl, {
   pan: (dx, dy) => {
     const k = stage.size.devPerCss / stage.size.scale; // world px per CSS px
+    lastPanAt = performance.now();
     camera.pan(-dx * k, -dy * k);
   },
   zoomStep: (dir) => stage.setZoom(stage.size.zoom + dir),
@@ -282,6 +318,7 @@ const loop = new FrameLoop({
     // The world changed under the ghost (or the selected object moved): re-validate.
     if (objects.sync() && build.open) build.refresh();
     heat.update();
+    followPlayer(now);
     camera.apply(stage.world, stage.size);
     const v = camera.view;
     chunks.update(v.x0, v.y0, v.x1, v.y1);
@@ -357,4 +394,4 @@ if (debug) {
 
 // ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it, play).
 if (debug) Object.assign(window, { __debug: { bridge, view, pour } });
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi, streetShops } });

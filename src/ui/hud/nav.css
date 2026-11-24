@@ -1,0 +1,11 @@
+.nav-btns {
+  position: absolute;
+  right: calc(var(--safe-r) + 10px);
+  bottom: calc(var(--safe-b) + 68px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+body.building .nav-btns {
+  display: none;
+}

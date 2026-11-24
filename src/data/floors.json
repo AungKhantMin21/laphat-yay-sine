@@ -4,5 +4,6 @@
   "3": "floor/shop",
   "4": "floor/dirt",
   "5": "floor/crossing",
-  "6": "floor/kitchen"
+  "6": "floor/kitchen",
+  "7": "floor/lane"
 }
