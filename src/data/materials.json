@@ -1,0 +1,12 @@
+{
+  "materials": [
+    { "key": "floor_wood", "kind": "floor", "finish": "wood", "pack": 10, "price": 6000 },
+    { "key": "floor_terrazzo", "kind": "floor", "finish": "terrazzo", "pack": 10, "price": 8000 },
+    { "key": "floor_blue", "kind": "floor", "finish": "tileBlue", "pack": 10, "price": 7000 },
+    { "key": "floor_red", "kind": "floor", "finish": "tileRed", "pack": 10, "price": 7000 },
+    { "key": "paint_cream", "kind": "wall", "finish": "cream", "pack": 10, "price": 3000 },
+    { "key": "paint_green", "kind": "wall", "finish": "green", "pack": 10, "price": 3000 },
+    { "key": "paint_blue", "kind": "wall", "finish": "blue", "pack": 10, "price": 3000 },
+    { "key": "paint_rose", "kind": "wall", "finish": "rose", "pack": 10, "price": 3000 }
+  ]
+}

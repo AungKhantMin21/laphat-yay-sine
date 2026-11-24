@@ -27,6 +27,8 @@ import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys, installWalkKeys } from './input/keyboard';
 import { NeighbourhoodMap } from './ui/hud/map';
 import { NEIGHBOURHOOD } from './shared/neighbourhood';
+import { ShopPanel } from './ui/shop/panel';
+import { ITEM } from './shared/market';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
 import { installTin } from './ui/hud/tin';
@@ -99,6 +101,7 @@ const bridge: SimBridge = new SimBridge(view, {
     tin.refresh(bridge.player?.money ?? 0);
     if (bridge.player) stockHud.refresh(bridge.player.cupsLeft, bridge.player.stock);
     dayEnd.refresh();
+    shopPanel.refresh();
   },
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
@@ -111,7 +114,14 @@ const bridge: SimBridge = new SimBridge(view, {
           freeTeaToastAt = performance.now();
           queueUi.toast('stock.freeTea');
         }
-      } else if (e.k === 'atShop') queueUi.toast(`shop.${NEIGHBOURHOOD.shops[e.shop]?.key ?? ''}`); // S6: the shop panel
+      } else if (e.k === 'atShop') {
+        shopPanel.open(e.shop);
+        // The panel sits on the left: keep the player in view on the right (inside the follow dead zone).
+        const body = npcs.bodyOf(WORKER_SLOT0);
+        if (body) camera.centreOn(body.x - stage.size.w * 0.18, body.y - 12);
+      }
+      else if (e.k === 'putAway') queueUi.toast('market.putAway');
+      else if (e.k === 'delivered') queueUi.toast('market.delivered');
       else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
@@ -323,6 +333,23 @@ function followPlayer(now: number): void {
   if (followOff) return;
   camera.follow(body.x, body.y - 12, stage.size);
 }
+const shopPanel = new ShopPanel(document.getElementById('ui')!, {
+  player: () => bridge.player,
+  atCounter: (shop) => {
+    const s = NEIGHBOURHOOD.shops[shop];
+    const p = playerTile();
+    return !!s && !!p && p[0] === s.visitX && p[1] === s.visitY;
+  },
+  act: (a) => bridge.act(a),
+  toast: (k) => queueUi.toast(k),
+  icon: (kind, id) => {
+    if (kind !== ITEM.object) return null;
+    const def = CATALOG.defs[id];
+    const f = def && atlas.frames.get(spriteFrame(def, 0));
+    return f ? { url: atlas.url, x: f[0], y: f[1], w: f[2], h: f[3] } : null;
+  },
+});
+
 /** The player's tile from their sprite, or null. */
 function playerTile(): [number, number] | null {
   const body = npcs.bodyOf(WORKER_SLOT0);

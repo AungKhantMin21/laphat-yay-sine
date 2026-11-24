@@ -10,7 +10,12 @@ import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { Service } from './service/service';
 import { TASK } from './service/task-board';
-import { PLAYER, ROLE, Workers } from './npc/workers';
+import { Market, type Goods } from './market/market';
+import { ITEM } from '../shared/market';
+import { MATERIALS } from '../shared/materials';
+import { NEIGHBOURHOOD } from '../shared/neighbourhood';
+import { isShopZone } from '../shared/rules/access';
+import { PLAYER, ROLE, WS, Workers } from './npc/workers';
 import { STAFF, hireBlock } from '../shared/staff';
 import { MAX_WORKERS } from '../shared/layout';
 import { PHASE, minuteOfDay } from '../shared/day';
@@ -45,6 +50,10 @@ export class Game {
   staff: StaffMember[] = [];
   /** Last game minute an arrival was rolled for (one roll per minute). */
   private arrivalMinute = -1;
+  /** The neighbourhood shops: today's stock, goods in hand, deliveries (M3). */
+  readonly market: Market;
+  /** Building materials in tiles, per material id (M3; the paint tool uses them). */
+  readonly materials: Int32Array;
 
   constructor(
     readonly sim: Sim,
@@ -63,6 +72,46 @@ export class Game {
     this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e), sim.rng.npcDecide);
     const home = this.workers.homeTile();
     this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
+    this.market = new Market(sim.seed);
+    this.materials = new Int32Array(MATERIALS.defs.length);
+    this.market.refresh(sim.day);
+  }
+
+  /** Purchases land here: ingredients on the kitchen shelf, objects in the inventory, materials in the store. */
+  receive(g: Goods): void {
+    if (g.kind === ITEM.ingredient) this.service.stock.add(g.id, g.qty * INGREDIENTS.defs[g.id]!.pack);
+    else if (g.kind === ITEM.material) this.materials[g.id] = this.materials[g.id]! + g.qty * MATERIALS.defs[g.id]!.pack;
+    else this.builder.give(g.id, g.qty);
+    this.materialsChanged = true;
+  }
+  private materialsChanged = false;
+
+  /** Buys at a neighbourhood shop (the player must stand at its counter, during its hours). */
+  private buy(shop: number, row: number, qty: number, deliver: boolean): Result {
+    const w = this.workers;
+    const site = NEIGHBOURHOOD.shops[shop];
+    const atCounter = !!site && w.tile[PLAYER] === site.visitY * this.walkStaff.w + site.visitX && w.state[PLAYER] !== WS.walking;
+    const b = this.builder;
+    const r = this.market.buy(shop, row, qty, deliver, b.money, minuteOfDay(this.sim.gameMinute), atCounter, this.sim.gameMinute, this.day.holds);
+    if (r.reason) return { ok: false, reason: r.reason };
+    b.money -= r.paid;
+    b.changed = true;
+    this.events.push({ k: 'money', delta: -r.paid, total: b.money });
+    return { ok: true };
+  }
+
+  /** Goods in hand are put away once the player is inside; deliveries arrive when due. */
+  private goods(opening: boolean): void {
+    const m = this.market;
+    if (m.carry.length > 0) {
+      const t = this.workers.tile[PLAYER]!;
+      if (t >= 0 && isShopZone(this.world.state.area.access[t]!)) {
+        const got = m.putAway(this);
+        if (got) this.events.push({ k: 'putAway', goods: got });
+      }
+    }
+    const got = m.deliverDue(this.sim.gameMinute, opening, this);
+    if (got) this.events.push({ k: 'delivered', goods: got });
   }
 
   /**
@@ -310,8 +359,11 @@ export class Game {
         return b.undo();
       case 'redo':
         return b.redo();
-      case 'openShop':
-        return this.day.open(this.sim, this.customers());
+      case 'openShop': {
+        const r = this.day.open(this.sim, this.customers());
+        if (r.ok) this.goods(true); // deliveries ordered for the opening arrive
+        return r;
+      }
       case 'sleep': {
         const r = this.day.sleep(this.sim, this.customers());
         if (!r.ok) return r;
@@ -326,6 +378,12 @@ export class Game {
         this.service.endOfDay(); // cups washed overnight, no jobs left
         this.payWages();
         this.workers.reset(); // everyone back beside the counter
+        // Overnight: goods in hand are put away and every delivery arrives.
+        const carried = this.market.putAway(this);
+        if (carried) this.events.push({ k: 'putAway', goods: carried });
+        const arrived = this.market.deliverAll(this);
+        if (arrived) this.events.push({ k: 'delivered', goods: arrived });
+        this.market.refresh(this.sim.day);
         return { ok: true };
       }
       case 'hire':
@@ -343,6 +401,8 @@ export class Game {
       }
       case 'visit':
         return res(this.workers.queueErrand(PLAYER, TASK.visit, a.shop));
+      case 'buy':
+        return this.buy(a.shop, a.item, a.qty, !!a.deliver);
       // The player's pour at the counter (the worker opened it with a brewReady event).
       case 'cancelPour':
         return res(this.workers.cancelBrew(PLAYER, a.id));
@@ -374,13 +434,18 @@ export class Game {
       seats: this.npcs.seatCount(),
       stock: Array.from(this.service.stock.count, (n, k) => n - this.service.stock.reserved[k]!),
       cupsLeft: this.service.stock.cupsLeft(),
+      market: this.market.rows.map((rows) => rows.map((r) => ({ ...r }))),
+      carry: this.market.carry.map((g) => ({ ...g })),
+      carryLoad: this.market.load(),
+      deliveries: this.market.deliveries.map((g) => ({ kind: g.kind, id: g.id, qty: g.qty })),
+      materials: Array.from(this.materials),
     };
   }
 
   /** True once after anything in the player state changed. */
   takeChanged(): boolean {
-    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed;
-    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = false;
+    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed || this.market.changed || this.materialsChanged;
+    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = this.market.changed = this.materialsChanged = false;
     return c;
   }
 
@@ -409,6 +474,8 @@ export class Game {
     this.service.tick(this.sim.tick);
     this.npcs.tick(this.sim.tick);
     this.workers.tick(this.sim.tick);
+    this.market.refresh(this.sim.day);
+    this.goods(false);
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);

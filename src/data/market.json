@@ -1,0 +1,53 @@
+{
+  "priceRange": [0.85, 1.15],
+  "priceStep": 50,
+  "delivery": { "share": 0.1, "min": 500, "hours": 2 },
+  "carryMax": 4,
+  "shops": {
+    "market": {
+      "rows": 3,
+      "pool": [
+        { "ingredient": "tea", "qty": [6, 10] },
+        { "ingredient": "condensed", "qty": [6, 10] },
+        { "ingredient": "evaporated", "qty": [3, 6] }
+      ]
+    },
+    "books": {
+      "rows": 3,
+      "pool": [
+        { "object": "book_stack", "qty": [1, 3] },
+        { "object": "news_rack", "qty": [1, 2] },
+        { "object": "poster", "qty": [1, 3] },
+        { "object": "radio", "qty": [1, 1] },
+        { "object": "wall_clock", "qty": [1, 1] }
+      ]
+    },
+    "furniture": {
+      "rows": 5,
+      "pool": [
+        { "object": "stool", "qty": [2, 6] },
+        { "object": "chair", "qty": [1, 4] },
+        { "object": "bench", "qty": [1, 2] },
+        { "object": "table", "qty": [1, 3] },
+        { "object": "table_long", "qty": [1, 2] },
+        { "object": "shelf", "qty": [1, 2] },
+        { "object": "rug", "qty": [1, 2] },
+        { "object": "pot_plant", "qty": [1, 4] },
+        { "object": "teapot", "qty": [1, 4] }
+      ]
+    },
+    "hardware": {
+      "rows": 4,
+      "pool": [
+        { "material": "floor_wood", "qty": [2, 5] },
+        { "material": "floor_terrazzo", "qty": [2, 5] },
+        { "material": "floor_blue", "qty": [2, 5] },
+        { "material": "floor_red", "qty": [2, 5] },
+        { "material": "paint_cream", "qty": [2, 5] },
+        { "material": "paint_green", "qty": [2, 5] },
+        { "material": "paint_blue", "qty": [2, 5] },
+        { "material": "paint_rose", "qty": [2, 5] }
+      ]
+    }
+  }
+}

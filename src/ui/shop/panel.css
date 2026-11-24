@@ -1,0 +1,103 @@
+/* A neighbourhood shop's counter (M3): a sheet on the left edge so the player stays visible. */
+.shop-panel {
+  position: absolute;
+  left: calc(var(--safe-l) + 10px);
+  top: calc(var(--safe-t) + 60px);
+  bottom: calc(var(--safe-b) + 64px);
+  width: min(380px, 52vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: #2a1d18f2;
+  border: 2px solid #c8a46e;
+  border-radius: 10px;
+  color: #fff8ea;
+  z-index: 8;
+}
+.shop-panel.hidden {
+  display: none;
+}
+.shop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shop-title {
+  font-size: 17px;
+  flex: 1;
+}
+.shop-hours {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.shop-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shop-rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 6px;
+  background: #3d2a22;
+}
+.shop-rows .icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  image-rendering: pixelated;
+}
+.shop-rows .icon i {
+  display: block;
+  image-rendering: pixelated;
+}
+.shop-rows .icon.pack::before {
+  content: '';
+  width: 22px;
+  height: 26px;
+  background: #ecd3a5;
+  border: 2px solid #8a6644;
+  border-radius: 3px 3px 6px 6px;
+}
+.shop-rows .icon.tin::before {
+  content: '';
+  width: 24px;
+  height: 22px;
+  background: #9aa6ae;
+  border: 2px solid #44505c;
+  border-radius: 3px;
+}
+.shop-rows .info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.shop-rows .name {
+  font-size: 14px;
+}
+.shop-rows .sub {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.shop-rows .hud-btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+.shop-load {
+  font-size: 12px;
+  opacity: 0.9;
+}

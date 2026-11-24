@@ -17,7 +17,7 @@ const SOOT: Ramp = ['3d2a22', '2a1d18', '1b1411'];
 /** Height in px above the footprint per object (sprite headroom). */
 const HEIGHT: Record<string, number> = {
   stool: 8, chair: 22, bench: 10, table: 10, table_long: 14, counter: 24, shelf: 34, rug: 2,
-  radio: 10, pot_plant: 24, teapot: 9, wall_clock: 56, poster: 56, ceiling_fan: 60, hanging_lamp: 60,
+  radio: 10, book_stack: 9, news_rack: 26, pot_plant: 24, teapot: 9, wall_clock: 56, poster: 56, ceiling_fan: 60, hanging_lamp: 60,
   kettle: 12, sink: 18, stove: 16,
 };
 
@@ -125,6 +125,19 @@ const DRAW: Record<string, Draw> = {
   radio: (img, rot) => {
     slab(img, 0.3, 0, 7, DARK);
     strip(img, backSide(rot + 2), 0.04, 0.3, 2, 6, METAL);
+  },
+  book_stack: (img) => {
+    // Three books, a little askew, spines in different colours.
+    img.box(0.25, 0.3, 0.75, 0.7, 0, 3, ['fff8ea', 'c85a44', '9a3a30']);
+    img.box(0.3, 0.25, 0.72, 0.68, 3, 6, ['fff8ea', '3c6e6a', '2c3440']);
+    img.box(0.28, 0.32, 0.7, 0.72, 6, 8, ['fff8ea', 'f0c060', 'd9a05b']);
+  },
+  news_rack: (img, rot) => {
+    // A slanted wooden rack with folded newspapers.
+    const back = backSide(rot);
+    strip(img, back, 0.15, 0.15, 0, 24, KEY);
+    for (const z of [4, 12, 20]) strip(img, back, 0.35, 0.18, z, z + 5, ['f6ead0', 'ecd3a5', 'c8a46e']);
+    legs(img, 0.15, 0.08, 4, DARK);
   },
   pot_plant: (img) => {
     // Clay pot with a bushy top: overlapping leaf clumps make a clear round silhouette.

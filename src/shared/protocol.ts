@@ -37,7 +37,8 @@ export type Action =
   | { k: 'walkTo'; x: number; y: number }
   /** Errand (M3): walk the player to neighbourhood shop `shop` (shared/neighbourhood.ts id); `atShop` on arrival. */
   | { k: 'visit'; shop: number }
-  | { k: 'buy'; shop: number; item: number; qty: number };
+  /** At a shop's counter (M3): buy `qty` units of today's row `item`; carried home, or delivered for a fee. */
+  | { k: 'buy'; shop: number; item: number; qty: number; deliver?: boolean };
 
 export type ToSim =
   /** The worker loads the save in `saveSlot` or starts a new game (`seed` only for tests/debug). */
@@ -76,6 +77,10 @@ export type SimEvent =
   | { k: 'brewReady'; id: number; drink: number }
   /** Nothing on the menu could be made: customer `id` got free plain tea (M3). */
   | { k: 'freeTea'; id: number }
+  /** Goods in hand were put away in the shop (M3). */
+  | { k: 'putAway'; goods: GoodsLine[] }
+  /** Deliveries arrived (M3). */
+  | { k: 'delivered'; goods: GoodsLine[] }
   /** The player reached shop `shop`'s counter (M3): open its panel. */
   | { k: 'atShop'; shop: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
@@ -126,8 +131,24 @@ export interface PlayerState {
   seats: number;
   /** Ingredient portions free to use (shared/ingredients.ts order; reserved ones excluded) (M3). */
   stock: number[];
-  /** Cups of the best-stocked drink still possible (the HUD shelf). */
+  /** About how many cups the shelf can still make (the HUD shelf). */
   cupsLeft: number;
+  /** Today's rows per neighbourhood shop (qty = units left) (M3). */
+  market: { kind: number; id: number; qty: number; price: number }[][];
+  /** Goods in the player's hands and their load (≤ market.json carryMax). */
+  carry: GoodsLine[];
+  carryLoad: number;
+  /** Goods on their way. */
+  deliveries: GoodsLine[];
+  /** Building materials in tiles, per material id. */
+  materials: number[];
+}
+
+/** `qty` units of an item (shared/market.ts ITEM kind + id). */
+export interface GoodsLine {
+  kind: number;
+  id: number;
+  qty: number;
 }
 
 export type FromSim =

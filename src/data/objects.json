@@ -24,6 +24,8 @@
     { "key": "rug", "w": 2, "h": 2, "layer": "floor", "price": 7000, "rots": 2, "recolour": true, "props": { "comfort": [1, 0], "beauty": [1, 1] } },
     { "key": "radio", "w": 1, "h": 1, "layer": "furniture", "price": 15000, "rots": 4, "small": true, "props": { "noise": [3, 3] } },
     { "key": "pot_plant", "w": 1, "h": 1, "layer": "furniture", "price": 4000, "rots": 1, "small": true, "recolour": true, "props": { "beauty": [2, 2], "smell": [1, 1], "noise": [-1, 1] } },
+    { "key": "book_stack", "w": 1, "h": 1, "layer": "furniture", "price": 3000, "rots": 2, "small": true, "props": { "beauty": [1, 1], "noise": [-1, 1] } },
+    { "key": "news_rack", "w": 1, "h": 1, "layer": "furniture", "price": 7000, "rots": 4, "recolour": true, "props": { "beauty": [1, 1], "noise": [-1, 1] } },
     { "key": "teapot", "w": 1, "h": 1, "layer": "furniture", "price": 2500, "rots": 2, "small": true, "recolour": true, "props": { "smell": [2, 1], "warmth": [1, 0] } },
     { "key": "wall_clock", "w": 1, "h": 1, "layer": "wall", "price": 6000, "rots": 2, "props": { "beauty": [1, 1] } },
     { "key": "poster", "w": 1, "h": 1, "layer": "wall", "price": 2000, "rots": 2, "recolour": true, "props": { "beauty": [2, 1] } },
