@@ -8,3 +8,7 @@ Ideas that are not part of v0.1 (M0–M6). Add here instead of building them.
 - Recolour atlas eviction / second page when many colour variants exist.
 - Customers who arrive close together walk the same street row and overlap in a single file (seen with the M2 gate's `crowd`; natural arrivals are ~1 a minute). Spread them across the pavement rows or add simple separation when the street gets busier (M4).
 - Vehicles on the road (cars, trishaws, bicycles) — M4 living world; the road is blocked for people from M2.5 on.
+- Shop owners who remember you; phone orders from a shop where you are a regular (10+ visits); a bicycle for faster walking (DESIGN §4 "convenience is earned" — after M3).
+- Crafting at a workbench from materials (DESIGN §3).
+- Wall-mounted items (posters on the back wall, clocks, shelves).
+- Real shop interiors you can walk into; NPC shoppers at the market stalls (M4 living world).

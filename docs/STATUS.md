@@ -1,6 +1,6 @@
 # Status — start here
 
-Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then DESIGN.md and docs/ARCHITECTURE.md as needed.
+Last updated 24 Nov 2026. Read this first in a new session, then CLAUDE.md, then DESIGN.md and docs/ARCHITECTURE.md as needed.
 
 ## Where we are
 
@@ -10,7 +10,7 @@ Last updated 22 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
 | M2.5 Shop, service and street | ✅ done, deployed | docs/M2_5.md (steps, progress, gate table) |
-| **M3 Neighbourhood** | **next — not planned yet** | DESIGN.md §11 (lighter after M2.5) |
+| **M3 Neighbourhood** | **in progress — plan approved 24 Nov 2026** | docs/M3.md (decisions 1–10, steps S1–S9, progress) |
 | M4–M6 | not started | DESIGN.md §11 |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
@@ -68,7 +68,11 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M3 Neighbourhood — plan mode first
+## Next step: M3 Neighbourhood — S2 (neighbourhood map)
+
+The plan is approved; read docs/M3.md (decisions at the top, progress table at the end). S1 (docs) is done: DESIGN.md and ARCHITECTURE.md describe the M3 target (protocol v10 and save v4 are marked planned).
+
+Older pre-plan notes:
 
 DESIGN.md §11: 3 streets (reuse the M2.5 walk zones, access classes and `shared/street.ts` pattern; real areas from `src/data`), walking the neighbourhood (the player worker already walks with A*), 4 shops with daily stock (`rng.market` is unused so far), carrying and delivery (the tray/cup carrying in `sim/npc/workers.ts` is a model). Neighbouring building fronts are decor (`BUILDINGS`); M3 turns some into real shops.
 

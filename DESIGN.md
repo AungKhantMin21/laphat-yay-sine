@@ -31,7 +31,7 @@ One in-game day takes 8–12 real minutes and ends with sleep, a save and a teas
 
 1. **Morning** — open the shutters, check the ingredient shelf, hear overnight news from the first regulars.
 2. **Serve** — a calm Diner Dash. The player is a character in the shop, and every cup is made by a person: take the order at the table → brew at the tea counter (a tactile pour minigame: milk-to-tea ratio by holding) → carry it on the tray (2 cups at first) → later clear the cups → wash them at the sink. Tap to queue up to 3 tasks (small numbered markers; tap a marker to cancel). Customers never leave angry and there is no failure state: waiting longer only lowers the tip, fast and good service raises it. Cups are a fixed set, so washing keeps the service going. Staff can be hired to share the work (§6).
-3. **Errands** — walk the neighbourhood: ingredients at the wet market, furniture at the furniture shop, paint at the hardware stall. Stock changes daily.
+3. **Errands** — walk the neighbourhood: ingredients at the wet market, furniture at the furniture shop, paint and floor tiles at the hardware stall, decor at the bookstall. Stock changes daily. The clock waits before opening and after closing, so errands fit there without leaving customers waiting; going out during the day is fine too (customers only wait longer).
 4. **Build** — rearrange, place and paint in build mode at any time. The shop keeps running while you build.
 5. **Evening** — close up, count the day in the savings tin, read the notice board, sleep.
 6. **Tomorrow teaser** — one line on the sleep screen: a customer's promise, a rumour of a sale, a seed about to sprout.
@@ -110,6 +110,21 @@ The shop: an open front with roll-up shutters facing the pavement, a signboard w
 - The walk is part of the calm: street sounds, weather, light changing through the day.
 - Purchases are carried home, or delivered later the same day for a small fee.
 
+**The neighbourhood (M3)** is one 128×96 map: the tea shop street, a market street and a quiet lane, joined at a junction. The shop keeps its place and keeps running while you walk.
+
+| Shop | Street | Sells | Hours |
+| --- | --- | --- | --- |
+| Wet market | market street | tea leaves, condensed milk, evaporated milk | 05:00–11:00 |
+| Furniture shop | the lane | stools, chairs, benches, tables, shelves, rugs, plants | 08:00–20:00 |
+| Hardware & paint stall | the lane | floor tiles and wall paint, by the tile | 08:00–20:00 |
+| Bookstall | market street | decor: book stack, newspaper rack, poster stand, radio | 07:00–19:00 |
+
+- Shops are fronts with a counter and a keeper. Tap the keeper (or a shop on the map) to walk there; the shop panel opens on arrival.
+- Daily stock: each morning every shop picks its items, quantities and a price factor (0.85–1.15) from the save's seed and the day, so it is the same after a reload. Sold-out items come back another day.
+- Carrying: up to 4 load (an ingredient pack is 1, furniture is its footprint). Goods are put away as soon as you step into your shop. Delivery costs 10 % (min 500 kyat) and arrives 2 game hours later, or at the next opening if bought in the evening.
+- Ingredients never stall service: they are reserved when an order is taken. If a customer's drink can't be made they pick one that can; if nothing can be made they get free ရေနွေးကြမ်း and leave content without paying.
+- A small map (button in the HUD) shows the streets, the shops and you; tap a shop to walk there.
+
 **Convenience is earned:** bicycle (faster walking), a delivery helper hired at the shop, phone orders from a shop where you are a regular (10+ visits).
 
 ## 5. Economy and property market
@@ -119,7 +134,7 @@ Currency is kyat. Space is bought only when an owner is selling or renting.
 ### Money
 
 - Income: drinks and snacks; tips from happy regulars; occasional catering orders.
-- Spending: ingredients, furniture, materials, property, staff wages.
+- Spending: ingredients (about a quarter of a cup's price), furniture, materials, delivery fees, property, staff wages.
 - **Staff wages** are paid daily from the savings tin at Sleep. If the tin is too low, that staff member takes an unpaid day off tomorrow; nothing is taken and there is never debt.
 - Savings live in a tin box under the counter; its fill level is the money display.
 - All prices live in data tables, so balancing never needs code changes.
@@ -201,7 +216,8 @@ All dialogue lives in JSON, written in Myanmar first (Unicode), English added la
 
 - **Drink model:** tea strength, condensed milk, evaporated milk, sugar, temperature, toppings. Each recipe maps to taste axes: sweet, strong, creamy.
 - **Taste matching:** each customer has a preferred point on those axes; satisfaction falls off with distance.
-- **Classic presets** (pon man, cho seint, kya seint, plain tea) unlocked from the start.
+- **Classic presets** (pon man, cho seint, kya seint) unlocked from the start.
+- **Ingredients (M3):** each preset uses tea leaves plus condensed and/or evaporated milk from the kitchen stock, bought at the wet market. A new game starts with about 2 days of stock; the HUD shelf shows how many cups are left.
 - **Snacks:** paratha, samosa, e kya kwe, mohinga (later), each with a simple prep minigame.
 - **Tea sayar** (M5): brews for you at a steady, better-than-average quality; the pour minigame stays for the player's own cups.
 - **Cook** (M5): needs the snack recipes; the stove in the back kitchen is placed from the start and waits for them.
@@ -299,6 +315,8 @@ A 2-second benchmark plus `hardwareConcurrency` and `deviceMemory` picks Low / M
 ### Input and layout
 
 - Pointer Events for mouse, touch and pen; tap-to-walk, drag to pan, pinch or wheel to zoom (zoom snaps to whole-number pixel scales).
+- Outside the shop, a tap on walkable ground walks the player there (WASD on desktop); walks and shop visits share the 3-slot queue. The camera follows the player outside the shop; a home button re-centres on the shop.
+- Build mode has a paint tool (M3) for floor tiles and wall colour inside the owned shop, using materials bought at the hardware stall.
 - In the shop, a tap on a customer, a table, the counter or the sink queues that task for the player (up to 3, numbered markers; tap a marker to cancel).
 - Default zoom shows characters clearly on a landscape phone (about 40 CSS px tall: a world view about 200 px high); one step out shows the full 270 px view.
 - Debug UI (perf overlay, music switcher) appears only with `?debug=1`, in one small box inside the safe area.
@@ -348,7 +366,7 @@ Build in Claude Code, one milestone at a time: plan mode first, performance chec
 | M1 | Build mode | place, rotate, stack, recolour, undo/redo, property grids, IndexedDB save/load | 2 weeks |
 | M2 | Shop day | customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser | 2 weeks |
 | M2.5 | Shop, service and street | walkable zones and a walled shop with front, counter and back kitchen; player character with tap-to-queue service (order → brew → tray → serve → clear → wash); task board; the waiter; starting layout, readable sprites with shadows, default zoom; building fronts; debug UI only with `?debug=1` | 2 weeks |
-| M3 | Neighbourhood | 3 streets (reusing M2.5 zones), walking the neighbourhood, 4 shops with daily stock, carrying and delivery | 2 weeks |
+| M3 | Neighbourhood | 3 streets on one 128×96 map (reusing M2.5 zones), walking the neighbourhood with a map, 4 shops with daily stock, real ingredients, carrying and delivery, floor and wall painting | 2 weeks |
 | M4 | Living world | sim worker, schedules (incl. staff), LOD, property market, gossip, offline catch-up (incl. staff and wages), vehicles on the road, helper role | 3 weeks |
 | M5 | Story and kitchen | 3 regulars with full arcs, story-driven needs, seasons, drink mixing, tea sayar and cook roles, snacks | 2 weeks |
 | M6 | Ship v0.1 | generated ambience, PWA install, share codes, device-matrix pass, published | 2 weeks |
@@ -378,3 +396,4 @@ Estimates assume hobby pace (evenings and weekends).
 - Ambient sound is generated in code with no voices.
 - Music: four Gemini loops, already processed into `assets/music/`.
 - 22 Nov 2026 (M2 review): service is done by people only (no auto-serve); customers never leave angry, waiting only lowers the tip; the road is for vehicles, people cross at one zebra crossing; the waiter unlocks at 60,000 kyat savings and 6 seats, wage 3,000 kyat/day (data, tunable).
+- 24 Nov 2026 (M3 plan): one bigger map, not separate scenes; errands fit the held clock before opening and after closing; ingredients reserved at order time with a free-tea fallback so service never stalls; delivery 10 % (min 500 kyat), 2 game hours; painting by the tile from hardware-stall materials. Details in docs/M3.md.

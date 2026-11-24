@@ -82,7 +82,7 @@ Two channels:
 - **Commands and events**: small structured-clone objects, low frequency.
 - **Frames**: one binary `ArrayBuffer` per sim tick (10 Hz), transferred to main, then **transferred back** with `recycle` for reuse. Pool of 4 buffers, 64 KB each, grown on demand. Zero allocation at steady state.
 
-The source of truth for message shapes is `src/shared/protocol.ts` (protocol **v9** as of M2.5; v5 added the shop day, v6 customers and pouring with frame section NPC_ORDER, v7 the teaser event and debug `jump`, v8 debug `crowd`, v9 walk zones, the task board, workers, staff and the TASK/CUP sections). Summary:
+The source of truth for message shapes is `src/shared/protocol.ts` (protocol **v9** as of M2.5; v5 added the shop day, v6 customers and pouring with frame section NPC_ORDER, v7 the teaser event and debug `jump`, v8 debug `crowd`, v9 walk zones, the task board, workers, staff and the TASK/CUP sections; **v10 is planned for M3**: errands, market, ingredients, painting — see "Neighbourhood and errands" below). Summary:
 
 ### Main → Worker
 
@@ -166,6 +166,16 @@ Every cup is made by a person; there is no auto-serve. The worker keeps a **task
 - Cups are a fixed pool (`shop.json`); with no clean cup, `brew` waits for a wash. Cups reset to clean on load.
 - Workers and customers use NPC_SPAWN/STATE with def ids `NPC_DEF_CUSTOMER`, `NPC_DEF_PLAYER`, `NPC_DEF_WAITER` (shared/npc.ts); markers and cups come from the TASK and CUP sections.
 - Events: `brewReady`, `served` (now with `wait`), `wages {paid, dayOff}` at sleep.
+
+### Neighbourhood and errands (M3, protocol v10 — planned)
+
+- **Map data.** `src/data/neighbourhood.json` describes the whole 128×96 area: streets (pavement, road, crossing rects), building fronts, the four shops (front rect, keeper tile, visit tile, hours, stock pool key) and customer entry points. `shared/neighbourhood.ts` validates it (like `buildStaff`); `shared/street.ts` keeps exporting `SHOP`, `KITCHEN`, `OPENING`… with unchanged values, so object coordinates in saves stay valid. `sim/area.ts` builds every grid generically from it.
+- **Errands as tasks.** Two player-only task kinds on the board: `go` (target tile) = 6 and `visit` (shop index) = 7. `walkTo {x,y}` and `interact {id}` add them to the player's queue (same 3 slots, markers and cancel). Staff never claim them. Arriving at a visit tile sends `atShop {shop}`; the UI opens the shop panel. The TASK section layout is unchanged.
+- **Market** (`sim/market/market.ts`): each morning `rng.market` is re-seeded from (save seed, day) and picks every shop's rows (item, qty, price factor 0.85–1.15) from `src/data/market.json`. Deterministic, so only today's purchases are saved. `marketStock {shop}` returns the rows in its ack; `buy {shop, item, qty, deliver}` checks hours, money, stock and that the player stands at the visit tile.
+- **Ingredients** (`sim/service/stock.ts`): counts per ingredient (`src/data/ingredients.json`; each drink's `uses` in `drinks.json`). Reserved when the order is taken, released on cancel, consumed at brew. A customer whose drink can't be made picks one that can; if none can, `freeTea` — they leave content without paying. Service can never wait on stock.
+- **Carrying and delivery**: player carry slots (item + qty, load ≤ 4) are put away when the player enters `front`/`interior`/`kitchen` (`putAway`). Deliveries are a small fixed array (due minute, item, qty) delivered on the tick, or at the next opening when the clock is held (`delivered`).
+- **Painting**: materials counts; `paint {x, y, layer, finish}` is a builder command with undo (owned tiles only; the rule lives in `shared/rules/placement.ts`). Floor finishes are FLOOR values; wall colour is a new u8 area grid streamed as a TILE_PATCH layer; `render/chunks.ts` picks wall textures by colour.
+- PlayerState gains `stock`, `materials`, `carry`, `deliveries`.
 
 ### Protocol rules
 
@@ -263,6 +273,8 @@ Database `laphat`:
 Binary save v2 = the v1 layout plus a shop-day block (game clock, phase/shutters, today's stats, tomorrow's teaser as `{key, arg}`: a teasers.json key and, for a guest, a drink key); v1 saves migrate with clock = tick and the shutters open. Customers are not saved: a mid-day load reopens with an empty shop and the same money, phase and stats.
 
 Binary save v3 (M2.5) = v2 plus the staff roster: u8 count, then (u8 len + role key, u16 hired day, u8 flags: bit 0 day off). Migration 2→3 adds an empty roster; missing kitchen fixtures and furniture that no longer fits are handled at load (see walk zones). Workers, tasks and cups are not saved (cups reset to clean).
+
+Binary save v4 (M3, planned) = v3 plus: ingredient stock (key, count), materials (key, count), painted tiles (tile index, layer, finish key), carried goods and pending deliveries (item key, qty, due minute), today's purchases (shop, row, qty). Migration 3→4 gives the old save a new game's starting ingredients and nothing else.
 
 Binary save v1: header (magic `LYS1`, schema, seed, savedAt, tick, 4 RNG states, money, next uid), a **key table** (object types are stored by key, so reordering `objects.json` never breaks saves; unknown keys are skipped), inventory as (key index, qty), objects as 16 bytes each (uid, key index, x, y, rot, layer, colour, flags, parent uid). Property grids and occupancy are rebuilt on load.
 
