@@ -36,21 +36,36 @@ const WALL_H = 40;
 /** Low sill height in px. */
 const SILL_H = 8;
 
+/**
+ * Wall colours: plain, then the paint colours (shared/layout.ts WALL_COLOURS order). Per colour:
+ * [north face (lit), north cap, west face (shaded), west cap, sill north, sill west].
+ */
+const WALL_PAINT: Record<string, [string, string, string, string, string, string]> = {
+  '': ['ecd3a5', 'f6ead0', 'c8a46e', 'dab886', 'c8a46e', 'a98258'],
+  cream: ['fff8ea', 'fff8ea', 'f6ead0', 'fff8ea', 'f6ead0', 'ecd3a5'],
+  green: ['94b37a', 'f6ead0', '6b8f5a', '94b37a', '6b8f5a', '46573a'],
+  blue: ['5e9a8e', 'f6ead0', '3c6e6a', '5e9a8e', '3c6e6a', '2c3440'],
+  rose: ['e98a5e', 'f6ead0', 'c85a44', 'e98a5e', 'c85a44', '9a3a30'],
+};
+
 export function drawWalls(): Array<[string, IsoImage]> {
   const out: Array<[string, IsoImage]> = [];
-  for (const side of ['n', 'w'] as const) {
-    const img = new IsoImage(1, 1, WALL_H);
-    // Light from the top left: the north wall (facing +v) is lit, the west wall (facing +u) shaded.
-    const [face, edge] = side === 'n' ? ['ecd3a5', 'f6ead0'] : ['c8a46e', 'dab886'];
-    img.wallQuad(side, 0, 1, 0, WALL_H, face);
-    img.wallQuad(side, 0, 1, WALL_H - 2, WALL_H, edge); // top cap
-    img.wallQuad(side, 0, 1, 0, 3, side === 'n' ? 'a98258' : '8a6644'); // skirting
-    out.push([`wall/${side}`, img]);
-    // Low sill (front, east side, kitchen partition): same wall, cut down so the room stays visible.
-    const low = new IsoImage(1, 1, WALL_H);
-    low.wallQuad(side, 0, 1, 0, SILL_H, side === 'n' ? 'c8a46e' : 'a98258');
-    low.wallQuad(side, 0, 1, SILL_H - 2, SILL_H, side === 'n' ? 'ecd3a5' : 'dab886');
-    out.push([`wall/low_${side}`, low]);
+  for (const [colour, c] of Object.entries(WALL_PAINT)) {
+    const suffix = colour ? `_${colour}` : '';
+    for (const side of ['n', 'w'] as const) {
+      const img = new IsoImage(1, 1, WALL_H);
+      // Light from the top left: the north wall (facing +v) is lit, the west wall (facing +u) shaded.
+      const [face, edge] = side === 'n' ? [c[0], c[1]] : [c[2], c[3]];
+      img.wallQuad(side, 0, 1, 0, WALL_H, face);
+      img.wallQuad(side, 0, 1, WALL_H - 2, WALL_H, edge); // top cap
+      img.wallQuad(side, 0, 1, 0, 3, side === 'n' ? 'a98258' : '8a6644'); // skirting
+      out.push([`wall/${side}${suffix}`, img]);
+      // Low sill (front, east side, kitchen partition): same wall, cut down so the room stays visible.
+      const low = new IsoImage(1, 1, WALL_H);
+      low.wallQuad(side, 0, 1, 0, SILL_H, side === 'n' ? c[4] : c[5]);
+      low.wallQuad(side, 0, 1, SILL_H - 2, SILL_H, side === 'n' ? c[0] : c[3]);
+      out.push([`wall/low_${side}${suffix}`, low]);
+    }
   }
   return out;
 }

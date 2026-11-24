@@ -1,8 +1,10 @@
-// Build commands: place, move, rotate, recolour, pick up, sell — with inventory, money and undo/redo.
+// Build commands: place, move, rotate, recolour, pick up, sell, paint — with inventory, materials,
+// money and undo/redo.
 // Every command is stored as one generic record: objects before, objects after, inventory and money
 // deltas. Undo applies the record backwards. Records reference objects by stable uid, never by slot.
 import { CATALOG, LAYER, footH, footW, sellValue } from '../../shared/catalog';
-import { checkPlacement, newPlaceResult } from '../../shared/rules/placement';
+import { PAINT_LAYER, checkPaint, checkPlacement, newPlaceResult } from '../../shared/rules/placement';
+import { MATERIALS, MATERIAL_KIND } from '../../shared/materials';
 import type { SimWorld } from '../world';
 
 export const HISTORY_MAX = 100;
@@ -25,6 +27,10 @@ interface Op {
   /** [type, delta] pairs applied to the inventory going forward. */
   inv: Array<[number, number]>;
   money: number;
+  /** Painted tiles (M3): grid value before and after; floor = the floor grid, else the wall colour. */
+  paint?: { tile: number; floor: boolean; from: number; to: number }[];
+  /** [material, delta] pairs applied going forward (tiles). */
+  mat?: Array<[number, number]>;
 }
 
 export interface Result {
@@ -40,6 +46,8 @@ const no = (reason: string): Result => ({ ok: false, reason });
 export class Builder {
   money: number;
   readonly inventory: Uint16Array;
+  /** Building materials in tiles, per material id (M3). */
+  readonly materials = new Int32Array(MATERIALS.defs.length);
   private readonly past: Op[] = [];
   private readonly future: Op[] = [];
   private readonly check = newPlaceResult();
@@ -149,6 +157,24 @@ export class Builder {
     return this.commit({ before, after: [], inv, money: refund });
   }
 
+  /**
+   * Paints tile (x, y) with material `m` (M3): a floor finish on a shop floor tile, or a colour on
+   * the shop's wall there. Uses one tile of the material; undo gives it back.
+   */
+  paint(x: number, y: number, m: number): Result {
+    const def = MATERIALS.defs[m];
+    if (!def) return no('build.err.noMaterial');
+    const floor = def.kind === MATERIAL_KIND.floor;
+    const reason = checkPaint(this.world.state, x, y, floor ? PAINT_LAYER.floor : PAINT_LAYER.wall);
+    if (reason) return no(reason);
+    const a = this.world.state.area;
+    const t = y * a.w + x;
+    const from = (floor ? a.floor : a.paint)[t]!;
+    if (from === def.value) return no('build.err.samePaint');
+    if (this.materials[m]! < 1) return no('build.err.noMaterial');
+    return this.commit({ before: [], after: [], inv: [], money: 0, paint: [{ tile: t, floor, from, to: def.value }], mat: [[m, -1]] });
+  }
+
   undo(): Result {
     const op = this.past[this.past.length - 1];
     if (!op) return no('build.err.nothingToUndo');
@@ -187,6 +213,7 @@ export class Builder {
     const money = op.money * dir;
     if (this.money + money < 0) return no('build.err.noMoney');
     for (const [type, d] of op.inv) if (this.inventory[type]! + d * dir < 0) return no('build.err.noItem');
+    if (op.mat) for (const [m, d] of op.mat) if (this.materials[m]! + d * dir < 0) return no('build.err.noMaterial');
 
     const w = this.world;
     const s = w.objects;
@@ -208,6 +235,8 @@ export class Builder {
     }
     this.money += money;
     for (const [type, d] of op.inv) this.inventory[type] = this.inventory[type]! + d * dir;
+    if (op.mat) for (const [m, d] of op.mat) this.materials[m] = this.materials[m]! + d * dir;
+    if (op.paint) for (const p of op.paint) w.paint(p.tile, p.floor, dir === 1 ? p.to : p.from);
     this.changed = true;
     const focus = focusUid ? s.indexOfUid(focusUid) : 0;
     return focus ? { ok: true, index: focus } : OK;

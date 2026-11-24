@@ -2,6 +2,7 @@
 // pack at the hardware stall and used one unit per tile by the build-mode paint tool. `finish` names
 // the floor finish (shared/layout.ts FLOOR key) or wall colour it paints. Validated once at load.
 import raw from '../data/materials.json';
+import { FLOOR, WALL_COLOURS } from './layout';
 
 export const MATERIAL_KIND = { floor: 0, wall: 1 } as const;
 
@@ -12,6 +13,8 @@ export interface MaterialDef {
   name: string;
   kind: number;
   finish: string;
+  /** What it paints: a FLOOR value (floor) or a WALL_COLOURS index (wall). */
+  value: number;
   /** Tiles one pack covers. */
   pack: number;
   /** Base kyat per pack. */
@@ -37,10 +40,11 @@ export function buildMaterials(d: RawMaterials): Materials {
     if (byKey.has(r.key)) throw new Error(`${at}: duplicate key`);
     const kind = (MATERIAL_KIND as Record<string, number>)[r.kind];
     if (kind === undefined) throw new Error(`${at}: kind must be floor or wall`);
-    if (!r.finish) throw new Error(`${at}: needs a finish`);
+    const value = kind === MATERIAL_KIND.floor ? ((FLOOR as Record<string, number>)[r.finish] ?? 0) : (WALL_COLOURS as readonly string[]).indexOf(r.finish);
+    if (!(value > 0)) throw new Error(`${at}: unknown ${r.kind} finish "${r.finish}"`);
     if (!(Number.isInteger(r.pack) && r.pack > 0 && r.pack <= 1000)) throw new Error(`${at}: pack must be a whole number 1…1000`);
     if (!(Number.isInteger(r.price) && r.price > 0)) throw new Error(`${at}: price must be a whole number > 0`);
-    const def = { id, key: r.key, name: `material.${r.key}`, kind, finish: r.finish, pack: r.pack, price: r.price };
+    const def = { id, key: r.key, name: `material.${r.key}`, kind, finish: r.finish, value, pack: r.pack, price: r.price };
     defs.push(def);
     byKey.set(r.key, def);
   });

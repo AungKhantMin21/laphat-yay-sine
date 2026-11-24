@@ -131,12 +131,12 @@ export class WorldView implements FrameHandler {
   tilePatch(layer: number, x: number, y: number, w: number, h: number, bytes: Uint8Array, offset: number): void {
     const a = this.state.area;
     const dst =
-      layer === TILE_LAYER.floor ? a.floor : layer === TILE_LAYER.wall ? a.wall : layer === TILE_LAYER.zone ? a.zone : layer === TILE_LAYER.access ? a.access : a.facade;
+      layer === TILE_LAYER.floor ? a.floor : layer === TILE_LAYER.wall ? a.wall : layer === TILE_LAYER.zone ? a.zone : layer === TILE_LAYER.access ? a.access : layer === TILE_LAYER.paint ? a.paint : a.facade;
     for (let row = 0; row < h; row++) {
       const s = offset + row * w;
       dst.set(bytes.subarray(s, s + w), (y + row) * a.w + x);
     }
-    if (layer === TILE_LAYER.floor || layer === TILE_LAYER.wall || layer === TILE_LAYER.facade) this.tilesDirty.add(x, y, w, h);
+    if (layer === TILE_LAYER.floor || layer === TILE_LAYER.wall || layer === TILE_LAYER.facade || layer === TILE_LAYER.paint) this.tilesDirty.add(x, y, w, h);
   }
   objUpsert(handle: number, type: number, x: number, y: number, rot: number, layer: number, colour: number, flags: number, parent: number): void {
     const { objects: s, occ } = this.state;

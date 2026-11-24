@@ -42,14 +42,18 @@ export class FloorChunks {
   private floor: Uint8Array = new Uint8Array(0);
   private wall: Uint8Array = new Uint8Array(0);
   private facade: Uint8Array = new Uint8Array(0);
+  private paint: Uint8Array = new Uint8Array(0);
   private areaW = 0;
   private areaH = 0;
 
   constructor(
     private readonly renderer: Renderer,
     private readonly tiles: Texture[],
-    /** Wall textures: [north edge, west edge, low north sill, low west sill]. */
-    private readonly walls: readonly [Texture, Texture, Texture, Texture],
+    /**
+     * Wall textures, 4 per wall colour (shared/layout.ts WALL_COLOURS order, plain first):
+     * [north edge, west edge, low north sill, low west sill].
+     */
+    private readonly walls: readonly Texture[],
     /** Building-front textures by facade grid value (index 0 unused). */
     private readonly facades: readonly Texture[],
     /** Max chunk textures alive at once (each 256×192 RGBA ≈ 192 KB). */
@@ -71,9 +75,10 @@ export class FloorChunks {
   }
 
   /** Call when a new area loads. */
-  setArea(floor: Uint8Array, wall: Uint8Array, facade: Uint8Array, w: number, h: number): void {
+  setArea(floor: Uint8Array, wall: Uint8Array, facade: Uint8Array, paint: Uint8Array, w: number, h: number): void {
     this.wall = wall;
     this.facade = facade;
+    this.paint = paint;
     for (const c of this.chunks) this.release(c);
     this.layer.removeChildren().forEach((c) => c.destroy());
     this.floor = floor;
@@ -176,6 +181,7 @@ export class FloorChunks {
         const ty = cy * CHUNK + j;
         const inside = tx < W && ty < this.areaH;
         const bits = inside ? this.wall[ty * W + tx]! : 0;
+        const colour = bits && inside ? this.paint[ty * W + tx]! : 0;
         // A building front stands on the tile's −y edge like a north wall, but taller; with
         // FACADE_WEST it stands on the −x edge (the same sprite, mirrored).
         const fv = inside ? this.facade[ty * W + tx]! : 0;
@@ -193,7 +199,7 @@ export class FloorChunks {
         for (let side = 0; side < 4; side++) {
           if (!(bits & WALL_ORDER[side]!)) continue;
           const s = this.scratchWalls[wk++]!;
-          s.texture = this.walls[WALL_TEX[side]!]!;
+          s.texture = this.walls[colour * 4 + WALL_TEX[side]!] ?? this.walls[WALL_TEX[side]!]!;
           s.visible = true;
           s.scale.x = 1;
           s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - WALL_H);

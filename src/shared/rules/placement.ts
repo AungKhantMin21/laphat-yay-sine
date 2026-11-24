@@ -1,4 +1,5 @@
 // Placement rules, shared by the worker (authority) and build mode's ghost on the main thread.
+// Also where the paint tool may paint (M3).
 // Pure and allocation-free: the caller passes a result object to fill (the ghost checks every move).
 import { CATALOG, LAYER, ZONE_RULE, footH, footW } from '../catalog';
 import { MAX_AREA_H, MAX_AREA_W, WALL, WALL_N, WALL_W, ZONE } from '../layout';
@@ -171,4 +172,25 @@ export function wayStaysOpen(world: WorldState, x: number, y: number, fw: number
     }
   }
   return found === ways;
+}
+
+/** Paint layers (the `paint` builder command). */
+export const PAINT_LAYER = { floor: 0, wall: 1 } as const;
+
+/**
+ * May tile (x, y) be painted? Floors: inside the player's shop only. Walls: a tile with a wall
+ * edge that belongs to the shop (back walls inside it; the front and east sills sit on the tile
+ * beyond, so they count when the owned tile is on the other side of that edge). '' or an i18n key.
+ */
+export function checkPaint(s: WorldState, x: number, y: number, layer: number): string {
+  const a = s.area;
+  if (!a.inBounds(x, y)) return 'build.err.paintOutside';
+  const t = y * a.w + x;
+  const owned = (tx: number, ty: number): boolean => a.inBounds(tx, ty) && (a.zone[ty * a.w + tx]! & ZONE.owned) !== 0;
+  if (layer === PAINT_LAYER.floor) return owned(x, y) && isShopZone(a.access[t]!) ? '' : 'build.err.paintOutside';
+  if (layer !== PAINT_LAYER.wall) return 'build.err.paintOutside';
+  const bits = a.wall[t]!;
+  if (bits === 0) return 'build.err.noWall';
+  if (owned(x, y) || ((bits & WALL_W) !== 0 && owned(x - 1, y)) || ((bits & WALL_N) !== 0 && owned(x, y - 1))) return '';
+  return 'build.err.paintOutside';
 }

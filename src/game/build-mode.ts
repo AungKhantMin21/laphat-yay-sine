@@ -1,16 +1,17 @@
-// Build mode: what the player is doing (browsing, placing, a selected object, moving it), the ghost
+// Build mode: what the player is doing (browsing, placing, a selected object, moving it, painting), the ghost
 // validated locally with the shared rules, and the actions sent to the worker.
 import { CATALOG, LAYER, footH, footW, sellValue } from '../shared/catalog';
 import { tileAtX, tileAtY } from '../shared/iso';
 import { WALL } from '../shared/layout';
-import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
+import { PAINT_LAYER, checkPaint, checkPlacement, newPlaceResult } from '../shared/rules/placement';
+import { MATERIALS, MATERIAL_KIND } from '../shared/materials';
 import type { Action } from '../shared/protocol';
 import type { SimBridge } from './bridge';
 import type { WorldView } from './view';
 import type { ObjectLayer } from '../render/objects';
 import type { Ghost } from '../render/ghost';
 
-export type BuildMode = 'off' | 'browse' | 'place' | 'selected' | 'move';
+export type BuildMode = 'off' | 'browse' | 'place' | 'selected' | 'move' | 'paint';
 
 /** How high above the floor wall and ceiling items are drawn: pointer y is shifted down by this. */
 const POINTER_LIFT: Record<number, number> = { [LAYER.wall]: 28, [LAYER.ceiling]: 44 };
@@ -39,6 +40,10 @@ export class BuildController {
   colour = 0;
   tx = 0;
   ty = 0;
+  /** Material being laid (paint mode, materials.json id). */
+  material = -1;
+  /** Last tile painted in this drag (no repeats). */
+  private paintedAt = -1;
   /** Selected object slot (selected / move modes). */
   sel = 0;
   /** Waiting for a second tap on "sell". */
@@ -93,8 +98,23 @@ export class BuildController {
     this.refresh();
   }
 
+  /** Start painting with material `m` (M3): taps and drags lay it tile by tile. */
+  choosePaint(m: number): void {
+    if (!MATERIALS.defs[m]) return;
+    this.deselect();
+    this.d.ghost.hide();
+    this.material = m;
+    this.paintedAt = -1;
+    this.setMode('paint');
+  }
+
   tap(x: number, y: number, pointerType: string): void {
     if (this.heat >= 0) this.point(x, y);
+    if (this.mode === 'paint') {
+      this.paintedAt = -1;
+      this.paintAt(x, y, true);
+      return;
+    }
     if (this.mode === 'place' || this.mode === 'move') {
       this.aim(x, y);
       if (pointerType === 'mouse') void this.confirm();
@@ -147,6 +167,14 @@ export class BuildController {
 
   /** A drag that starts on the ghost's footprint moves the ghost instead of the camera. */
   dragStart(x: number, y: number): boolean {
+    if (this.mode === 'paint') {
+      // A drag that starts on a paintable tile paints along the way instead of panning.
+      const [tx, ty] = this.paintTile(x, y);
+      if (this.paintRule(tx, ty)) return false;
+      this.paintedAt = -1;
+      this.paintAt(x, y, false);
+      return true;
+    }
     if (this.mode !== 'place' && this.mode !== 'move') return false;
     const def = CATALOG.defs[this.type]!;
     const [wx, wy] = this.d.toWorld(x, y);
@@ -157,7 +185,45 @@ export class BuildController {
   }
 
   dragMove(x: number, y: number): void {
+    if (this.mode === 'paint') return this.paintAt(x, y, false);
     this.aim(x, y);
+  }
+
+  /** Tile under a CSS point for the current material (walls are hit a little above their base). */
+  private paintTile(x: number, y: number): [number, number] {
+    const [wx, wy] = this.d.toWorld(x, y);
+    const def = MATERIALS.defs[this.material];
+    const lift = def && def.kind === MATERIAL_KIND.wall ? 20 : 0;
+    return [tileAtX(wx, wy + lift), tileAtY(wx, wy + lift)];
+  }
+
+  /** '' when tile (tx, ty) can take the current material (the shared rule; the worker checks again). */
+  private paintRule(tx: number, ty: number): string {
+    const def = MATERIALS.defs[this.material];
+    if (!def) return 'build.err.noMaterial';
+    return checkPaint(this.d.view.state, tx, ty, def.kind === MATERIAL_KIND.wall ? PAINT_LAYER.wall : PAINT_LAYER.floor);
+  }
+
+  /** Paints the tile under the pointer (once per tile per drag). `loud`: say why it can't. */
+  private paintAt(x: number, y: number, loud: boolean): void {
+    const [tx, ty] = this.paintTile(x, y);
+    const a = this.d.view.area;
+    const t = ty * a.w + tx;
+    if (t === this.paintedAt) return;
+    this.paintedAt = t;
+    const rule = this.paintRule(tx, ty);
+    if (rule) {
+      if (loud) this.say(rule);
+      return;
+    }
+    void this.d.bridge.act({ k: 'paint', x: tx, y: ty, material: this.material }).then((r) => {
+      if (!r.ok && r.reason && (loud || r.reason === 'build.err.noMaterial')) this.say(r.reason);
+      if (r.ok && !this.built) {
+        this.built = true;
+        this.d.onFirstBuild?.();
+      }
+      if (r.ok && (this.d.bridge.player?.materials[this.material] ?? 0) <= 1) this.emit();
+    });
   }
 
   rotate(): void {
@@ -204,6 +270,9 @@ export class BuildController {
       this.mode = 'selected';
       this.highlight(true);
       this.emit();
+    } else if (this.mode === 'paint') {
+      this.material = -1;
+      this.setMode('browse');
     } else if (this.mode === 'place' || this.mode === 'selected') {
       this.deselect();
       this.d.ghost.hide();

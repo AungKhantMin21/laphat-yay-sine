@@ -14,7 +14,7 @@ import { installQueue } from './ui/hud/queue';
 import { NavButtons } from './ui/hud/nav';
 import { StreetShops } from './render/street-shops';
 import { ACCESS, isShopZone, mayEnter } from './shared/rules/access';
-import { MAX_TASKS, WORKER_SLOT0 } from './shared/layout';
+import { MAX_TASKS, WALL_COLOURS, WORKER_SLOT0 } from './shared/layout';
 import { FloorChunks } from './render/chunks';
 import { ObjectLayer } from './render/objects';
 import { NpcLayer } from './render/npcs';
@@ -65,10 +65,7 @@ const stageEl = document.getElementById('stage')!;
 const stage = await createPixelStage(stageEl);
 const atlas = await loadAtlas();
 const chunks = new FloorChunks(stage.renderer, floorTextures(atlas, floorFrames, FLOOR_TYPES), [
-  atlas.get('wall/n') ?? Texture.EMPTY,
-  atlas.get('wall/w') ?? Texture.EMPTY,
-  atlas.get('wall/low_n') ?? Texture.EMPTY,
-  atlas.get('wall/low_w') ?? Texture.EMPTY,
+  ...WALL_COLOURS.flatMap((c) => ['n', 'w', 'low_n', 'low_w'].map((k) => atlas.get(`wall/${k}${c ? `_${c}` : ''}`) ?? Texture.EMPTY)),
 ], FACADE_FRAMES.map((f) => (f ? (atlas.get(f) ?? Texture.EMPTY) : Texture.EMPTY)));
 stage.world.addChild(chunks.layer);
 stage.onContextRestored(() => chunks.invalidateAll());
@@ -133,7 +130,7 @@ const bridge: SimBridge = new SimBridge(view, {
     }
   },
   onReady: () => {
-    chunks.setArea(view.area.floor, view.area.wall, view.area.facade, view.area.w, view.area.h);
+    chunks.setArea(view.area.floor, view.area.wall, view.area.facade, view.area.paint, view.area.w, view.area.h);
     camera.setArea(view.area.w, view.area.h);
     if (!booted) {
       booted = true;

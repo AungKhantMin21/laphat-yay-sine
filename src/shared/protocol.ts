@@ -37,6 +37,8 @@ export type Action =
   | { k: 'walkTo'; x: number; y: number }
   /** Errand (M3): walk the player to neighbourhood shop `shop` (shared/neighbourhood.ts id); `atShop` on arrival. */
   | { k: 'visit'; shop: number }
+  /** Build mode paint tool (M3): lay material `material` (materials.json id) on tile (x, y). */
+  | { k: 'paint'; x: number; y: number; material: number }
   /** At a shop's counter (M3): buy `qty` units of today's row `item`; carried home, or delivered for a fee. */
   | { k: 'buy'; shop: number; item: number; qty: number; deliver?: boolean };
 

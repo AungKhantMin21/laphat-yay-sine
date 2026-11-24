@@ -28,6 +28,8 @@ export class SimWorld {
   private readonly upserts: IndexQueue;
   private readonly removed: Uint32Array;
   private removedCount = 0;
+  /** Painted tiles since the last frame (M3): one dirty rect per paint layer (floor, wall colour). */
+  private readonly paintRect = new Int32Array(8);
   /** Tiles whose floor-standing furniture changed (walk grid rebuild), inclusive-exclusive. */
   walkX0 = 0;
   walkY0 = 0;
@@ -150,7 +152,55 @@ export class SimWorld {
       if (this.state.objects.live[i]) this.writeUpsert(w, i);
     }
     q.clear();
+    this.writePaint(w);
     this.writeGrids(w);
+  }
+
+  /**
+   * Paints tile t (M3): `floor` sets the FLOOR value, otherwise the wall colour. The change streams
+   * to the main thread next frame; a new floor may change walking cost, so the walk grid updates too.
+   */
+  paint(t: number, floor: boolean, value: number): void {
+    const a = this.state.area;
+    const x = t % a.w;
+    const y = (t - x) / a.w;
+    (floor ? a.floor : a.paint)[t] = value;
+    const r = this.paintRect;
+    const o = floor ? 0 : 4;
+    if (r[o + 2]! <= r[o]!) {
+      r[o] = x;
+      r[o + 1] = y;
+      r[o + 2] = x + 1;
+      r[o + 3] = y + 1;
+    } else {
+      r[o] = Math.min(r[o]!, x);
+      r[o + 1] = Math.min(r[o + 1]!, y);
+      r[o + 2] = Math.max(r[o + 2]!, x + 1);
+      r[o + 3] = Math.max(r[o + 3]!, y + 1);
+    }
+    if (floor) {
+      if (!this.walkDirty) {
+        this.walkX0 = x;
+        this.walkY0 = y;
+        this.walkX1 = x + 1;
+        this.walkY1 = y + 1;
+      } else {
+        this.walkX0 = Math.min(this.walkX0, x);
+        this.walkY0 = Math.min(this.walkY0, y);
+        this.walkX1 = Math.max(this.walkX1, x + 1);
+        this.walkY1 = Math.max(this.walkY1, y + 1);
+      }
+    }
+  }
+
+  private writePaint(w: FrameWriter): void {
+    const r = this.paintRect;
+    const a = this.state.area;
+    for (let o = 0; o < 8; o += 4) {
+      if (r[o + 2]! <= r[o]!) continue;
+      w.tilePatch(o === 0 ? TILE_LAYER.floor : TILE_LAYER.paint, r[o]!, r[o + 1]!, r[o + 2]! - r[o]!, r[o + 3]! - r[o + 1]!, o === 0 ? a.floor : a.paint, a.w);
+      r[o] = r[o + 1] = r[o + 2] = r[o + 3] = 0;
+    }
   }
 
   /** Main thread's heat overlay: which property grids to stream. */
@@ -180,6 +230,8 @@ export class SimWorld {
     w.tilePatch(TILE_LAYER.zone, 0, 0, a.w, a.h, a.zone, a.w);
     w.tilePatch(TILE_LAYER.access, 0, 0, a.w, a.h, a.access, a.w);
     w.tilePatch(TILE_LAYER.facade, 0, 0, a.w, a.h, a.facade, a.w);
+    w.tilePatch(TILE_LAYER.paint, 0, 0, a.w, a.h, a.paint, a.w);
+    this.paintRect.fill(0);
     const s = this.state.objects;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 1; i < s.capacity; i++) if (s.live[i] && (s.parent[i] === 0) === (pass === 0)) this.writeUpsert(w, i);

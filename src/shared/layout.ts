@@ -30,16 +30,30 @@ export const MINUTES_PER_DAY = 24 * 60;
 /** New saves start at 06:00 on day 0. */
 export const START_MINUTE = 6 * 60;
 
-/** M0 placeholder street size until area data exists. */
-export const M0_AREA_W = 64;
-export const M0_AREA_H = 48;
-
 /** Floor tile types (grid values in the `floor` layer). */
-export const FLOOR = { none: 0, road: 1, pavement: 2, shopTile: 3, dirt: 4, crossing: 5, kitchen: 6, lane: 7 } as const;
-export const FLOOR_TYPES = 8;
+export const FLOOR = {
+  none: 0,
+  road: 1,
+  pavement: 2,
+  shopTile: 3,
+  dirt: 4,
+  crossing: 5,
+  kitchen: 6,
+  lane: 7,
+  // Finishes the player can lay with the paint tool (M3, materials.json).
+  wood: 8,
+  terrazzo: 9,
+  tileBlue: 10,
+  tileRed: 11,
+} as const;
+export const FLOOR_TYPES = 12;
+
+/** Wall colours (the `paint` grid; 0 = the plain wall). Names are materials.json wall finishes. */
+export const WALL_COLOURS = ['', 'cream', 'green', 'blue', 'rose'] as const;
 
 /** TILE_PATCH layer ids. */
-export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3, facade: 4 } as const;
+/** `paint` = wall colour per tile (M3). */
+export const TILE_LAYER = { floor: 0, wall: 1, zone: 2, access: 3, facade: 4, paint: 5 } as const;
 
 /**
  * `wall` grid bits: a wall on the tile's north-east edge (−y side) or north-west edge (−x side).

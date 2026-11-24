@@ -3,6 +3,7 @@
 import './build.css';
 import type { BuildController } from '../../game/build-mode';
 import type { PlayerState } from '../../shared/protocol';
+import { MATERIALS } from '../../shared/materials';
 import { CATALOG } from '../../shared/catalog';
 import { formatNumber, t } from '../i18n';
 
@@ -15,6 +16,18 @@ export interface IconInfo {
 }
 
 const ICON_BOX = 48;
+
+/** Swatch colour per material finish (palette colours). */
+const MATERIAL_SWATCH: Record<string, string> = {
+  wood: '#a98258',
+  terrazzo: '#ecd3a5',
+  tileBlue: '#5e9a8e',
+  tileRed: '#c85a44',
+  cream: '#fff8ea',
+  green: '#94b37a',
+  blue: '#5e9a8e',
+  rose: '#e98a5e',
+};
 const PROPS = ['comfort', 'light', 'noise', 'warmth', 'shade', 'beauty', 'smell', 'cover'] as const;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -59,7 +72,8 @@ export function installBuildUi(ctl: BuildController, getPlayer: () => PlayerStat
 
   function renderDrawer(p: PlayerState | null): void {
     const inv = p?.inventory ?? [];
-    const key = `${inv.join(',')}|${ctl.mode === 'place' ? ctl.type : -1}`;
+    const mats = p?.materials ?? [];
+    const key = `${inv.join(',')}|${mats.join(',')}|${ctl.mode === 'place' ? ctl.type : -1}|${ctl.mode === 'paint' ? ctl.material : -1}`;
     if (key === lastInv) return;
     lastInv = key;
     list.textContent = '';
@@ -88,6 +102,23 @@ export function installBuildUi(ctl: BuildController, getPlayer: () => PlayerStat
       li.appendChild(b);
       list.appendChild(li);
     }
+    // Floor tiles and wall paint from the hardware stall (M3): pick one to paint with.
+    for (const m of MATERIALS.defs) {
+      const n = mats[m.id] ?? 0;
+      if (n <= 0) continue;
+      any = true;
+      const li = el('li');
+      const b = el('button');
+      if (ctl.mode === 'paint' && ctl.material === m.id) b.classList.add('on');
+      const icon = el('span', 'icon');
+      const sw = el('i', 'mat');
+      sw.style.background = MATERIAL_SWATCH[m.finish] ?? '#ecd3a5';
+      icon.appendChild(sw);
+      b.append(icon, el('span', '', t(m.name)), el('span', 'count', t('build.tiles', { n })));
+      b.addEventListener('click', () => ctl.choosePaint(m.id));
+      li.appendChild(b);
+      list.appendChild(li);
+    }
     if (!any) list.appendChild(el('li', 'empty', t('build.empty')));
   }
 
@@ -111,6 +142,10 @@ export function installBuildUi(ctl: BuildController, getPlayer: () => PlayerStat
         on(button(m === 'move' ? t('build.move') : t('build.place'), '✓', 'primary'), () => void ctl.confirm(), ctl.check.ok),
       );
       add(row);
+    }
+    if (m === 'paint') {
+      add(el('div', 'hint', t('build.paintHint')));
+      add(on(button(t('build.done'), '✓', 'primary'), () => ctl.cancel()));
     }
     if (m === 'selected') {
       add(on(button(t('build.rotate'), '↻'), () => ctl.rotate()));

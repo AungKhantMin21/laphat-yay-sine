@@ -5,5 +5,9 @@
   "4": "floor/dirt",
   "5": "floor/crossing",
   "6": "floor/kitchen",
-  "7": "floor/lane"
+  "7": "floor/lane",
+  "8": "floor/wood",
+  "9": "floor/terrazzo",
+  "10": "floor/tile_blue",
+  "11": "floor/tile_red"
 }

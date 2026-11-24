@@ -78,6 +78,40 @@ const tiles: Record<string, Painter> = {
     const edge = y % 3 === 0 || (x + (row % 2) * 3) % 6 === 0;
     return edge ? '6e4e36' : (row + col) % 3 === 0 ? '8a6644' : 'a98258';
   },
+  // Floor finishes from the hardware stall (M3).
+  wood: (x, y, e) => {
+    // Planks along iso-x with dark seams; staggered board ends.
+    if (e === 'tl') return 'd9a05b';
+    if (e === 'br') return '6e4e36';
+    const v = y / 8 - x / 16 + 2; // 0..4 across the tile in iso-y
+    const u = x / 16 + y / 8; // 0..4 along iso-x
+    const plank = Math.floor(v);
+    if (v - plank < 0.25) return '6e4e36';
+    if (Math.abs(u - ((plank * 1.7) % 4)) < 0.12) return '8a6644';
+    return plank % 2 ? 'a98258' : 'c8a46e';
+  },
+  terrazzo: (x, y, e) => {
+    if (e === 'tl') return 'fff8ea';
+    if (e === 'br') return '9aa6ae';
+    const n = noise(x, y, 5) % 11;
+    return n === 0 ? 'c85a44' : n === 1 ? '6a7884' : n === 2 ? '3c6e6a' : 'ecd3a5';
+  },
+  tile_blue: (x, y, e) => {
+    if (e === 'tl') return 'fff8ea';
+    if (e === 'br') return '2c3440';
+    const u = x / 16 + y / 8;
+    const v = y / 8 - x / 16 + 2;
+    const g = (u % 2 < 0.15 || v % 2 < 0.15) && u > 0.1 && v > 0.1;
+    return g ? 'fff8ea' : (Math.floor(u / 2) + Math.floor(v / 2)) % 2 ? '5e9a8e' : '3c6e6a';
+  },
+  tile_red: (x, y, e) => {
+    if (e === 'tl') return 'f6ead0';
+    if (e === 'br') return '6a2a26';
+    const u = x / 16 + y / 8;
+    const v = y / 8 - x / 16 + 2;
+    const g = (u % 2 < 0.15 || v % 2 < 0.15) && u > 0.1 && v > 0.1;
+    return g ? 'ecd3a5' : (Math.floor(u / 2) + Math.floor(v / 2)) % 2 ? 'c85a44' : '9a3a30';
+  },
   dirt: (x, y, e) => {
     if (e === 'tl') return '6e4e36';
     if (e === 'br') return '3d2a22';

@@ -15,6 +15,8 @@ export class AreaGrids {
   readonly access: Uint8Array;
   /** Building-front segment on the tile's −y edge, or its −x edge with FACADE_WEST (shared/street.ts FACADE_FRAMES index; 0 = none). Decor only. */
   readonly facade: Uint8Array;
+  /** Wall colour of the walls on this tile's edges (shared/layout.ts WALL_COLOURS index; 0 = plain) (M3). */
+  readonly paint: Uint8Array;
 
   constructor(
     readonly id: number,
@@ -26,6 +28,7 @@ export class AreaGrids {
     this.zone = new Uint8Array(w * h);
     this.access = new Uint8Array(w * h);
     this.facade = new Uint8Array(w * h);
+    this.paint = new Uint8Array(w * h);
   }
 
   inBounds(x: number, y: number): boolean {

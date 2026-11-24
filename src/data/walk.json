@@ -9,6 +9,10 @@
     "dirt": 12,
     "crossing": 14,
     "kitchen": 10,
-    "lane": 10
+    "lane": 10,
+    "wood": 10,
+    "terrazzo": 10,
+    "tileBlue": 10,
+    "tileRed": 10
   }
 }

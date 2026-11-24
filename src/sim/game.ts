@@ -15,9 +15,10 @@ import { ITEM, itemId, itemKey } from '../shared/market';
 import { MATERIALS } from '../shared/materials';
 import { NEIGHBOURHOOD } from '../shared/neighbourhood';
 import { isShopZone } from '../shared/rules/access';
+import { PAINT_LAYER, checkPaint } from '../shared/rules/placement';
 import { PLAYER, ROLE, WS, Workers } from './npc/workers';
 import { STAFF, hireBlock } from '../shared/staff';
-import { MAX_WORKERS } from '../shared/layout';
+import { FLOOR, MAX_WORKERS, WALL_COLOURS } from '../shared/layout';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
@@ -29,9 +30,13 @@ import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
-import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type StaffMember } from './save/format';
+import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type SavedPaint, type StaffMember } from './save/format';
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
+
+/** FLOOR key by value (saves store floor finishes by key). */
+const FLOOR_KEYS: string[] = [];
+for (const [k, v] of Object.entries(FLOOR)) FLOOR_KEYS[v] = k;
 
 export class Game {
   /** Events for the main thread, drained by the worker after each step or action. */
@@ -52,8 +57,6 @@ export class Game {
   private arrivalMinute = -1;
   /** The neighbourhood shops: today's stock, goods in hand, deliveries (M3). */
   readonly market: Market;
-  /** Building materials in tiles, per material id (M3; the paint tool uses them). */
-  readonly materials: Int32Array;
 
   constructor(
     readonly sim: Sim,
@@ -73,18 +76,23 @@ export class Game {
     const home = this.workers.homeTile();
     this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
     this.market = new Market(sim.seed);
-    this.materials = new Int32Array(MATERIALS.defs.length);
     this.market.refresh(sim.day);
   }
 
   /** Purchases land here: ingredients on the kitchen shelf, objects in the inventory, materials in the store. */
   receive(g: Goods): void {
     if (g.kind === ITEM.ingredient) this.service.stock.add(g.id, g.qty * INGREDIENTS.defs[g.id]!.pack);
-    else if (g.kind === ITEM.material) this.materials[g.id] = this.materials[g.id]! + g.qty * MATERIALS.defs[g.id]!.pack;
-    else this.builder.give(g.id, g.qty);
-    this.materialsChanged = true;
+    else if (g.kind === ITEM.material) {
+      const m = this.builder.materials;
+      m[g.id] = m[g.id]! + g.qty * MATERIALS.defs[g.id]!.pack;
+      this.builder.changed = true;
+    } else this.builder.give(g.id, g.qty);
   }
-  private materialsChanged = false;
+
+  /** Building materials in tiles (Builder owns them: painting is undoable). */
+  get materials(): Int32Array {
+    return this.builder.materials;
+  }
 
   /** Buys at a neighbourhood shop (the player must stand at its counter, during its hours). */
   private buy(shop: number, row: number, qty: number, deliver: boolean): Result {
@@ -305,9 +313,24 @@ export class Game {
       materials,
       carry: m.carry.map((g) => ({ kind: g.kind, key: itemKey(g.kind, g.id), qty: g.qty })),
       deliveries: m.deliveries.map((g) => ({ kind: g.kind, key: itemKey(g.kind, g.id), qty: g.qty, due: g.due })),
-      painted: [], // S8
+      painted: this.painted(),
     };
   }
+
+  /** Tiles that differ from the neighbourhood as built (floors laid or walls coloured with the paint tool). */
+  private painted(): SavedPaint[] {
+    const a = this.world.state.area;
+    const base = (Game.baseArea ??= createArea());
+    const out: SavedPaint[] = [];
+    for (let t = 0; t < a.w * a.h; t++) {
+      const x = t % a.w;
+      const y = (t - x) / a.w;
+      if (a.floor[t] !== base.floor[t]) out.push({ x, y, layer: PAINT_LAYER.floor, finish: FLOOR_KEYS[a.floor[t]!] ?? '' });
+      if (a.paint[t] !== 0) out.push({ x, y, layer: PAINT_LAYER.wall, finish: WALL_COLOURS[a.paint[t]!] ?? '' });
+    }
+    return out;
+  }
+  private static baseArea: ReturnType<typeof createArea> | undefined;
 
   /** Restores the neighbourhood part of a save; items whose key no longer exists are skipped. */
   private loadHood(h: SaveNeighbourhood): void {
@@ -331,6 +354,20 @@ export class Game {
       return id >= 0 ? [{ kind: g.kind, id, qty: g.qty, due: g.due }] : [];
     });
     m.changed = true;
+    // Paint that still fits today's rules (unknown finishes or tiles no longer in the shop are dropped).
+    const a = this.world.state;
+    for (const p of h.painted) {
+      if (checkPaint(a, p.x, p.y, p.layer)) continue;
+      const t = p.y * a.area.w + p.x;
+      if (p.layer === PAINT_LAYER.floor) {
+        const v = (FLOOR as Record<string, number>)[p.finish];
+        if (v && FLOOR_KEYS[v]) this.world.paint(t, true, v);
+      } else {
+        const v = (WALL_COLOURS as readonly string[]).indexOf(p.finish);
+        if (v > 0) this.world.paint(t, false, v);
+      }
+    }
+    this.syncWalk();
   }
 
   /**
@@ -449,6 +486,8 @@ export class Game {
         return res(this.workers.queueErrand(PLAYER, TASK.visit, a.shop));
       case 'buy':
         return this.buy(a.shop, a.item, a.qty, !!a.deliver);
+      case 'paint':
+        return b.paint(a.x, a.y, a.material);
       // The player's pour at the counter (the worker opened it with a brewReady event).
       case 'cancelPour':
         return res(this.workers.cancelBrew(PLAYER, a.id));
@@ -484,14 +523,14 @@ export class Game {
       carry: this.market.carry.map((g) => ({ ...g })),
       carryLoad: this.market.load(),
       deliveries: this.market.deliveries.map((g) => ({ kind: g.kind, id: g.id, qty: g.qty })),
-      materials: Array.from(this.materials),
+      materials: Array.from(this.builder.materials),
     };
   }
 
   /** True once after anything in the player state changed. */
   takeChanged(): boolean {
-    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed || this.market.changed || this.materialsChanged;
-    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = this.market.changed = this.materialsChanged = false;
+    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed || this.market.changed;
+    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = this.market.changed = false;
     return c;
   }
 
