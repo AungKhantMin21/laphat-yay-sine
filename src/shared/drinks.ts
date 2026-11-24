@@ -5,6 +5,7 @@
 // A preset targets a milk share of the drink; the cup should also be about full. M5 adds more
 // ingredients and the sweet/strong/creamy taste axes.
 import raw from '../data/drinks.json';
+import { INGREDIENTS } from './ingredients';
 import { SHOP, toCoins, type ShopRules } from './shop';
 
 export interface DrinkDef {
@@ -16,6 +17,8 @@ export interface DrinkDef {
   price: number;
   /** Target condensed-milk share of the drink, 0…1. */
   milk: number;
+  /** Portions of each ingredient a cup takes (index = shared/ingredients.ts id). */
+  uses: Uint8Array;
 }
 
 export interface PourRules {
@@ -50,7 +53,7 @@ export interface RawDrinks {
   pour: PourRules;
   flow: PourFlow;
   reactions: { great: number; good: number };
-  presets: { key: string; price: number; milk: number }[];
+  presets: { key: string; price: number; milk: number; uses: Record<string, number> }[];
 }
 
 const frac = (v: number, where: string): number => {
@@ -83,7 +86,15 @@ export function buildDrinks(d: RawDrinks): Drinks {
     if (!/^[a-z0-9_]+$/.test(r.key)) throw new Error(`${at}: key must be lower_snake_case`);
     if (byKey.has(r.key)) throw new Error(`${at}: duplicate key`);
     if (!(Number.isInteger(r.price) && r.price > 0)) throw new Error(`${at}: price must be a whole number > 0`);
-    const def: DrinkDef = { id, key: r.key, name: `drink.${r.key}`, price: r.price, milk: frac(r.milk, `${at} milk`) };
+    const uses = new Uint8Array(INGREDIENTS.defs.length);
+    for (const [k, n] of Object.entries(r.uses ?? {})) {
+      const ing = INGREDIENTS.byKey.get(k);
+      if (!ing) throw new Error(`${at}: unknown ingredient "${k}"`);
+      if (!(Number.isInteger(n) && n > 0 && n <= 10)) throw new Error(`${at}: uses.${k} must be a whole number 1…10`);
+      uses[ing.id] = n;
+    }
+    if (!uses.some((n) => n > 0)) throw new Error(`${at}: uses no ingredients`);
+    const def: DrinkDef = { id, key: r.key, name: `drink.${r.key}`, price: r.price, milk: frac(r.milk, `${at} milk`), uses };
     defs.push(def);
     byKey.set(r.key, def);
   });

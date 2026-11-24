@@ -1,0 +1,8 @@
+{
+  "ingredients": [
+    { "key": "tea", "pack": 20, "price": 2000 },
+    { "key": "condensed", "pack": 20, "price": 2000 },
+    { "key": "evaporated", "pack": 20, "price": 1000 }
+  ],
+  "lowCups": 25
+}

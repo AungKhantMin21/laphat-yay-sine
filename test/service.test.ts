@@ -97,6 +97,8 @@ function play(seed: number, n: number, period = 15) {
     }
   };
   for (let d = 0; d < n; d++) {
+    // A morning market trip (M3): the bot keeps the kitchen stocked.
+    for (let k = 0; k < g.service.stock.count.length; k++) g.service.stock.add(k, 200 - g.service.stock.count[k]!);
     expect(g.act({ k: 'openShop' }).ok).toBe(true);
     for (let k = 0; k < 24 * 60 * TICK_HZ && g.day.phase !== PHASE.evening; k++) {
       step(g);

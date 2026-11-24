@@ -528,6 +528,21 @@ export class Customers {
   // ---- service (called by sim/service/service.ts) ----
 
   /** The order was taken: the drink bubble shows. Returns false if they aren't asking. */
+  /** Seated and asking to order. */
+  wantsToOrder(i: number): boolean {
+    return this.order[i] === ORDER.ask;
+  }
+
+  /** Nothing could be made (M3): free plain tea from the table pot — they drink it, content, and pay nothing. */
+  freeTea(i: number): void {
+    if (this.order[i] !== ORDER.ask) return;
+    this.setOrder(i, ORDER.served);
+    if (this.state[i] === CS.asking) {
+      this.state[i] = CS.drinking;
+      this.stateT[i] = 0;
+    }
+  }
+
   orderTaken(i: number): boolean {
     if (this.order[i] !== ORDER.ask) return false;
     this.setOrder(i, ORDER.waiting);

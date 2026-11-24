@@ -12,6 +12,8 @@ import { SHOP, type ShopRules } from '../../shared/shop';
 import type { Customers, CustomerHooks } from '../npc/customers';
 import type { SimWorld } from '../world';
 import { CUP, Cups } from './cups';
+import { Stock } from './stock';
+import { DRINKS } from '../../shared/drinks';
 import { TASK, TaskBoard } from './task-board';
 
 /** Where each task sits in the player's queue (sim/npc/workers.ts). */
@@ -25,6 +27,10 @@ export type OnPaid = (customer: number, drink: number, score: number, wait: numb
 export class Service implements CustomerHooks {
   readonly board = new TaskBoard();
   readonly cups: Cups;
+  /** Ingredient portions (M3): reserved at takeOrder, used at brew. */
+  readonly stock = new Stock();
+  /** Nothing on the menu could be made: customer `h` got free plain tea (M3; Game emits `freeTea`). */
+  onFreeTea: (customer: number) => void = () => {};
   /** Sim tick (set by tick()); jobs remember when they were posted. */
   private now = 0;
 
@@ -76,6 +82,8 @@ export class Service implements CustomerHooks {
   gone(i: number): void {
     const h = this.customers.handle(i);
     const b = this.board;
+    // Ordered but not brewed yet: the ingredients go back to the shelf.
+    if (b.find(TASK.brew, h) !== NONE) this.stock.release(DRINKS.defs[this.customers.drink[i]!]!);
     b.remove(b.find(TASK.order, h));
     b.remove(b.find(TASK.brew, h));
     // A cup already brewed for them goes back on the shelf, unused (nothing is lost).
@@ -90,10 +98,29 @@ export class Service implements CustomerHooks {
 
   // ---- jobs (worker `w` is at the right place; each returns '' or an i18n error key) ----
 
-  /** Takes customer `h`'s order: the drink bubble shows and a brew job goes up. */
+  /**
+   * Takes customer `h`'s order: their cup's ingredients are reserved, the drink bubble shows and a
+   * brew job goes up. If their drink can't be made they pick one that can; if nothing on the menu
+   * can, they get free plain tea from the table pot and stay content (no cup, no pay).
+   */
   takeOrder(h: number): string {
     const i = this.customers.indexOf(h);
-    if (!i || !this.customers.orderTaken(i)) return 'serve.err.gone';
+    const c = this.customers;
+    if (!i || !c.wantsToOrder(i)) return 'serve.err.gone';
+    let d = DRINKS.defs[c.drink[i]!]!;
+    if (!this.stock.canMake(d)) {
+      const alt = this.stock.firstMakeable();
+      if (alt < 0) {
+        c.freeTea(i);
+        this.board.remove(this.board.find(TASK.order, h));
+        this.onFreeTea(h);
+        return '';
+      }
+      c.drink[i] = alt;
+      d = DRINKS.defs[alt]!;
+    }
+    c.orderTaken(i);
+    this.stock.reserve(d);
     this.board.remove(this.board.find(TASK.order, h));
     this.post(TASK.brew, h);
     return '';
@@ -119,6 +146,7 @@ export class Service implements CustomerHooks {
     const c = this.cups.clean();
     if (c === 0) return 'serve.err.noCups';
     this.customers.pouring(i, false);
+    this.stock.consume(DRINKS.defs[this.customers.drink[i]!]!);
     const cups = this.cups;
     cups.drink[c] = this.customers.drink[i]!;
     cups.score[c] = score;
@@ -222,6 +250,7 @@ export class Service implements CustomerHooks {
   endOfDay(): void {
     this.board.clear();
     this.cups.reset();
+    this.stock.clearReservations();
   }
 
   /** Has `sink`, `counter`… : the shop can serve at all. */

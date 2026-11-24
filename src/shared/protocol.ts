@@ -74,6 +74,8 @@ export type SimEvent =
   | { k: 'wages'; paid: number; dayOff: number; total: number }
   /** The player reached the counter to brew customer `id`'s `drink`: open the pour minigame. */
   | { k: 'brewReady'; id: number; drink: number }
+  /** Nothing on the menu could be made: customer `id` got free plain tea (M3). */
+  | { k: 'freeTea'; id: number }
   /** The player reached shop `shop`'s counter (M3): open its panel. */
   | { k: 'atShop'; shop: number }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
@@ -122,6 +124,10 @@ export interface PlayerState {
   staff: { role: string; dayOff: boolean }[];
   /** Seats in the shop (hiring unlocks). */
   seats: number;
+  /** Ingredient portions free to use (shared/ingredients.ts order; reserved ones excluded) (M3). */
+  stock: number[];
+  /** Cups of the best-stocked drink still possible (the HUD shelf). */
+  cupsLeft: number;
 }
 
 export type FromSim =

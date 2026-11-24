@@ -4,6 +4,7 @@ import { CATALOG, SERVICE } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
+import { INGREDIENTS } from '../shared/ingredients';
 import { createArea, ENTRIES, SEATING } from './area';
 import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
@@ -58,6 +59,7 @@ export class Game {
     this.paths = new PathFinder([this.walk, this.walkStaff]);
     this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { entries: ENTRIES });
     this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
+    this.service.onFreeTea = (h) => this.events.push({ k: 'freeTea', id: h });
     this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e), sim.rng.npcDecide);
     const home = this.workers.homeTile();
     this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
@@ -180,7 +182,17 @@ export class Game {
     for (const e of layout ? start.layout : []) {
       if (!placeStart(world, e)) throw new Error(`start.json: ${e.key} at ${e.x},${e.y} breaks the placement rules`);
     }
-    return new Game(new Sim(seed), world, new Builder(world, start.money, inv));
+    const game = new Game(new Sim(seed), world, new Builder(world, start.money, inv));
+    game.giveStartStock();
+    return game;
+  }
+
+  /** A new game's kitchen stock (start.json `stock`, ingredient keys → portions). */
+  giveStartStock(): void {
+    for (const [key, n] of Object.entries(start.stock as Record<string, number>)) {
+      const def = INGREDIENTS.byKey.get(key);
+      if (def) this.service.stock.add(def.id, n);
+    }
   }
 
   /** Snapshot for saving. */
@@ -273,6 +285,7 @@ export class Game {
     // Staff whose role no longer exists are dropped (they were never objects; nothing is lost).
     game.staff = d.staff.filter((m) => STAFF.byKey.has(m.role)).map((m) => ({ ...m }));
     game.spawnStaff();
+    game.giveStartStock(); // S7: the saved stock (save v4)
     return { game, skipped, returned, added };
   }
 
@@ -303,6 +316,8 @@ export class Game {
         const r = this.day.sleep(this.sim, this.customers());
         if (!r.ok) return r;
         if (r.ended) {
+          // Running low on ingredients beats the usual teaser: tomorrow starts at the wet market.
+          if (this.service.stock.cupsLeft() < INGREDIENTS.lowCups) this.day.teaser = { key: 'lowStock', arg: '' };
           this.events.push({ k: 'dayEnd', day: r.ended.day, stats: r.ended.stats });
           const t = this.day.teaser;
           if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
@@ -357,13 +372,15 @@ export class Game {
       brewing: this.workers.brewFor[PLAYER]!,
       staff: this.staff.map((m) => ({ role: m.role, dayOff: m.dayOff })),
       seats: this.npcs.seatCount(),
+      stock: Array.from(this.service.stock.count, (n, k) => n - this.service.stock.reserved[k]!),
+      cupsLeft: this.service.stock.cupsLeft(),
     };
   }
 
   /** True once after anything in the player state changed. */
   takeChanged(): boolean {
-    const c = this.builder.changed || this.day.changed || this.workers.changed;
-    this.builder.changed = this.day.changed = this.workers.changed = false;
+    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed;
+    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = false;
     return c;
   }
 

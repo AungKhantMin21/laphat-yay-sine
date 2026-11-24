@@ -11,7 +11,7 @@ const drink = (key: string) => DRINKS.byKey.get(key)!;
 const pourAt = (share: number, fill = DRINKS.pour.fillTarget) => [fill * (1 - share), fill * share] as const;
 
 /** A milk-free drink (none on the menu since 22 Nov 2026) still scores sensibly. */
-const noMilk: DrinkDef = { id: 99, key: 'no_milk', name: 'drink.no_milk', price: 500, milk: 0 };
+const noMilk: DrinkDef = { id: 99, key: 'no_milk', name: 'drink.no_milk', price: 500, milk: 0, uses: new Uint8Array([1]) };
 
 describe('drink data', () => {
   it('loads the four classic presets with Myanmar names', () => {

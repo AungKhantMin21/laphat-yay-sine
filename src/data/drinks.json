@@ -6,11 +6,42 @@
     "ratioSlack": 0.05,
     "ratioFalloff": 0.25
   },
-  "flow": { "tea": 0.3, "milk": 0.15 },
-  "reactions": { "great": 0.9, "good": 0.6 },
+  "flow": {
+    "tea": 0.3,
+    "milk": 0.15
+  },
+  "reactions": {
+    "great": 0.9,
+    "good": 0.6
+  },
   "presets": [
-    { "key": "pon_man", "price": 1000, "milk": 0.35 },
-    { "key": "cho_seint", "price": 1200, "milk": 0.5 },
-    { "key": "kya_seint", "price": 1200, "milk": 0.22 }
+    {
+      "key": "pon_man",
+      "price": 1000,
+      "milk": 0.35,
+      "uses": {
+        "tea": 1,
+        "condensed": 1,
+        "evaporated": 1
+      }
+    },
+    {
+      "key": "cho_seint",
+      "price": 1200,
+      "milk": 0.5,
+      "uses": {
+        "tea": 1,
+        "condensed": 2
+      }
+    },
+    {
+      "key": "kya_seint",
+      "price": 1200,
+      "milk": 0.22,
+      "uses": {
+        "tea": 2,
+        "condensed": 1
+      }
+    }
   ]
 }

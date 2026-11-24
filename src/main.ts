@@ -30,6 +30,7 @@ import { NEIGHBOURHOOD } from './shared/neighbourhood';
 import { installSettings } from './ui/settings';
 import { installDayHud } from './ui/hud/day-hud';
 import { installTin } from './ui/hud/tin';
+import { installStock } from './ui/hud/stock';
 import { installDayEnd } from './ui/hud/day-end';
 import { installPourUi } from './ui/pour/pour';
 import { installReactions } from './ui/pour/reactions';
@@ -89,12 +90,14 @@ const pickMusic = (): void =>
   music.play(musicPinned ?? (nightPinned ? 'night' : trackFor(Math.floor(view.gameMinute / 60) % 24, false)));
 
 let booted = false;
+let freeTeaToastAt = -1e9;
 const bridge: SimBridge = new SimBridge(view, {
   onState: () => {
     buildUi.refresh();
     settings.refresh();
     dayHud.refresh();
     tin.refresh(bridge.player?.money ?? 0);
+    if (bridge.player) stockHud.refresh(bridge.player.cupsLeft, bridge.player.stock);
     dayEnd.refresh();
   },
   onEvents: (list) => {
@@ -102,7 +105,13 @@ const bridge: SimBridge = new SimBridge(view, {
     for (const e of list) {
       if (e.k === 'served') reactions.show(e.id, e.reaction, e.price + e.tip);
       else if (e.k === 'brewReady') pour.open(e.id, e.drink);
-      else if (e.k === 'atShop') queueUi.toast(`shop.${NEIGHBOURHOOD.shops[e.shop]?.key ?? ''}`); // S6: the shop panel
+      else if (e.k === 'freeTea') {
+        // Once in a while is enough: it may happen to every customer until the next market trip.
+        if (performance.now() - freeTeaToastAt > 60_000) {
+          freeTeaToastAt = performance.now();
+          queueUi.toast('stock.freeTea');
+        }
+      } else if (e.k === 'atShop') queueUi.toast(`shop.${NEIGHBOURHOOD.shops[e.shop]?.key ?? ''}`); // S6: the shop panel
       else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
       else if (e.k === 'teaser') dayEnd.teaser(e.key, e.drink);
@@ -180,6 +189,7 @@ const dayEnd = installDayEnd({
   },
 });
 const tin = installTin();
+const stockHud = installStock();
 const pour = installPourUi({
   // The sim marks the order as pouring itself when the player reaches the counter (M2.5).
   startPour: () => Promise.resolve({ ok: true }),

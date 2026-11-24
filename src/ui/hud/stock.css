@@ -1,0 +1,24 @@
+/* Kitchen shelf readout under the savings tin (M3). */
+.stock-hud {
+  position: absolute;
+  top: calc(var(--safe-t) + 52px);
+  right: calc(var(--safe-r) + 10px);
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: #2a1d18dd;
+  border: 2px solid #8a6644;
+  color: #fff8ea;
+  font-size: 13px;
+  line-height: 1.6;
+  pointer-events: none;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.stock-hud.low {
+  border-color: #f0c060;
+  background: #6a2a26dd;
+}
+body.building .stock-hud {
+  display: none;
+}
