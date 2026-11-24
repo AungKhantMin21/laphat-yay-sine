@@ -13,7 +13,7 @@ export class AreaGrids {
   readonly zone: Uint8Array;
   /** Walk zone per tile (shared/rules/access.ts WZ). */
   readonly access: Uint8Array;
-  /** Building-front segment on the tile's −y edge (shared/street.ts FACADE_FRAMES index; 0 = none). Decor only. */
+  /** Building-front segment on the tile's −y edge, or its −x edge with FACADE_WEST (shared/street.ts FACADE_FRAMES index; 0 = none). Decor only. */
   readonly facade: Uint8Array;
 
   constructor(

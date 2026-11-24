@@ -4,7 +4,7 @@ import { CATALOG, SERVICE } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
-import { createM1Area, SEATING, SPAWN_ROWS } from './area';
+import { createArea, ENTRIES, SEATING } from './area';
 import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { Service } from './service/service';
@@ -55,7 +55,7 @@ export class Game {
     this.walk = new WalkGrid(world.state.area, world.state.occ, ACCESS.people);
     this.walkStaff = new WalkGrid(world.state.area, world.state.occ, ACCESS.staff);
     this.paths = new PathFinder([this.walk, this.walkStaff]);
-    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { rows: SPAWN_ROWS });
+    this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { entries: ENTRIES });
     this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
     this.workers = new Workers(this.walkStaff, this.paths, this.service, this.npcs, (e) => this.events.push(e), sim.rng.npcDecide);
     const home = this.workers.homeTile();
@@ -175,7 +175,7 @@ export class Game {
       const def = CATALOG.byKey.get(key);
       if (def) inv[def.id] = n;
     }
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     for (const e of layout ? start.layout : []) {
       if (!placeStart(world, e)) throw new Error(`start.json: ${e.key} at ${e.x},${e.y} breaks the placement rules`);
     }
@@ -236,7 +236,7 @@ export class Game {
     sim.tick = d.tick;
     sim.clock = d.clock;
     [sim.rng.market.state, sim.rng.npcDecide.state, sim.rng.events.state, sim.rng.cosmetic.state] = d.rng;
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     const inv = new Uint16Array(CATALOG.defs.length);
     for (const [key, n] of Object.entries(d.inventory)) {
       const def = CATALOG.byKey.get(key);

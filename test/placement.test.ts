@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG } from '../src/shared/catalog';
 import { checkPlacement, newPlaceResult } from '../src/shared/rules/placement';
 import { SimWorld, type ObjectFields } from '../src/sim/world';
-import { createM1Area, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, SHOP } from '../src/sim/area';
+import { createArea, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, SHOP } from '../src/sim/area';
 import { ZONE } from '../src/shared/layout';
 
 /** A pavement tile in front of the shop (not owned, open sky). */
@@ -12,7 +12,7 @@ const T = (key: string) => CATALOG.byKey.get(key)!;
 const fields = (key: string, x: number, y: number, rot = 0, parent = 0): ObjectFields => ({ type: T(key).id, x, y, rot, layer: T(key).layer, colour: 0, parent });
 
 function setup() {
-  const world = new SimWorld(createM1Area());
+  const world = new SimWorld(createArea());
   const check = (key: string, x: number, y: number, rot = 0, ignore = 0) => {
     const r = checkPlacement(world.state, T(key).id, x, y, rot, ignore, newPlaceResult());
     return r.ok ? (r.parent ? `ok on ${r.parent}` : 'ok') : r.reason;

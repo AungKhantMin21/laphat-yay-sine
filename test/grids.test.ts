@@ -6,7 +6,7 @@ import { falloff, PropertyGrids } from '../src/sim/grids/property-grids';
 import { SimWorld } from '../src/sim/world';
 import { Builder } from '../src/sim/build/builder';
 import { Rng } from '../src/shared/rng';
-import { createM1Area, SHOP, PAVEMENT } from '../src/sim/area';
+import { createArea, SHOP, PAVEMENT } from '../src/sim/area';
 
 /** A pavement tile in front of the shop (open sky). */
 const FRONTAGE = { x0: SHOP.x0, y0: PAVEMENT.y0 };
@@ -17,7 +17,7 @@ const X = SHOP.x0 + 5;
 const Y = SHOP.y0 + 5;
 
 function setup() {
-  const world = new SimWorld(createM1Area());
+  const world = new SimWorld(createArea());
   const b = new Builder(world, 0, new Uint16Array(CATALOG.defs.length).fill(50));
   const W = world.state.area.w;
   const at = (p: number, x: number, y: number) => world.grids.value[p]![y * W + x]!;
@@ -68,7 +68,7 @@ describe('PropertyGrids', () => {
 
   it('any build sequence fully undone leaves every grid exactly at the area base', () => {
     const { world, b } = setup();
-    const base = new PropertyGrids(createM1Area());
+    const base = new PropertyGrids(createArea());
     const rng = new Rng(7);
     for (let k = 0; k < 80; k++) {
       const x = SHOP.x0 + rng.int(12);

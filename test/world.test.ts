@@ -3,7 +3,7 @@ import { CATALOG, LAYER } from '../src/shared/catalog';
 import { FrameWriter, readFrame } from '../src/shared/diff';
 import { WALL, ZONE } from '../src/shared/layout';
 import { SimWorld, type ObjectFields } from '../src/sim/world';
-import { createM1Area, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, CROSSING, SHOP } from '../src/sim/area';
+import { createArea, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, CROSSING, SHOP } from '../src/sim/area';
 import { WZ } from '../src/shared/rules/access';
 import { WorldView } from '../src/game/view';
 
@@ -40,7 +40,7 @@ function sameOccupancy(a: SimWorld, b: WorldView): void {
 
 describe('M1 area', () => {
   it('shop is owned and roofed; back walls full height, front, east and kitchen walls low', () => {
-    const a = createM1Area();
+    const a = createArea();
     const at = (x: number, y: number) => y * a.w + x;
     expect(a.zone[at(SHOP.x0 + 2, SHOP.y0 + 2)]).toBe(ZONE.owned | ZONE.roof);
     expect(a.zone[at(SHOP.x0, PAVEMENT.y0)]).toBe(0);
@@ -56,7 +56,7 @@ describe('M1 area', () => {
   });
 
   it('walk zones: pavements, road with one crossing, front, interior, kitchen; the rest blocked', () => {
-    const a = createM1Area();
+    const a = createArea();
     const at = (x: number, y: number) => y * a.w + x;
     expect(a.access[at(0, PAVEMENT.y0)]).toBe(WZ.pavement);
     expect(a.access[at(5, ROAD.y0 + 2)]).toBe(WZ.road);
@@ -72,7 +72,7 @@ describe('M1 area', () => {
 
 describe('SimWorld + occupancy', () => {
   it('marks a rotated footprint and clears it on remove', () => {
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     const W = world.state.area.w;
     const i = world.add(obj('bench', 26, 12, { rot: 1 })); // 2×1 rotated → 1×2
     const f = world.state.occ.furniture;
@@ -82,7 +82,7 @@ describe('SimWorld + occupancy', () => {
   });
 
   it('stacked items use the stack grid, wall items the wall grid for their side, ceiling its own', () => {
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     const W = world.state.area.w;
     const table = world.add(obj('table', 27, 12));
     const pot = world.add(obj('teapot', 27, 12, { parent: table }));
@@ -99,7 +99,7 @@ describe('SimWorld + occupancy', () => {
   });
 
   it('uids are stable and reusable for undo; handles change generation when a slot is reused', () => {
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     const a = world.add(obj('stool', 26, 12));
     const uid = world.objects.uid[a]!;
     const h1 = world.objects.handle(a);
@@ -114,7 +114,7 @@ describe('SimWorld + occupancy', () => {
 
 describe('main-thread mirror', () => {
   it('snapshot + incremental frames give identical occupancy, including slot reuse in one frame', () => {
-    const world = new SimWorld(createM1Area());
+    const world = new SimWorld(createArea());
     const view = new WorldView();
     const table = world.add(obj('table_long', 26, 12));
     world.add(obj('teapot', 26, 12, { parent: table }));

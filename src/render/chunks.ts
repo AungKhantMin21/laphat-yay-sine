@@ -3,6 +3,7 @@
 import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { HALF_H, HALF_W, isoX, isoY } from '../shared/iso';
 import { WALL } from '../shared/layout';
+import { FACADE_WEST } from '../shared/street';
 import { SpatialHash } from './cull';
 import type { DirtyRect } from '../game/view';
 
@@ -175,14 +176,18 @@ export class FloorChunks {
         const ty = cy * CHUNK + j;
         const inside = tx < W && ty < this.areaH;
         const bits = inside ? this.wall[ty * W + tx]! : 0;
-        // A building front stands on the tile's −y edge, like a north wall, but taller.
-        const f = inside ? this.facade[ty * W + tx]! : 0;
+        // A building front stands on the tile's −y edge like a north wall, but taller; with
+        // FACADE_WEST it stands on the −x edge (the same sprite, mirrored).
+        const fv = inside ? this.facade[ty * W + tx]! : 0;
+        const f = fv & ~FACADE_WEST;
         if (f !== 0 && this.facades[f]) {
           const s = this.scratchWalls[wk++]!;
           const tex = this.facades[f]!;
+          const west = (fv & FACADE_WEST) !== 0;
           s.texture = tex;
           s.visible = true;
-          s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - (tex.height - 2 * HALF_H));
+          s.scale.x = west ? -1 : 1;
+          s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W + (west ? tex.width : 0), PAD_TOP + (i + j) * HALF_H - (tex.height - 2 * HALF_H));
         }
         // West edge first, then north; a tile has at most one wall per edge (full or low).
         for (let side = 0; side < 4; side++) {
@@ -190,6 +195,7 @@ export class FloorChunks {
           const s = this.scratchWalls[wk++]!;
           s.texture = this.walls[WALL_TEX[side]!]!;
           s.visible = true;
+          s.scale.x = 1;
           s.position.set(CHUNK_W / 2 + (i - j) * HALF_W - HALF_W, PAD_TOP + (i + j) * HALF_H - WALL_H);
         }
       }

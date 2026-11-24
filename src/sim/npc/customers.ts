@@ -49,8 +49,8 @@ export interface CustomerHooks {
 }
 
 export interface Street {
-  /** Pavement rows customers walk along; they enter and leave at x = 0 and x = w − 1. Row 0 is the shop side. */
-  rows: readonly number[];
+  /** Where customers appear and leave (weighted). Entry 0 also seeds the reachability flood fill. */
+  entries: readonly { x: number; y: number; weight: number }[];
 }
 
 const NO_HOOKS: CustomerHooks = { asked() {}, finished() {}, gone() {} };
@@ -110,6 +110,9 @@ export class Customers {
   private now = 0;
   /** Service hooks; set by the game once the service exists. */
   hooks: CustomerHooks = NO_HOOKS;
+  /** Entry tiles and their cumulative pick weights (0…1]. */
+  private readonly entryTile: Int32Array;
+  private readonly entryCum: Float64Array;
 
   constructor(
     private readonly world: SimWorld,
@@ -122,6 +125,18 @@ export class Customers {
     private readonly cust: CustomerRules = CUSTOMERS,
   ) {
     const n = this.capacity;
+    const ne = street.entries.length;
+    this.entryTile = new Int32Array(ne);
+    this.entryCum = new Float64Array(ne);
+    let total = 0;
+    for (const e of street.entries) total += e.weight;
+    let acc = 0;
+    street.entries.forEach((e, k) => {
+      this.entryTile[k] = e.y * walk.w + e.x;
+      acc += e.weight / total;
+      this.entryCum[k] = acc;
+    });
+    this.entryCum[ne - 1] = 1;
     this.alive = new Uint8Array(n);
     this.gen = new Uint16Array(n);
     this.state = new Uint8Array(n);
@@ -245,10 +260,8 @@ export class Customers {
     if (this.freeTop === 0) return NONE;
     const r = this.decide;
     const W = this.walk.w;
-    const st = this.street;
-    const side = r.int(2);
-    const y0 = st.rows[r.int(st.rows.length)]!;
-    const y1 = st.rows[r.int(st.rows.length)]!;
+    const from = this.pickEntry(r.next());
+    const to = this.pickEntry(r.next());
     const rolled = pickOrder(r.next(), this.cust);
     const drink = order >= 0 ? order : rolled;
     const ms = this.cust.milkShift;
@@ -259,12 +272,12 @@ export class Customers {
     const i = this.free[--this.freeTop]!;
     this.live++;
     this.alive[i] = 1;
-    const x0 = side ? W - 1 : 0;
-    this.tile[i] = y0 * W + x0;
-    this.exit[i] = y1 * W + (side ? 0 : W - 1);
+    const x0 = from % W;
+    this.tile[i] = from;
+    this.exit[i] = to;
     this.x[i] = x0 + 0.5;
-    this.y[i] = y0 + 0.5;
-    this.dir[i] = side ? DIR.west : DIR.east;
+    this.y[i] = (from - x0) / W + 0.5;
+    this.dir[i] = DIR.east;
     this.anim[i] = ANIM.walk;
     this.drink[i] = drink;
     this.order[i] = ORDER.none;
@@ -281,6 +294,14 @@ export class Customers {
     if (this.spawnedN < this.spawned.length) this.spawned[this.spawnedN++] = h;
     this.stateDirty.push(i);
     return h;
+  }
+
+  /** Entry tile for a uniform draw u in [0, 1). */
+  private pickEntry(u: number): number {
+    const c = this.entryCum;
+    let k = 0;
+    while (k < c.length - 1 && u >= c[k]!) k++;
+    return this.entryTile[k]!;
   }
 
   // ---- seat choice ----
@@ -377,7 +398,7 @@ export class Customers {
     const W = walk.w;
     const reach = this.reach;
     reach.fill(0);
-    const start = this.street.rows[0]! * W;
+    const start = this.entryTile[0]!;
     if (!walk.passable(start)) return;
     const q = this.bfs;
     let head = 0;

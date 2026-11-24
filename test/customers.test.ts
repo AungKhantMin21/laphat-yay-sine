@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NEIGHBOURHOOD } from '../src/shared/neighbourhood';
 import { Game } from '../src/sim/game';
 import { CATALOG } from '../src/shared/catalog';
 import { FrameWriter, readFrame, type FrameHandler } from '../src/shared/diff';
@@ -16,7 +17,7 @@ import { CS } from '../src/sim/npc/customers';
 import type { SimEvent } from '../src/shared/protocol';
 
 const T = (key: string): number => CATALOG.byKey.get(key)!.id;
-const W = 64;
+const W = NEIGHBOURHOOD.w;
 const tileOf = (x: number, y: number): number => y * W + x;
 
 let buf = new ArrayBuffer(1 << 16);

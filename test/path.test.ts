@@ -1,3 +1,4 @@
+import { NEIGHBOURHOOD } from '../src/shared/neighbourhood';
 import { describe, expect, it } from 'vitest';
 import { AreaGrids, WorldState } from '../src/shared/world-state';
 import { FLOOR, WALL } from '../src/shared/layout';
@@ -370,19 +371,19 @@ describe('walk grid in the game', () => {
     expect(g.paths.statusOf(find(g.paths, at(2, 20), at(SHOP.x0 - 1, SHOP.y0 + 2), ACCESS.staff))).toBe(PATH.failed);
   });
 
-  it('a corner-to-corner search keeps every tick within the node budget and finishes over a few ticks', () => {
+  it('the longest errand (street end → the farthest shop) keeps every tick within the node budget and finishes over a few ticks', () => {
     const g = Game.create(5);
     const W = g.walk.w;
-    // Pavement end to the far pavement's other end, over the crossing.
-    const h = g.paths.request(19 * W, 30 * W + W - 1);
+    const far = NEIGHBOURHOOD.shops.reduce((a, b) => (b.visitX + b.visitY > a.visitX + a.visitY ? b : a));
+    const h = g.paths.request(19 * W, far.visitY * W + far.visitX);
     let ticks = 0;
-    while (g.paths.statusOf(h) === PATH.queued && ticks < 20) {
+    while (g.paths.statusOf(h) === PATH.queued && ticks < 40) {
       const before = g.paths.expansions;
       g.paths.tick();
       expect(g.paths.expansions - before).toBeLessThanOrEqual(WALK.nodesPerTick);
       ticks++;
     }
     expect(g.paths.statusOf(h)).toBe(PATH.done);
-    expect(ticks).toBeLessThanOrEqual(3);
+    expect(ticks).toBeLessThanOrEqual(8);
   });
 });

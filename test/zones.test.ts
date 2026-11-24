@@ -6,7 +6,7 @@ import { Game } from '../src/sim/game';
 import { CATALOG, LAYER, footH, footW } from '../src/shared/catalog';
 import { ACCESS, WZ, isShopZone, mayEnter } from '../src/shared/rules/access';
 import { PATH } from '../src/sim/path/pathfinder';
-import { KITCHEN, KITCHEN_DOOR, SEATING, SPAWN_ROWS } from '../src/sim/area';
+import { ENTRIES, KITCHEN, KITCHEN_DOOR, SEATING } from '../src/sim/area';
 import { Rng } from '../src/shared/rng';
 import { FrameWriter } from '../src/shared/diff';
 
@@ -47,7 +47,7 @@ function seats(g: Game): number[] {
 
 function spawns(g: Game): number[] {
   const W = g.walk.w;
-  return SPAWN_ROWS.flatMap((y) => [y * W, y * W + W - 1]);
+  return ENTRIES.map((e) => e.y * W + e.x);
 }
 
 /** Finds a path (all at once) and returns its tiles including the start, or null if it failed. */

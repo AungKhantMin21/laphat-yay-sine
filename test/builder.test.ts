@@ -3,14 +3,14 @@ import { CATALOG, sellValue } from '../src/shared/catalog';
 import { Rng } from '../src/shared/rng';
 import { SimWorld } from '../src/sim/world';
 import { Builder, HISTORY_MAX } from '../src/sim/build/builder';
-import { createM1Area, SHOP } from '../src/sim/area';
+import { createArea, SHOP } from '../src/sim/area';
 
 const T = (key: string) => CATALOG.byKey.get(key)!.id;
 const X = SHOP.x0 + 3;
 const Y = SHOP.y0 + 3;
 
 function setup(money = 10000, stock = 5) {
-  const world = new SimWorld(createM1Area());
+  const world = new SimWorld(createArea());
   const inv = new Uint16Array(CATALOG.defs.length).fill(stock);
   const b = new Builder(world, money, inv);
   return { world, b, inv };

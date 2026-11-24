@@ -1,0 +1,69 @@
+{
+  "size": [112, 72],
+  "rects": {
+    "shop": [24, 9, 36, 19],
+    "kitchen": [24, 9, 36, 12],
+    "seating": [24, 12, 36, 19],
+    "pavement": [0, 19, 76, 22],
+    "road": [0, 22, 73, 28],
+    "crossing": [30, 22, 32, 28],
+    "farPavement": [0, 28, 67, 31],
+    "marketRoad": [67, 28, 73, 72],
+    "marketWest": [64, 31, 67, 72],
+    "marketEast": [73, 22, 76, 72],
+    "marketCrossing": [67, 44, 73, 46],
+    "lane": [76, 50, 112, 53]
+  },
+  "shopOpening": [30, 34],
+  "kitchenDoor": [26, 11],
+  "paint": [
+    ["road", "road", "road"],
+    ["marketRoad", "road", "road"],
+    ["crossing", "crossing", "crossing"],
+    ["marketCrossing", "crossing", "crossing"],
+    ["pavement", "pavement", "pavement"],
+    ["farPavement", "pavement", "pavement"],
+    ["marketWest", "pavement", "pavement"],
+    ["marketEast", "pavement", "pavement"],
+    ["lane", "pavement", "pavement"]
+  ],
+  "buildings": [
+    { "edge": "n", "at": 19, "from": 0, "to": 6, "tall": true, "variant": 0, "entry": false },
+    { "edge": "n", "at": 19, "from": 6, "to": 11, "tall": true, "variant": 1, "entry": false },
+    { "edge": "n", "at": 19, "from": 11, "to": 17, "tall": true, "variant": 2, "entry": true },
+    { "edge": "n", "at": 19, "from": 17, "to": 24, "tall": true, "variant": 0, "entry": false },
+    { "edge": "n", "at": 19, "from": 37, "to": 41, "tall": false, "variant": 1, "entry": false },
+    { "edge": "n", "at": 19, "from": 41, "to": 45, "tall": false, "variant": 2, "entry": false },
+    { "edge": "n", "at": 19, "from": 45, "to": 51, "tall": true, "variant": 1, "entry": true },
+    { "edge": "n", "at": 19, "from": 51, "to": 57, "tall": true, "variant": 2, "entry": false },
+    { "edge": "n", "at": 19, "from": 57, "to": 64, "tall": true, "variant": 0, "entry": true },
+    { "edge": "n", "at": 19, "from": 64, "to": 73, "tall": true, "variant": 1, "entry": false },
+    { "edge": "w", "at": 64, "from": 34, "to": 35, "tall": true, "variant": 2, "entry": false },
+    { "edge": "w", "at": 64, "from": 42, "to": 48, "tall": true, "variant": 0, "entry": false },
+    { "edge": "w", "at": 64, "from": 48, "to": 54, "tall": true, "variant": 1, "entry": true },
+    { "edge": "w", "at": 64, "from": 61, "to": 67, "tall": true, "variant": 0, "entry": false },
+    { "edge": "w", "at": 64, "from": 67, "to": 72, "tall": true, "variant": 2, "entry": false },
+    { "edge": "n", "at": 50, "from": 76, "to": 80, "tall": true, "variant": 2, "entry": false },
+    { "edge": "n", "at": 50, "from": 88, "to": 92, "tall": true, "variant": 0, "entry": true },
+    { "edge": "n", "at": 50, "from": 98, "to": 104, "tall": true, "variant": 1, "entry": false },
+    { "edge": "n", "at": 50, "from": 104, "to": 112, "tall": true, "variant": 2, "entry": false }
+  ],
+  "shops": [
+    { "key": "market", "edge": "w", "at": 64, "from": 35, "to": 42, "visit": 38, "hours": ["05:00", "11:00"] },
+    { "key": "books", "edge": "w", "at": 64, "from": 54, "to": 61, "visit": 57, "hours": ["07:00", "19:00"] },
+    { "key": "furniture", "edge": "n", "at": 50, "from": 80, "to": 88, "visit": 84, "hours": ["08:00", "20:00"] },
+    { "key": "hardware", "edge": "n", "at": 50, "from": 92, "to": 98, "visit": 95, "hours": ["08:00", "20:00"] }
+  ],
+  "entries": [
+    { "tile": [0, 19], "weight": 2 },
+    { "tile": [0, 20], "weight": 2 },
+    { "tile": [0, 21], "weight": 2 },
+    { "tile": [0, 28], "weight": 1 },
+    { "tile": [0, 29], "weight": 1 },
+    { "tile": [0, 30], "weight": 1 },
+    { "tile": [65, 71], "weight": 1 },
+    { "tile": [74, 71], "weight": 1 },
+    { "tile": [111, 51], "weight": 1 }
+  ],
+  "entryDoorWeight": 2
+}
