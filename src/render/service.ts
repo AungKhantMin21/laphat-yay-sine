@@ -30,6 +30,8 @@ export class ServiceLayer {
   private readonly empty: Texture;
   private readonly steamFrames: Texture[] = [];
   private readonly steam: Sprite;
+  /** Shopping in the player's hands (M3). */
+  private readonly parcel: Sprite;
   /** Cups per tile index while laying cups out (reset each layout; preallocated). */
   private readonly perTile: Uint8Array;
   private readonly trayCount = new Uint8Array(MAX_WORKERS + 1);
@@ -56,6 +58,7 @@ export class ServiceLayer {
     for (let c = 0; c <= MAX_CUPS; c++) this.cups.push(make(this.empty));
     for (let w = 0; w <= MAX_WORKERS; w++) this.trays.push(make(tray));
     this.steam = make(this.steamFrames[0]!);
+    this.parcel = make(atlas.get('fx/parcel') ?? Texture.EMPTY);
     this.perTile = new Uint8Array(128 * 96);
   }
 
@@ -140,9 +143,15 @@ export class ServiceLayer {
     }
   }
 
-  /** Trays (with their cups) in front of each worker who carries something. */
+  /** Trays (with their cups) in front of each worker who carries something; the player's shopping. */
   private followTrays(): void {
     const v = this.view;
+    const me = v.playerCarry > 0 && this.trayCount[1] === 0 ? this.npcs.bodyOf(WORKER_SLOT0) : null;
+    this.parcel.visible = !!me;
+    if (me) {
+      this.parcel.position.set(me.x, me.y - 22); // on the head, market style: visible whichever way they face
+      this.parcel.zIndex = me.zIndex + 0.5;
+    }
     for (let w = 1; w <= MAX_WORKERS; w++) {
       const tray = this.trays[w]!;
       const slot = WORKER_SLOT0 + w - 1;

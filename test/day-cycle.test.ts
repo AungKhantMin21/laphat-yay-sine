@@ -1,3 +1,4 @@
+import start from '../src/data/start.json';
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/sim/game';
 import { FrameWriter, readFrame, type FrameHandler } from '../src/shared/diff';
@@ -128,12 +129,15 @@ describe('save v2', () => {
     const data = g.toSave(1);
     data.teaser = { key: '', arg: '' };
     data.staff = [];
-    const v3 = serialize(data);
-    const v1 = v3.slice(0, v3.byteLength - 20 - 2 - 1);
+    data.hood = { marketDay: -1, sold: {}, stock: {}, materials: {}, carry: [], deliveries: [], painted: [] };
+    const v4 = serialize(data);
+    // Day block (20) + two empty teaser strings (2) + empty staff (1) + empty neighbourhood (11).
+    const v1 = v4.slice(0, v4.byteLength - 20 - 2 - 1 - 11);
     new DataView(v1).setUint16(4, 1, true);
     const back = parse(v1);
-    expect(back.schema).toBe(3); // v1 → v2 → v3
+    expect(back.schema).toBe(4); // v1 → v2 → v3 → v4
     expect(back.staff).toEqual([]);
+    expect(back.hood.stock).toEqual(start.stock);
     expect(back.clock).toBe(back.tick);
     expect(back.shuttersOpen).toBe(true);
     expect(back.today).toEqual({ served: 0, poured: 0, earned: 0, tips: 0, best: 0 });

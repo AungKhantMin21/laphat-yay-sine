@@ -11,7 +11,7 @@ import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/d
 import { Service } from './service/service';
 import { TASK } from './service/task-board';
 import { Market, type Goods } from './market/market';
-import { ITEM } from '../shared/market';
+import { ITEM, itemId, itemKey } from '../shared/market';
 import { MATERIALS } from '../shared/materials';
 import { NEIGHBOURHOOD } from '../shared/neighbourhood';
 import { isShopZone } from '../shared/rules/access';
@@ -29,7 +29,7 @@ import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
-import { SAVE_SCHEMA, type SaveData, type SavedObject, type StaffMember } from './save/format';
+import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type StaffMember } from './save/format';
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
 
@@ -284,7 +284,53 @@ export class Game {
       nextUid: this.world.uidCounter,
       inventory,
       objects,
+      hood: this.saveHood(),
     };
+  }
+
+  /** The neighbourhood part of the save (M3). Goods are stored by key. */
+  private saveHood(): SaveNeighbourhood {
+    const m = this.market;
+    const st = this.service.stock;
+    const stock: Record<string, number> = {};
+    INGREDIENTS.defs.forEach((d) => st.count[d.id]! > 0 && (stock[d.key] = st.count[d.id]!));
+    const materials: Record<string, number> = {};
+    MATERIALS.defs.forEach((d) => this.materials[d.id]! > 0 && (materials[d.key] = this.materials[d.id]!));
+    const sold: Record<string, number[]> = {};
+    NEIGHBOURHOOD.shops.forEach((s) => (sold[s.key] = [...(m.sold[s.id] ?? [])]));
+    return {
+      marketDay: m.day,
+      sold,
+      stock,
+      materials,
+      carry: m.carry.map((g) => ({ kind: g.kind, key: itemKey(g.kind, g.id), qty: g.qty })),
+      deliveries: m.deliveries.map((g) => ({ kind: g.kind, key: itemKey(g.kind, g.id), qty: g.qty, due: g.due })),
+      painted: [], // S8
+    };
+  }
+
+  /** Restores the neighbourhood part of a save; items whose key no longer exists are skipped. */
+  private loadHood(h: SaveNeighbourhood): void {
+    const st = this.service.stock;
+    for (const [key, n] of Object.entries(h.stock)) {
+      const d = INGREDIENTS.byKey.get(key);
+      if (d) st.add(d.id, n);
+    }
+    for (const [key, n] of Object.entries(h.materials)) {
+      const d = MATERIALS.byKey.get(key);
+      if (d) this.materials[d.id] = n;
+    }
+    const m = this.market;
+    if (h.marketDay === this.sim.day) m.restore(h.marketDay, NEIGHBOURHOOD.shops.map((s) => h.sold[s.key] ?? []));
+    m.carry = h.carry.flatMap((g) => {
+      const id = itemId(g.kind, g.key);
+      return id >= 0 ? [{ kind: g.kind, id, qty: g.qty }] : [];
+    });
+    m.deliveries = h.deliveries.flatMap((g) => {
+      const id = itemId(g.kind, g.key);
+      return id >= 0 ? [{ kind: g.kind, id, qty: g.qty, due: g.due }] : [];
+    });
+    m.changed = true;
   }
 
   /**
@@ -334,7 +380,7 @@ export class Game {
     // Staff whose role no longer exists are dropped (they were never objects; nothing is lost).
     game.staff = d.staff.filter((m) => STAFF.byKey.has(m.role)).map((m) => ({ ...m }));
     game.spawnStaff();
-    game.giveStartStock(); // S7: the saved stock (save v4)
+    game.loadHood(d.hood);
     return { game, skipped, returned, added };
   }
 

@@ -107,6 +107,21 @@ export function itemName(kind: number, id: number): string {
   return `obj.${CATALOG.defs[id]!.key}`;
 }
 
+/** Save key of an item (ingredient, catalog or material key). */
+export function itemKey(kind: number, id: number): string {
+  if (kind === ITEM.ingredient) return INGREDIENTS.defs[id]?.key ?? '';
+  if (kind === ITEM.material) return MATERIALS.defs[id]?.key ?? '';
+  return CATALOG.defs[id]?.key ?? '';
+}
+
+/** Item id for a save key, or −1 if it no longer exists. */
+export function itemId(kind: number, key: string): number {
+  if (kind === ITEM.ingredient) return INGREDIENTS.byKey.get(key)?.id ?? -1;
+  if (kind === ITEM.material) return MATERIALS.byKey.get(key)?.id ?? -1;
+  if (kind === ITEM.object) return CATALOG.byKey.get(key)?.id ?? -1;
+  return -1;
+}
+
 /** Delivery fee for goods worth `cost` kyat. */
 export function deliveryFee(cost: number, rules: MarketRules = MARKET): number {
   const step = rules.priceStep;

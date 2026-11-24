@@ -91,6 +91,8 @@ export class WorldView implements FrameHandler {
   cupCount = 0;
   /** Set when any cup moved; the cup renderer clears it. */
   cupsChanged = false;
+  /** Load of the goods in the player's hands (M3; set from PlayerState). */
+  playerCarry = 0;
 
   get area(): AreaGrids {
     return this.state.area;

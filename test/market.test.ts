@@ -12,6 +12,7 @@ import { ITEM, MARKET, basePrice, buildMarket, dailyStock, deliveryFee, type Raw
 import { NEIGHBOURHOOD } from '../src/shared/neighbourhood';
 import type { SimEvent } from '../src/shared/protocol';
 import { PLAYER, WS } from '../src/sim/npc/workers';
+import { parse, serialize } from '../src/sim/save/format';
 
 let buf = new ArrayBuffer(1 << 16);
 const writer = new FrameWriter();
@@ -181,5 +182,50 @@ describe('buying', () => {
     g.act({ k: 'sleep' });
     expect(g.market.carry).toEqual([]);
     expect(g.service.stock.count[TEA]!).toBeGreaterThanOrEqual(tea + INGREDIENTS.byKey.get('tea')!.pack - 200);
+  });
+});
+
+describe('saving the neighbourhood (v4)', () => {
+  it('keeps stock, materials, today’s purchases, goods in hand and deliveries', () => {
+    const g = Game.create(21);
+    walkTo(g, { k: 'visit', shop: MARKET_ID });
+    g.builder.money = 1e6;
+    const row = rowOf(g, MARKET_ID, ITEM.ingredient, TEA);
+    g.act({ k: 'buy', shop: MARKET_ID, item: row, qty: 2 });
+    g.act({ k: 'buy', shop: MARKET_ID, item: row, qty: 1, deliver: true });
+    g.materials[1] = 17;
+    const data = g.toSave(0);
+    const back = parse(serialize(data));
+    expect(back.hood).toEqual(data.hood);
+    const { game } = Game.fromSave(back);
+    expect(game.market.carry).toEqual(g.market.carry);
+    expect(game.market.deliveries).toEqual(g.market.deliveries);
+    expect(game.market.rows[MARKET_ID]![row]!.qty).toBe(g.market.rows[MARKET_ID]![row]!.qty);
+    expect(Array.from(game.service.stock.count)).toEqual(Array.from(g.service.stock.count));
+    expect(game.materials[1]).toBe(17);
+  });
+
+  it('purchases from another day are forgotten (that day restocked)', () => {
+    const g = Game.create(22);
+    const data = g.toSave(0);
+    data.hood.marketDay = g.sim.day - 1;
+    data.hood.sold = { market: [99, 99, 99] };
+    const { game } = Game.fromSave(parse(serialize(data)));
+    expect(game.market.rows).toEqual(dailyStock(22, g.sim.day));
+  });
+
+  it('a v3 save migrates with a new game’s starting stock and keeps everything else', () => {
+    const g = Game.create(23);
+    const data = g.toSave(0);
+    data.hood = { marketDay: -1, sold: {}, stock: {}, materials: {}, carry: [], deliveries: [], painted: [] };
+    const v4 = serialize(data);
+    const v3 = v4.slice(0, v4.byteLength - 11); // the empty neighbourhood block
+    new DataView(v3).setUint16(4, 3, true);
+    const back = parse(v3);
+    expect(back.schema).toBe(4);
+    expect(back.objects).toEqual(data.objects);
+    expect(back.money).toBe(data.money);
+    const { game } = Game.fromSave(back);
+    expect(game.service.stock.cupsLeft()).toBe(Game.create(1).service.stock.cupsLeft());
   });
 });

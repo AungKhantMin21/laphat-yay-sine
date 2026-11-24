@@ -100,6 +100,7 @@ const bridge: SimBridge = new SimBridge(view, {
     dayHud.refresh();
     tin.refresh(bridge.player?.money ?? 0);
     if (bridge.player) stockHud.refresh(bridge.player.cupsLeft, bridge.player.stock);
+    view.playerCarry = bridge.player?.carryLoad ?? 0;
     dayEnd.refresh();
     shopPanel.refresh();
   },

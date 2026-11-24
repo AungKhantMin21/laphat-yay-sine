@@ -218,6 +218,13 @@ export function drawCharacters(): Array<[string, Raw]> {
   tray.rect(0, 1, 11, 2, '6a7884', 8);
   tray.rect(1, 3, 10, 3, '44505c');
   out.push(['fx/tray', tray]);
+  // Shopping in hand (M3): a cardboard box tied with string, carried in front.
+  const parcel = new Canvas(10, 8);
+  parcel.rect(0, 1, 9, 7, 'd9a05b', 6);
+  parcel.rect(0, 0, 9, 0, 'f0c060');
+  parcel.rect(4, 0, 5, 7, 'c85a44');
+  parcel.outline();
+  out.push(['fx/parcel', parcel]);
   for (let f = 0; f < 3; f++) {
     const s = new Canvas(7, 10);
     for (let y = 0; y < 10; y++) {

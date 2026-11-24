@@ -15,10 +15,20 @@
 //
 // v3 = the v2 layout (schema 3), then staff (M2.5):
 //   u8 count, then count × (u8 len + ASCII role key | u16 hiredDay | u8 flags (bit 0 day off))
+//
+// v4 = the v3 layout (schema 4), then the neighbourhood (M3). Strings are u8 len + UTF-8; items are
+// (u8 kind: 0 ingredient, 1 object, 2 material | str key):
+//   i32 marketDay | u8 shops × (str shop key | u8 rows × u8 sold today)
+//   | u8 n × (str ingredient key | u32 portions)                     kitchen stock
+//   | u8 n × (str material key | u32 tiles)                          materials
+//   | u8 n × (item | u16 qty)                                        carried
+//   | u8 n × (item | u16 qty | i32 due minute, −1 = next opening)    deliveries
+//   | u16 n × (u8 x | u8 y | u8 layer: 0 floor, 1 wall | str finish) painted tiles
 
 import type { DayStats } from '../../shared/protocol';
+import start from '../../data/start.json';
 
-export const SAVE_SCHEMA = 3;
+export const SAVE_SCHEMA = 4;
 const MAGIC = 0x3153594c; // 'LYS1' little-endian
 const OBJ_BYTES = 16;
 const DAY_BYTES = 20;
@@ -57,6 +67,36 @@ export interface StaffMember {
   dayOff: boolean;
 }
 
+/** Goods by item kind (shared/market.ts ITEM) and key (M3). */
+export interface SavedGoods {
+  kind: number;
+  key: string;
+  qty: number;
+}
+
+/** A painted tile (M3): a floor finish (layer 0) or wall colour (layer 1). */
+export interface SavedPaint {
+  x: number;
+  y: number;
+  layer: number;
+  finish: string;
+}
+
+/** The neighbourhood part of a save (v4). */
+export interface SaveNeighbourhood {
+  /** Day the purchases belong to (−1 = none); a different day restocks everything. */
+  marketDay: number;
+  /** Units bought today per shop key and row. */
+  sold: Record<string, number[]>;
+  /** Kitchen stock in portions, by ingredient key. */
+  stock: Record<string, number>;
+  /** Materials in tiles, by material key. */
+  materials: Record<string, number>;
+  carry: SavedGoods[];
+  deliveries: (SavedGoods & { due: number })[];
+  painted: SavedPaint[];
+}
+
 /** The current-schema save, as plain data. */
 export interface SaveData {
   schema: number;
@@ -78,6 +118,99 @@ export interface SaveData {
   nextUid: number;
   inventory: Record<string, number>;
   objects: SavedObject[];
+  /** M3: stock, materials, market purchases, goods in hand or on the way, paint. */
+  hood: SaveNeighbourhood;
+}
+
+/** Growable little-endian byte writer (saving is not a hot path). */
+class Bytes {
+  private buf = new Uint8Array(256);
+  private dv = new DataView(this.buf.buffer);
+  length = 0;
+  private room(n: number): void {
+    if (this.length + n <= this.buf.length) return;
+    const next = new Uint8Array(Math.max(this.buf.length * 2, this.length + n));
+    next.set(this.buf);
+    this.buf = next;
+    this.dv = new DataView(next.buffer);
+  }
+  u8(v: number): void {
+    this.room(1);
+    this.buf[this.length++] = v & 0xff;
+  }
+  u16(v: number): void {
+    this.room(2);
+    this.dv.setUint16(this.length, Math.min(0xffff, Math.max(0, Math.floor(v))), true);
+    this.length += 2;
+  }
+  u32(v: number): void {
+    this.room(4);
+    this.dv.setUint32(this.length, Math.min(0xffffffff, Math.max(0, Math.floor(v))), true);
+    this.length += 4;
+  }
+  i32(v: number): void {
+    this.room(4);
+    this.dv.setInt32(this.length, v | 0, true);
+    this.length += 4;
+  }
+  str(s: string): void {
+    const b = new TextEncoder().encode(s);
+    if (b.length > 255) throw new Error('save string too long');
+    this.u8(b.length);
+    this.room(b.length);
+    this.buf.set(b, this.length);
+    this.length += b.length;
+  }
+  bytes(): Uint8Array {
+    return this.buf.subarray(0, this.length);
+  }
+}
+
+function count(n: number, max: number, what: string): number {
+  if (n > max) throw new Error(`save: too many ${what}`);
+  return n;
+}
+
+/** The v4 neighbourhood block. */
+function writeHood(h: SaveNeighbourhood): Uint8Array {
+  const w = new Bytes();
+  w.i32(h.marketDay);
+  const shops = Object.entries(h.sold);
+  w.u8(count(shops.length, 255, 'shops'));
+  for (const [key, rows] of shops) {
+    w.str(key);
+    w.u8(count(rows.length, 255, 'rows'));
+    for (const n of rows) w.u8(Math.min(255, n));
+  }
+  for (const rec of [h.stock, h.materials]) {
+    const e = Object.entries(rec).filter(([, n]) => n > 0);
+    w.u8(count(e.length, 255, 'stock lines'));
+    for (const [key, n] of e) {
+      w.str(key);
+      w.u32(n);
+    }
+  }
+  w.u8(count(h.carry.length, 255, 'carried goods'));
+  for (const g of h.carry) {
+    w.u8(g.kind);
+    w.str(g.key);
+    w.u16(g.qty);
+  }
+  w.u8(count(h.deliveries.length, 255, 'deliveries'));
+  for (const g of h.deliveries) {
+    w.u8(g.kind);
+    w.str(g.key);
+    w.u16(g.qty);
+    w.i32(g.due);
+  }
+  w.u16(count(h.painted.length, 0xffff, 'painted tiles'));
+  for (const p of h.painted) {
+    w.u8(p.x);
+    w.u8(p.y);
+    w.u8(p.layer);
+    w.str(p.finish);
+  }
+  return w.bytes();
 }
 
 export function serialize(d: SaveData): ArrayBuffer {
@@ -97,9 +230,11 @@ export function serialize(d: SaveData): ArrayBuffer {
   if (teaserKey.length > 255 || teaserArg.length > 255) throw new Error('teaser too long');
   const staffKeys = d.staff.map((m) => enc.encode(m.role));
   if (staffKeys.length > 255 || staffKeys.some((b) => b.length > 255)) throw new Error('staff too long');
+  const hood = writeHood(d.hood);
   const size = 4 + 4 + 4 + 8 + 4 + 16 + 8 + 2 + keyBytes.reduce((s, b) => s + 1 + b.length, 0) + 2 + inv.length * 4 + 2 + d.objects.length * OBJ_BYTES
     + DAY_BYTES + 1 + teaserKey.length + 1 + teaserArg.length
-    + 1 + staffKeys.reduce((s, b) => s + 1 + b.length + 3, 0);
+    + 1 + staffKeys.reduce((s, b) => s + 1 + b.length + 3, 0)
+    + hood.length;
   const buf = new ArrayBuffer(size);
   const dv = new DataView(buf);
   const u8 = new Uint8Array(buf);
@@ -175,6 +310,7 @@ export function serialize(d: SaveData): ArrayBuffer {
     u8[o + 2] = m.dayOff ? 1 : 0;
     o += 3;
   });
+  u8.set(hood, o);
   return buf;
 }
 
@@ -334,11 +470,93 @@ function parseV3(dv: DataView): SaveData {
   return { ...base, schema: 3, staff };
 }
 
+/** Byte offset just after the v3 layout (the staff roster). */
+function endOfV3(dv: DataView): number {
+  let o = endOfV2(dv);
+  const need = (n: number): void => {
+    if (o + n > dv.byteLength) throw new Error('save truncated');
+  };
+  need(1);
+  const n = dv.getUint8(o++);
+  for (let k = 0; k < n; k++) {
+    need(1);
+    o += 1 + dv.getUint8(o) + 3;
+  }
+  return o;
+}
+
+function parseV4(dv: DataView): SaveData {
+  const base = parseV3(dv);
+  let o = endOfV3(dv);
+  const need = (n: number): void => {
+    if (o + n > dv.byteLength) throw new Error('save truncated');
+  };
+  const dec = new TextDecoder();
+  const u8 = (): number => {
+    need(1);
+    return dv.getUint8(o++);
+  };
+  const u16 = (): number => {
+    need(2);
+    o += 2;
+    return dv.getUint16(o - 2, true);
+  };
+  const u32 = (): number => {
+    need(4);
+    o += 4;
+    return dv.getUint32(o - 4, true);
+  };
+  const i32 = (): number => {
+    need(4);
+    o += 4;
+    return dv.getInt32(o - 4, true);
+  };
+  const str = (): string => {
+    const len = u8();
+    need(len);
+    const s = dec.decode(new Uint8Array(dv.buffer, dv.byteOffset + o, len));
+    o += len;
+    return s;
+  };
+  const hood: SaveNeighbourhood = { marketDay: i32(), sold: {}, stock: {}, materials: {}, carry: [], deliveries: [], painted: [] };
+  for (let s = u8(); s > 0; s--) {
+    const key = str();
+    const rows: number[] = [];
+    for (let r = u8(); r > 0; r--) rows.push(u8());
+    hood.sold[key] = rows;
+  }
+  for (const rec of [hood.stock, hood.materials]) {
+    for (let n = u8(); n > 0; n--) {
+      const key = str();
+      rec[key] = u32();
+    }
+  }
+  for (let n = u8(); n > 0; n--) {
+    const kind = u8();
+    const key = str();
+    hood.carry.push({ kind, key, qty: u16() });
+  }
+  for (let n = u8(); n > 0; n--) {
+    const kind = u8();
+    const key = str();
+    const qty = u16();
+    hood.deliveries.push({ kind, key, qty, due: i32() });
+  }
+  for (let n = u16(); n > 0; n--) {
+    const x = u8();
+    const y = u8();
+    const layer = u8();
+    hood.painted.push({ x, y, layer, finish: str() });
+  }
+  return { ...base, schema: 4, hood };
+}
+
 /** One parser per schema that ever existed. Never edit an old one. */
 export const PARSERS: Record<number, Parser> = {
   1: parseV1 as unknown as Parser,
   2: parseV2 as unknown as Parser,
   3: parseV3 as unknown as Parser,
+  4: parseV4 as unknown as Parser,
 };
 
 /** Upgrades schema n → n+1. MIGRATIONS[n] upgrades from n. Append only. */
@@ -354,6 +572,13 @@ export const MIGRATIONS: Record<number, (s: VersionedSave) => VersionedSave> = {
   }),
   // v2 → v3 (M2.5): no staff yet. (New kitchen fixtures and objects that no longer fit are handled at load.)
   2: (s) => ({ ...s, schema: 3, staff: [] }),
+  // v3 → v4 (M3): ingredients became real — the kitchen gets a new game's starting stock; nothing
+  // bought, carried or painted yet.
+  3: (s) => ({
+    ...s,
+    schema: 4,
+    hood: { marketDay: -1, sold: {}, stock: { ...(start.stock as Record<string, number>) }, materials: {}, carry: [], deliveries: [], painted: [] },
+  }),
 };
 
 export function migrate(s: VersionedSave, migrations = MIGRATIONS, target = SAVE_SCHEMA): VersionedSave {
