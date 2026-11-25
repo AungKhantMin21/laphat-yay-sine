@@ -65,7 +65,7 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Share links (M6) need compression; save codes are uncompressed (~24 bytes/object).
 - Multi-tile depth sorting may need sprite slicing once characters walk around (M2/M3).
 - BACKLOG.md holds deferred ideas.
-- Flaky test: `test/builder.test.ts` "any random sequence fully undoes…" failed once in a full parallel run on 22 Nov 2026; it did not recur in 4 full runs during M2.9. Probably a timeout under load; look again if it comes back.
+- Flaky test: `test/builder.test.ts` "any random sequence fully undoes…" failed once in a full parallel run on 22 Nov 2026; it did not recur in 4 full runs during M2.9. Probably a timeout under load. 25 Nov 2026: one unnamed test failed once in `npm run check` right after the perf gate (machine swapping), then passed in 5 straight runs — likely the same; look again if it comes back.
 - The mid-day reload check passed, but it can't tell whether the `pagehide` save or the hourly autosave kept the data. Add an M6 device check: background a phone mid-day and kill the tab (RISKS.md).
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
