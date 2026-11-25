@@ -1,0 +1,37 @@
+{
+  "rules": {
+    "considerChance": 0.006,
+    "considerDays": [7, 21],
+    "expiry": [7, 21],
+    "urgentChance": 0.002,
+    "urgentDiscount": [0.15, 0.25],
+    "urgentExpiry": [3, 6],
+    "npcBuyChance": 0.05,
+    "cooldown": [20, 60],
+    "relist": [10, 25],
+    "slowBelow": 0.3,
+    "slowDays": 14,
+    "closeChance": 0.3,
+    "rentDays": 30
+  },
+  "properties": [
+    { "key": "east_lot", "building": 4, "kind": "lot", "value": 250000, "rent": 3000, "firstListing": 3, "expand": { "rect": [36, 12, 41, 19], "join": "w", "opening": [13, 19] } },
+    { "key": "west_hall", "building": 3, "kind": "lot", "value": 600000, "rent": 6000, "considerChance": 0.05, "expand": { "rect": [17, 12, 24, 19], "join": "e", "opening": [13, 19] } },
+    { "key": "phone_shop", "building": 0, "kind": "business", "value": 420000 },
+    { "key": "tailor", "building": 1, "kind": "business", "value": 380000 },
+    { "key": "house_a", "building": 2, "kind": "house", "value": 900000 },
+    { "key": "bicycle_repair", "building": 5, "kind": "business", "value": 300000 },
+    { "key": "house_b", "building": 6, "kind": "house", "value": 1100000 },
+    { "key": "pharmacy", "building": 7, "kind": "business", "value": 650000 },
+    { "key": "house_c", "building": 8, "kind": "house", "value": 1200000 },
+    { "key": "gold_shop", "building": 9, "kind": "business", "value": 1500000 },
+    { "key": "rice_shop", "building": 11, "kind": "business", "value": 520000 },
+    { "key": "house_d", "building": 12, "kind": "house", "value": 950000 },
+    { "key": "noodle_shop", "building": 13, "kind": "business", "value": 480000 },
+    { "key": "electrical", "building": 14, "kind": "business", "value": 450000 },
+    { "key": "barber", "building": 15, "kind": "business", "value": 280000 },
+    { "key": "house_e", "building": 16, "kind": "house", "value": 1000000 },
+    { "key": "photo_studio", "building": 17, "kind": "business", "value": 400000 },
+    { "key": "printer", "building": 18, "kind": "business", "value": 560000 }
+  ]
+}

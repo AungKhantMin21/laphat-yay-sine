@@ -24,11 +24,18 @@
 //   | u8 n × (item | u16 qty)                                        carried
 //   | u8 n × (item | u16 qty | i32 due minute, −1 = next opening)    deliveries
 //   | u16 n × (u8 x | u8 y | u8 layer: 0 floor, 1 wall | str finish) painted tiles
+//
+// v5 = the v4 layout (schema 5), then the living world (M4):
+//   i32 rolledDay | u32 nextNews
+//   | u8 n × (str property key | u8 state | u8 listing | u32 price | u16 days | u16 cooldown
+//            | str owner | u8 flags (bit 0 closed, 1 listed once, 2 urgent) | u8 fortune × 255 | u8 slow)
+//   | u8 n × (u32 id | u16 day | u8 kind | str prop | str a | str b | u8 heard)   news
+//   | u8 n × (str resident key | u8 door (255 = not living here) | u16 visits)     residents
 
 import type { DayStats } from '../../shared/protocol';
 import start from '../../data/start.json';
 
-export const SAVE_SCHEMA = 4;
+export const SAVE_SCHEMA = 5;
 const MAGIC = 0x3153594c; // 'LYS1' little-endian
 const OBJ_BYTES = 16;
 const DAY_BYTES = 20;
@@ -97,6 +104,42 @@ export interface SaveNeighbourhood {
   painted: SavedPaint[];
 }
 
+/** One property's state (M4, sim/world/property-market.ts PropertyState). */
+export interface SavedProperty {
+  key: string;
+  state: number;
+  listing: number;
+  price: number;
+  days: number;
+  cooldown: number;
+  owner: string;
+  closed: boolean;
+  listedOnce: boolean;
+  urgent: boolean;
+  fortune: number;
+  slow: number;
+}
+
+export interface SavedNews {
+  id: number;
+  day: number;
+  kind: number;
+  prop: string;
+  a: string;
+  b: string;
+  heard: boolean;
+}
+
+/** The living-world part of a save (v5). Empty lists = a new world (an upgraded older save). */
+export interface SaveWorld {
+  rolledDay: number;
+  nextNews: number;
+  props: SavedProperty[];
+  news: SavedNews[];
+  /** Everyone in the resident pool: door = NEIGHBOURHOOD.doors index, or 255 (moved away / not yet here). */
+  residents: { key: string; door: number; visits: number }[];
+}
+
 /** The current-schema save, as plain data. */
 export interface SaveData {
   schema: number;
@@ -120,6 +163,13 @@ export interface SaveData {
   objects: SavedObject[];
   /** M3: stock, materials, market purchases, goods in hand or on the way, paint. */
   hood: SaveNeighbourhood;
+  /** M4: properties, news, residents. */
+  world: SaveWorld;
+}
+
+/** A new world (also what older saves upgrade to). */
+export function emptyWorld(): SaveWorld {
+  return { rolledDay: -1, nextNews: 1, props: [], news: [], residents: [] };
 }
 
 /** Growable little-endian byte writer (saving is not a hot path). */
@@ -213,6 +263,43 @@ function writeHood(h: SaveNeighbourhood): Uint8Array {
   return w.bytes();
 }
 
+/** The v5 living-world block. */
+function writeWorld(d: SaveWorld): Uint8Array {
+  const w = new Bytes();
+  w.i32(d.rolledDay);
+  w.u32(d.nextNews);
+  w.u8(count(d.props.length, 255, 'properties'));
+  for (const p of d.props) {
+    w.str(p.key);
+    w.u8(p.state);
+    w.u8(p.listing);
+    w.u32(p.price);
+    w.u16(p.days);
+    w.u16(p.cooldown);
+    w.str(p.owner);
+    w.u8((p.closed ? 1 : 0) | (p.listedOnce ? 2 : 0) | (p.urgent ? 4 : 0));
+    w.u8(Math.round(Math.min(1, Math.max(0, p.fortune)) * 255));
+    w.u8(Math.min(255, p.slow));
+  }
+  w.u8(count(d.news.length, 255, 'news'));
+  for (const n of d.news) {
+    w.u32(n.id);
+    w.u16(n.day);
+    w.u8(n.kind);
+    w.str(n.prop);
+    w.str(n.a);
+    w.str(n.b);
+    w.u8(n.heard ? 1 : 0);
+  }
+  w.u8(count(d.residents.length, 255, 'residents'));
+  for (const r of d.residents) {
+    w.str(r.key);
+    w.u8(r.door);
+    w.u16(r.visits);
+  }
+  return w.bytes();
+}
+
 export function serialize(d: SaveData): ArrayBuffer {
   const keys = new Map<string, number>();
   const keyOf = (k: string): number => {
@@ -231,10 +318,11 @@ export function serialize(d: SaveData): ArrayBuffer {
   const staffKeys = d.staff.map((m) => enc.encode(m.role));
   if (staffKeys.length > 255 || staffKeys.some((b) => b.length > 255)) throw new Error('staff too long');
   const hood = writeHood(d.hood);
+  const world = writeWorld(d.world);
   const size = 4 + 4 + 4 + 8 + 4 + 16 + 8 + 2 + keyBytes.reduce((s, b) => s + 1 + b.length, 0) + 2 + inv.length * 4 + 2 + d.objects.length * OBJ_BYTES
     + DAY_BYTES + 1 + teaserKey.length + 1 + teaserArg.length
     + 1 + staffKeys.reduce((s, b) => s + 1 + b.length + 3, 0)
-    + hood.length;
+    + hood.length + world.length;
   const buf = new ArrayBuffer(size);
   const dv = new DataView(buf);
   const u8 = new Uint8Array(buf);
@@ -311,6 +399,7 @@ export function serialize(d: SaveData): ArrayBuffer {
     o += 3;
   });
   u8.set(hood, o);
+  u8.set(world, o + hood.length);
   return buf;
 }
 
@@ -551,12 +640,124 @@ function parseV4(dv: DataView): SaveData {
   return { ...base, schema: 4, hood };
 }
 
+/** Where the v4 neighbourhood block ends (skips it without building it). */
+function endOfV4(dv: DataView): number {
+  let o = endOfV3(dv);
+  const need = (n: number): void => {
+    if (o + n > dv.byteLength) throw new Error('save truncated');
+  };
+  const u8 = (): number => {
+    need(1);
+    return dv.getUint8(o++);
+  };
+  const skip = (n: number): void => {
+    need(n);
+    o += n;
+  };
+  const str = (): void => skip(u8());
+  const u16 = (): number => {
+    need(2);
+    o += 2;
+    return dv.getUint16(o - 2, true);
+  };
+  skip(4);
+  for (let s = u8(); s > 0; s--) {
+    str();
+    skip(u8());
+  }
+  for (let k = 0; k < 2; k++) {
+    for (let n = u8(); n > 0; n--) {
+      str();
+      skip(4);
+    }
+  }
+  for (let n = u8(); n > 0; n--) {
+    skip(1);
+    str();
+    skip(2);
+  }
+  for (let n = u8(); n > 0; n--) {
+    skip(1);
+    str();
+    skip(6);
+  }
+  for (let n = u16(); n > 0; n--) {
+    skip(3);
+    str();
+  }
+  return o;
+}
+
+function parseV5(dv: DataView): SaveData {
+  const base = parseV4(dv);
+  let o = endOfV4(dv);
+  const need = (n: number): void => {
+    if (o + n > dv.byteLength) throw new Error('save truncated');
+  };
+  const dec = new TextDecoder();
+  const u8 = (): number => {
+    need(1);
+    return dv.getUint8(o++);
+  };
+  const u16 = (): number => {
+    need(2);
+    o += 2;
+    return dv.getUint16(o - 2, true);
+  };
+  const u32 = (): number => {
+    need(4);
+    o += 4;
+    return dv.getUint32(o - 4, true);
+  };
+  const i32 = (): number => {
+    need(4);
+    o += 4;
+    return dv.getInt32(o - 4, true);
+  };
+  const str = (): string => {
+    const len = u8();
+    need(len);
+    const s = dec.decode(new Uint8Array(dv.buffer, dv.byteOffset + o, len));
+    o += len;
+    return s;
+  };
+  const world: SaveWorld = { rolledDay: i32(), nextNews: u32(), props: [], news: [], residents: [] };
+  for (let n = u8(); n > 0; n--) {
+    const key = str();
+    const state = u8();
+    const listing = u8();
+    const price = u32();
+    const days = u16();
+    const cooldown = u16();
+    const owner = str();
+    const flags = u8();
+    const fortune = u8() / 255;
+    world.props.push({ key, state, listing, price, days, cooldown, owner, closed: (flags & 1) !== 0, listedOnce: (flags & 2) !== 0, urgent: (flags & 4) !== 0, fortune, slow: u8() });
+  }
+  for (let n = u8(); n > 0; n--) {
+    const id = u32();
+    const day = u16();
+    const kind = u8();
+    const prop = str();
+    const a = str();
+    const b = str();
+    world.news.push({ id, day, kind, prop, a, b, heard: u8() === 1 });
+  }
+  for (let n = u8(); n > 0; n--) {
+    const key = str();
+    const door = u8();
+    world.residents.push({ key, door, visits: u16() });
+  }
+  return { ...base, schema: 5, world };
+}
+
 /** One parser per schema that ever existed. Never edit an old one. */
 export const PARSERS: Record<number, Parser> = {
   1: parseV1 as unknown as Parser,
   2: parseV2 as unknown as Parser,
   3: parseV3 as unknown as Parser,
   4: parseV4 as unknown as Parser,
+  5: parseV5 as unknown as Parser,
 };
 
 /** Upgrades schema n → n+1. MIGRATIONS[n] upgrades from n. Append only. */
@@ -579,6 +780,9 @@ export const MIGRATIONS: Record<number, (s: VersionedSave) => VersionedSave> = {
     schema: 4,
     hood: { marketDay: -1, sold: {}, stock: { ...(start.stock as Record<string, number>) }, materials: {}, carry: [], deliveries: [], painted: [] },
   }),
+  // v4 → v5 (M4): a new living world — every property not selling (the east lot lists on day 3, or at
+  // the next Sleep if that day has passed), no news, everyone at home.
+  4: (s) => ({ ...s, schema: 5, world: emptyWorld() }),
 };
 
 export function migrate(s: VersionedSave, migrations = MIGRATIONS, target = SAVE_SCHEMA): VersionedSave {

@@ -24,6 +24,9 @@ import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
 import { Customers } from './npc/customers';
 import { Residents } from './npc/residents';
+import { PropertyMarket, type NewsItem } from './world/property-market';
+import { PROPERTIES, PS, type PropertyDef } from '../shared/properties';
+import { RESIDENTS } from '../shared/residents';
 import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
 import { SimWorld } from './world';
@@ -31,7 +34,7 @@ import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
-import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type SavedPaint, type StaffMember } from './save/format';
+import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type SavedPaint, type SaveWorld, type StaffMember } from './save/format';
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
 
@@ -62,6 +65,10 @@ export class Game {
   readonly market: Market;
   /** The named neighbours (M4). */
   readonly residents: Residents;
+  /** The property market and the street's news (M4). */
+  properties: PropertyMarket;
+  /** Residents not living here now (moved away, or newcomers yet to come), by key. */
+  spares: string[] = RESIDENTS.spare.map((d) => d.key);
   /** Keepers mask last sent in PlayerState. */
   private keepers = -1;
 
@@ -89,6 +96,35 @@ export class Game {
     this.npcs.onResidentGone = (r) => this.residents.backFromTea(r);
     this.residents.settle(sim.day, sim.gameMinute);
     this.residents.near = this.npcs.near;
+    this.properties = new PropertyMarket(sim.seed, (p) => this.houseOwner(p));
+  }
+
+  /** The first resident living behind a house's door ('' if nobody). */
+  private houseOwner(p: PropertyDef): string {
+    if (p.door < 0) return '';
+    const res = this.residents;
+    for (let r = 0; r < res.capacity; r++) if (res.who[r] && res.doorOf(r) === p.door) return res.who[r]!.key;
+    return '';
+  }
+
+  /** A house sold to a newcomer: its owner moves away, the first spare resident moves in. */
+  private houseSold(p: PropertyDef): [string, string] | null {
+    const res = this.residents;
+    const owner = this.properties.props[p.id]!.owner;
+    const r = owner ? res.slotOf(owner) : -1;
+    if (r < 0 || this.spares.length === 0) return null;
+    const came = this.spares.shift()!;
+    const def = RESIDENTS.byKey.get(came);
+    if (!def) return null;
+    res.moveOut(r);
+    res.moveIn(r, def, p.door);
+    this.spares.push(owner);
+    return [owner, came];
+  }
+
+  /** The once-a-day world step (M4): the property market rolls for `day`. Sleep and catch-up both use it. */
+  worldDay(day: number): void {
+    this.properties.rollDay(day, { houseSold: (p) => this.houseSold(p) });
   }
 
   /**
@@ -335,7 +371,74 @@ export class Game {
       inventory,
       objects,
       hood: this.saveHood(),
+      world: this.saveWorld(),
     };
+  }
+
+  /** The living-world part of the save (M4). */
+  private saveWorld(): SaveWorld {
+    const pm = this.properties;
+    const res = this.residents;
+    const residents: SaveWorld['residents'] = [];
+    for (let r = 0; r < res.capacity; r++) {
+      const d = res.who[r];
+      if (d) residents.push({ key: d.key, door: res.doorOf(r), visits: res.visits[r]! });
+    }
+    for (const key of this.spares) residents.push({ key, door: 255, visits: 0 });
+    return {
+      rolledDay: pm.rolledDay,
+      nextNews: pm.nextNews,
+      props: PROPERTIES.defs.map((def, i) => ({ key: def.key, ...pm.props[i]! })),
+      news: pm.news.map((n) => ({ ...n })),
+      residents,
+    };
+  }
+
+  /** Restores the living world (empty lists = an upgraded older save: keep the new world). */
+  private loadWorld(w: SaveWorld): void {
+    const res = this.residents;
+    if (w.residents.length > 0) {
+      const seen = new Set<string>();
+      res.clearAll();
+      this.spares = [];
+      let slot = 0;
+      for (const s of w.residents) {
+        const def = RESIDENTS.byKey.get(s.key);
+        if (!def || seen.has(s.key)) continue;
+        seen.add(s.key);
+        if (s.door === 255 || !NEIGHBOURHOOD.doors[s.door] || slot >= res.capacity) {
+          this.spares.push(s.key);
+          continue;
+        }
+        res.moveIn(slot, def, s.door);
+        res.visits[slot] = s.visits;
+        slot++;
+      }
+      // People added to the data since the save was made.
+      for (const def of RESIDENTS.residents) if (!seen.has(def.key) && slot < res.capacity) res.moveIn(slot++, def, def.home);
+      for (const def of RESIDENTS.spare) if (!seen.has(def.key)) this.spares.push(def.key);
+      res.settle(this.sim.day, this.sim.gameMinute);
+    }
+    const pm = this.properties;
+    for (const s of w.props) {
+      const def = PROPERTIES.byKey.get(s.key);
+      if (!def) continue;
+      const p = pm.props[def.id]!;
+      p.state = s.state;
+      p.listing = s.listing;
+      p.price = s.price;
+      p.days = s.days;
+      p.cooldown = s.cooldown;
+      p.owner = s.owner;
+      p.closed = s.closed;
+      p.listedOnce = s.listedOnce;
+      p.urgent = s.urgent;
+      p.fortune = s.fortune;
+      p.slow = s.slow;
+    }
+    pm.rolledDay = w.rolledDay;
+    pm.nextNews = Math.max(1, w.nextNews);
+    pm.news = w.news.map((n) => ({ ...n }));
   }
 
   /** The neighbourhood part of the save (M3). Goods are stored by key. */
@@ -460,6 +563,7 @@ export class Game {
     game.staff = d.staff.filter((m) => STAFF.byKey.has(m.role)).map((m) => ({ ...m }));
     game.spawnStaff();
     game.loadHood(d.hood);
+    game.loadWorld(d.world);
     return { game, skipped, returned, added };
   }
 
@@ -500,6 +604,7 @@ export class Game {
           if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
         }
         this.npcs.clear(); // the last passers-by go home too
+        this.worldDay(this.sim.day); // the street moves on overnight
         this.residents.settle(this.sim.day, this.sim.gameMinute); // tomorrow: everyone where the plan has them
         this.service.endOfDay(); // cups washed overnight, no jobs left
         this.payWages();
@@ -569,13 +674,27 @@ export class Game {
       deliveries: this.market.deliveries.map((g) => ({ kind: g.kind, id: g.id, qty: g.qty })),
       materials: Array.from(this.builder.materials),
       keepers: this.residents.keepersMask(),
+      buildings: this.properties.buildingFlags(),
+      listings: this.listings(),
+      news: this.properties.news.map(newsLine),
     };
+  }
+
+  /** Listed properties and your own spaces, for the notice board (M4). */
+  private listings(): PlayerState['listings'] {
+    const out: PlayerState['listings'] = [];
+    PROPERTIES.defs.forEach((def, i) => {
+      const p = this.properties.props[i]!;
+      if (p.state !== PS.listed && p.state !== PS.owned && p.state !== PS.rented) return;
+      out.push({ key: def.key, state: p.state, listing: p.listing, price: p.price, rent: def.rent, days: p.days, urgent: p.urgent, joins: def.expand !== null });
+    });
+    return out;
   }
 
   /** True once after anything in the player state changed. */
   takeChanged(): boolean {
-    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed || this.market.changed;
-    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = this.market.changed = false;
+    const c = this.builder.changed || this.day.changed || this.workers.changed || this.service.stock.changed || this.market.changed || this.properties.changed;
+    this.builder.changed = this.day.changed = this.workers.changed = this.service.stock.changed = this.market.changed = this.properties.changed = false;
     return c;
   }
 
@@ -682,4 +801,9 @@ function addMissingFixtures(world: SimWorld, inv: Uint16Array): number {
     if (!placed) inv[def.id] = Math.min(0xffff, inv[def.id]! + 1);
   }
   return added;
+}
+
+/** A news item as the main thread sees it (PlayerState.news). */
+function newsLine(n: NewsItem): PlayerState['news'][number] {
+  return { id: n.id, day: n.day, kind: n.kind, prop: n.prop, a: n.a, b: n.b, heard: n.heard };
 }

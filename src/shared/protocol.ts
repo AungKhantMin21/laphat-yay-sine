@@ -146,6 +146,12 @@ export interface PlayerState {
   materials: number[];
   /** Bit per neighbourhood shop id whose keeper is behind the counter (M4). */
   keepers: number;
+  /** Front flags per building (shared/properties.ts BUILDING_FLAG). */
+  buildings: number[];
+  /** Listed properties and your own spaces (the notice board). */
+  listings: { key: string; state: number; listing: number; price: number; rent: number; days: number; urgent: boolean; joins: boolean }[];
+  /** The street's news, oldest first (sim/world/property-market.ts NEWS kinds). */
+  news: { id: number; day: number; kind: number; prop: string; a: string; b: string; heard: boolean }[];
 }
 
 /** `qty` units of an item (shared/market.ts ITEM kind + id). */

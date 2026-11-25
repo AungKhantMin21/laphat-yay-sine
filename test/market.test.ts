@@ -12,7 +12,7 @@ import { ITEM, MARKET, basePrice, buildMarket, dailyStock, deliveryFee, type Raw
 import { NEIGHBOURHOOD } from '../src/shared/neighbourhood';
 import type { SimEvent } from '../src/shared/protocol';
 import { PLAYER, WS } from '../src/sim/npc/workers';
-import { parse, serialize } from '../src/sim/save/format';
+import { parse, serialize, emptyWorld } from '../src/sim/save/format';
 
 let buf = new ArrayBuffer(1 << 16);
 const writer = new FrameWriter();
@@ -218,11 +218,12 @@ describe('saving the neighbourhood (v4)', () => {
     const g = Game.create(23);
     const data = g.toSave(0);
     data.hood = { marketDay: -1, sold: {}, stock: {}, materials: {}, carry: [], deliveries: [], painted: [] };
-    const v4 = serialize(data);
-    const v3 = v4.slice(0, v4.byteLength - 11); // the empty neighbourhood block
+    data.world = emptyWorld();
+    const v5 = serialize(data);
+    const v3 = v5.slice(0, v5.byteLength - 11 - 11); // the empty neighbourhood and world blocks
     new DataView(v3).setUint16(4, 3, true);
     const back = parse(v3);
-    expect(back.schema).toBe(4);
+    expect(back.schema).toBe(5);
     expect(back.objects).toEqual(data.objects);
     expect(back.money).toBe(data.money);
     const { game } = Game.fromSave(back);

@@ -93,8 +93,10 @@ describe('save format', () => {
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(parse(fromBase64Url(code).buffer as ArrayBuffer)).toEqual(data);
     expect(() => fromBase64Url('not a code!')).toThrow();
-    // Header + key table + 16 bytes per object: the start shop plus a few more stays well under DESIGN's 2,000 characters.
-    expect(code.length).toBeLessThan(900);
+    // Header + key table + 16 bytes per object, plus (v5) the living world (~0.9 KB of properties and
+    // residents). This is the full backup code; share links (M6) get their own compressed layout-only
+    // format for DESIGN's 2,000-character target.
+    expect(code.length).toBeLessThan(2500);
   });
 
   it('objects that break the current shop rules go back to the inventory, never lost', () => {

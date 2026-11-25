@@ -140,6 +140,34 @@ export class Residents implements WalkerSoA {
     this.placeInside(r, this.home[r]!);
   }
 
+  /** Empties every slot (a save rebuilds the population). */
+  clearAll(): void {
+    for (let r = 0; r < this.capacity; r++) {
+      if (!this.who[r]) continue;
+      drop(this, r, this.paths);
+      this.placeInside(r, this.tile[r]!);
+      this.who[r] = null;
+      this.home[r] = -1;
+    }
+    this.planDay = -1;
+  }
+
+  /** A resident moves away; slot r becomes free. */
+  moveOut(r: number): void {
+    if (!this.who[r]) return;
+    drop(this, r, this.paths);
+    this.placeInside(r, this.home[r]!);
+    this.who[r] = null;
+    this.home[r] = -1;
+    this.plan[r] = [];
+  }
+
+  /** Door index (NEIGHBOURHOOD.doors) of slot r's home, or −1. */
+  doorOf(r: number): number {
+    const t = this.home[r]!;
+    return this.hood.doors.findIndex((d) => d.y * this.W + d.x === t);
+  }
+
   /** Resident slot by key, or −1. */
   slotOf(key: string): number {
     for (let r = 0; r < this.capacity; r++) if (this.who[r]?.key === key) return r;

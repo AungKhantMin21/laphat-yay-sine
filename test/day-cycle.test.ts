@@ -6,7 +6,7 @@ import { PHASE } from '../src/shared/day';
 import { SHOP } from '../src/shared/shop';
 import { MINUTES_PER_DAY, START_MINUTE } from '../src/shared/layout';
 import { TICK_HZ } from '../src/shared/protocol';
-import { parse, serialize, SAVE_SCHEMA } from '../src/sim/save/format';
+import { parse, serialize, SAVE_SCHEMA, emptyWorld } from '../src/sim/save/format';
 
 const writer = new FrameWriter();
 function steps(g: Game, n: number): void {
@@ -130,12 +130,13 @@ describe('save v2', () => {
     data.teaser = { key: '', arg: '' };
     data.staff = [];
     data.hood = { marketDay: -1, sold: {}, stock: {}, materials: {}, carry: [], deliveries: [], painted: [] };
-    const v4 = serialize(data);
-    // Day block (20) + two empty teaser strings (2) + empty staff (1) + empty neighbourhood (11).
-    const v1 = v4.slice(0, v4.byteLength - 20 - 2 - 1 - 11);
+    data.world = emptyWorld();
+    const v5 = serialize(data);
+    // Day block (20) + two empty teaser strings (2) + empty staff (1) + empty neighbourhood (11) + empty world (11).
+    const v1 = v5.slice(0, v5.byteLength - 20 - 2 - 1 - 11 - 11);
     new DataView(v1).setUint16(4, 1, true);
     const back = parse(v1);
-    expect(back.schema).toBe(4); // v1 → v2 → v3 → v4
+    expect(back.schema).toBe(5); // v1 → v2 → v3 → v4 → v5
     expect(back.staff).toEqual([]);
     expect(back.hood.stock).toEqual(start.stock);
     expect(back.clock).toBe(back.tick);
