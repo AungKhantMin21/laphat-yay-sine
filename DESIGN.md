@@ -29,14 +29,14 @@ Laphat Yay Sine is a calm sandbox life sim in a small, fictional Yangon-style ne
 
 One in-game day takes 8–12 real minutes and ends with sleep, a save and a teaser for tomorrow.
 
-1. **Morning** — open the shutters, check the ingredient shelf, hear overnight news from the first regulars.
+1. **Morning** — open the shutters, check the ingredient shelf, hear overnight news from the first regulars (M4: the first two residents served each morning bring the overnight news).
 2. **Serve** — a calm Diner Dash. The player is a character in the shop, and every cup is made by a person: take the order at the table → brew at the tea counter (a tactile pour minigame: milk-to-tea ratio by holding) → carry it on the tray (2 cups at first) → later clear the cups → wash them at the sink. Tap to queue up to 3 tasks (small numbered markers; tap a marker to cancel). Customers never leave angry and there is no failure state: waiting longer only lowers the tip, fast and good service raises it. Cups are a fixed set, so washing keeps the service going. Staff can be hired to share the work (§6).
 3. **Errands** — walk the neighbourhood: ingredients at the wet market, furniture at the furniture shop, paint and floor tiles at the hardware stall, decor at the bookstall. Stock changes daily. The clock waits before opening and after closing, so errands fit there without leaving customers waiting; going out during the day is fine too (customers only wait longer).
 4. **Build** — rearrange, place and paint in build mode at any time. The shop keeps running while you build.
 5. **Evening** — close up, count the day in the savings tin, read the notice board, sleep.
 6. **Tomorrow teaser** — one line on the sleep screen: a customer's promise, a rumour of a sale, a seed about to sprout.
 
-**Time model:** about 1 game hour = 1 real minute while active, paused in menus. After real time away, the world simulates up to 7 missed days in a fast catch-up, then shows a "while you were away" summary.
+**Time model:** about 1 game hour = 1 real minute while active, paused in menus. After real time away, the world simulates up to 7 missed days in a fast catch-up, then shows a "while you were away" summary. In catch-up the world moves on every day (market, property market, life events, news, deliveries). The shop opens only if staff are hired and paid: cups = a usual day's arrivals × appeal × a staff factor (data), capped by the ingredients in stock, each paid at the auto-serve rate (70 %, no tip); wages and rent are paid as at Sleep. Without staff the shop stays closed.
 
 ## 3. Sandbox build system
 
@@ -126,6 +126,13 @@ The shop: an open front with roll-up shutters facing the pavement, a signboard w
 - Ingredients never stall service: they are reserved when an order is taken. If a customer's drink can't be made they pick one that can; if nothing can be made they get free ရေနွေးကြမ်း and leave content without paying.
 - A small map (button in the HUD) shows the streets, the shops and you; tap a shop to walk there.
 
+**The living street (M4)**
+
+- **Residents:** 24 named neighbours (`src/data/residents.json`) live behind the `entry` doors. Each has a job (one of the 4 shopkeepers, works off the map, or at home), tea habits and an hourly schedule: home, work, market, tea shop, stroll. Shopkeepers walk to their stall before opening and home after closing. Residents shop at the market stalls for a few minutes. A resident going to your shop becomes an ordinary customer who keeps their name and counts visits (friendship in M5). Generic passers-by still come for volume, and the daily customer count stays about the same.
+- **Notice board** at the junction corner: walk there (or tap it on the map) to read the listings. Buy or rent buttons appear on the two spaces that join your shop; the other listings are news.
+- **Growing the shop:** the east lot (x 37–41, one storey; listed on day 3; about 250,000 kyat to buy or 3,000 a day to rent) and the west building (x 17–24; listed later by a life event; about 600,000 or 6,000 a day). Buying or renting turns the space into shop interior with a wide opening in the party wall and a low sill on the pavement side; the shop front stays the only entrance.
+- **Vehicles:** cars, trishaws and bicycles drive the roads (decoration only) and stop at the zebra crossings while someone is crossing.
+
 **Convenience is earned:** bicycle (faster walking), a delivery helper hired at the shop, phone orders from a shop where you are a regular (10+ visits).
 
 ## 5. Economy and property market
@@ -153,7 +160,8 @@ Every building and lot has an owner NPC and a state:
 | Street popularity rises | asking prices nearby go up |
 
 - Listings expire after 7–21 days; another NPC may buy first.
-- Rent is optional, only on spaces you chose to rent; the inherited shop is rent-free.
+- Rent is optional, only on spaces you chose to rent; the inherited shop is rent-free. Rent is paid at Sleep like wages. If the tin can't cover it, the lease ends calmly: furniture in that space goes back to the inventory, there is no debt, and the space comes back on the market later.
+- **M4 scope:** every building and lot has an owner and a state, rolled once a day (at Sleep and in catch-up). The four market shops never close. Listed fronts show a for-sale / for-rent sign; closed businesses show shutters. When a house sells, its resident may move away and a new one moves in. Only the two spaces next to the shop can be bought or rented by the player in v0.1.
 - The player learns about listings through customer gossip, the notice board and later a broker (pwèza) for a small fee.
 
 ### Calm-money rules
@@ -183,7 +191,7 @@ The sim keeps a **task board** of all open jobs: take order, brew, serve, clear,
 | Role | Jobs | Arrives |
 | --- | --- | --- |
 | Waiter | take orders, serve, clear | M2.5 |
-| Helper | wash cups | M4 (with staff schedules) |
+| Helper | wash cups, clear | M4 (with staff schedules) |
 | Tea sayar | brew, at a better quality than an average pour | M5 (with drink mixing) |
 | Cook | snacks | M5 (with snacks) |
 
@@ -191,11 +199,14 @@ The sim keeps a **task board** of all open jobs: take order, brew, serve, clear,
 - Hiring unlocks by savings and number of seats (data in `src/data/staff.json`). The player can still do any job.
 - Wages: see §5. Hiring and letting go happen in the evening.
 
+**Staff schedules (M4):** staff walk in from a street end in the morning and home in the evening; one who arrives after Open simply starts late. The helper (wash, clear) is hireable from M4.
+
 **Levels of detail**
 
 - **Near** (on screen): full movement, pathfinding, animation, every tick.
 - **Far** (off screen): position jumps along the schedule, decisions only on the hour.
 - **Abstract** (catch-up): no positions, only state changes and money.
+- As built (M4): the simulation runs the same wherever the camera is (so tests and catch-up stay deterministic); Near/Far only decides which NPCs are streamed to the main thread and drawn. Schedules decide on the hour; walkers follow real paths with a path cache.
 
 **Scale target:** about 40 named NPCs plus generic passers-by; at most 25 visible and animated at once.
 
@@ -205,7 +216,7 @@ The story gives reasons to build, never instructions on how.
 
 - **Regulars:** each has a 10–15 beat arc unlocked by visits and friendship. Beats are short (2–4 lines) and touch young-adult life: career pressure, family expectations, loneliness, small joys.
 - **Needs from stories:** beats create needs ("the student needs somewhere quiet before exams") that any valid space can satisfy.
-- **Gossip:** customers pass on world news from the simulation — listings, closures, new stalls, festivals.
+- **Gossip:** customers pass on world news from the simulation — listings, closures, new stalls, festivals. (M4: the sim keeps a short news log — listed, sold, closed, moved in or out, a cheap day at the market. A resident you serve who hasn't told you a newer item tells one: their name and a line for a few seconds, and it goes into the evening panel's news list.)
 - **Seasons:** hot, monsoon, cool. Weather changes customer counts, tastes and which needs matter.
 - **Festivals:** Thingyan, Thadingyut lights, Tazaungdaing.
 - **Customers notice changes:** short reactions to moved seats, new lights, a repainted wall.
@@ -368,7 +379,7 @@ Build in Claude Code, one milestone at a time: plan mode first, performance chec
 | M2 | Shop day | customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser | 2 weeks |
 | M2.5 | Shop, service and street | walkable zones and a walled shop with front, counter and back kitchen; player character with tap-to-queue service (order → brew → tray → serve → clear → wash); task board; the waiter; starting layout, readable sprites with shadows, default zoom; building fronts; debug UI only with `?debug=1` | 2 weeks |
 | M3 | Neighbourhood | 3 streets on one map (reusing M2.5 zones), walking the neighbourhood with a map, 4 shops with daily stock, real ingredients, carrying and delivery, floor and wall painting | 2 weeks |
-| M4 | Living world | sim worker, schedules (incl. staff), LOD, property market, gossip, offline catch-up (incl. staff and wages), vehicles on the road, helper role | 3 weeks |
+| M4 | Living world | residents with schedules (incl. staff and shopkeepers), LOD streaming, property market with a notice board and two spaces to grow the shop, gossip, offline catch-up (incl. staff, wages and rent), vehicles on the road, helper role | 3 weeks |
 | M5 | Story and kitchen | 3 regulars with full arcs, story-driven needs, seasons, drink mixing, tea sayar and cook roles, snacks | 2 weeks |
 | M6 | Ship v0.1 | generated ambience, PWA install, share codes, device-matrix pass, published | 2 weeks |
 
@@ -398,3 +409,4 @@ Estimates assume hobby pace (evenings and weekends).
 - Music: four Gemini loops, already processed into `assets/music/`.
 - 22 Nov 2026 (M2 review): service is done by people only (no auto-serve); customers never leave angry, waiting only lowers the tip; the road is for vehicles, people cross at one zebra crossing; the waiter unlocks at 60,000 kyat savings and 6 seats, wage 3,000 kyat/day (data, tunable).
 - 24 Nov 2026 (M3 plan): one bigger map, not separate scenes; errands fit the held clock before opening and after closing; ingredients reserved at order time with a free-tea fallback so service never stalls; delivery 10 % (min 500 kyat), 2 game hours; painting by the tile from hardware-stall materials. Details in docs/M3.md.
+- 25 Nov 2026 (M4 plan): 24 named residents; the camera never changes sim outcomes (LOD = streaming only); only the two spaces next to the shop can be bought or rented; unpaid rent ends the lease calmly (furniture to inventory, no debt); catch-up earns only with staff (70 %, capped by stock); vehicles are render-only decoration. Details in docs/M4.md.

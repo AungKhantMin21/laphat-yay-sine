@@ -179,6 +179,15 @@ Every cup is made by a person; there is no auto-serve. The worker keeps a **task
 - **Closing time:** customers still walking to a seat when the shop closes go home (they haven't ordered); with far entries this keeps the evening from waiting on long walks.
 - PlayerState gains `stock`, `cupsLeft`, `market`, `carry`, `carryLoad`, `deliveries`, `materials`.
 
+### Living world (M4, protocol v11 — planned; see docs/M4.md)
+
+- **Residents** (`src/data/residents.json`, `shared/residents.ts`, `sim/npc/residents.ts`): SoA (position, path, state inside/walking/at stall/shopping, block, home, look, visits). They decide on the hour from a schedule template; walking reuses `sim/npc/walker.ts` with the `people` class. A tea-shop block hands over to `Customers.spawnResident`. A path cache (`sim/path/cache.ts`) keyed by (from, to, class, grid version).
+- **LOD:** the sim never depends on the camera. `viewport {x0,y0,x1,y1}` (ToSim) sets the near rect (+4 tiles); NPC_SPAWN/STATE/DESPAWN are sent only for NPCs entering, inside or leaving it.
+- **Property market** (`src/data/properties.json`, `shared/properties.ts`, `sim/world/property-market.ts`): states not selling → considering → listed (sale/rent) → sold, rolled daily (Sleep and catch-up) with the `events` stream; news log; resident moves. Two `expand` spaces rebuild part of the area when bought or rented (TILE_PATCH for the changed rect).
+- **Catch-up:** `Game.worldDay()` (shared by Sleep and catch-up) and `Game.abstractDay()` (staffed shop income from `src/data/catchup.json`, stock never below 0, wages, rent, deliveries).
+- **Vehicles:** render-only (`render/vehicles.ts`), lanes in `neighbourhood.json`, cosmetic randomness.
+- **Save v5** (planned): v4 plus property states/listings/owners, owned and rented spaces with the lease, the news log and who heard what, resident visits and moves.
+
 ### Protocol rules
 
 - The worker is the only authority on world state; the main thread holds a mirror.
