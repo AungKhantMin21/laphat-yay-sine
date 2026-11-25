@@ -38,7 +38,7 @@ import { installPourUi } from './ui/pour/pour';
 import { installReactions } from './ui/pour/reactions';
 import { requestPersistentStorage } from './platform/persist';
 import { CATALOG, SERVICE, spriteFrame } from './shared/catalog';
-import { tileAtX, tileAtY } from './shared/iso';
+import { tileAtX, tileAtY, tileXf, tileYf } from './shared/iso';
 import { handleIndex } from './shared/ids';
 import { Camera } from './render/camera';
 import { installGestures } from './input/pointer';
@@ -404,6 +404,22 @@ installGestures(stageEl, {
 const debug = new URLSearchParams(location.search).has('debug');
 const draws = debug ? new DrawCallCounter(stage.renderer) : null;
 
+/** Last tile rect sent to the worker (M4 Near LOD); resent when it moves by 2 tiles or more. */
+const sentView = [0, 0, -1, -1];
+function sendViewport(x0: number, y0: number, x1: number, y1: number): void {
+  const tx0 = Math.floor(tileXf(x0, y0));
+  const tx1 = Math.ceil(tileXf(x1, y1));
+  const ty0 = Math.floor(tileYf(x1, y0));
+  const ty1 = Math.ceil(tileYf(x0, y1));
+  const s = sentView;
+  if (s[2]! >= 0 && Math.abs(tx0 - s[0]!) < 2 && Math.abs(ty0 - s[1]!) < 2 && Math.abs(tx1 - s[2]!) < 2 && Math.abs(ty1 - s[3]!) < 2) return;
+  s[0] = tx0;
+  s[1] = ty0;
+  s[2] = tx1;
+  s[3] = ty1;
+  bridge.setViewport(tx0, ty0, tx1, ty1);
+}
+
 const loop = new FrameLoop({
   update: () => undefined,
   render: (_alpha, now) => {
@@ -420,9 +436,11 @@ const loop = new FrameLoop({
     followPlayer(now);
     camera.apply(stage.world, stage.size);
     const v = camera.view;
+    sendViewport(v.x0, v.y0, v.x1, v.y1);
     chunks.update(v.x0, v.y0, v.x1, v.y1);
     npcs.update(now, TIER_SETTINGS[device.tier].maxAnimatedNpcs, v.x0, v.y0, v.x1, v.y1);
     shopFront.update(bridge.player?.phase ?? 0);
+    streetShops.setKeepers(bridge.player?.keepers ?? 0);
     serviceProps.update(now, bridge.player?.phase ?? 0);
     queueUi.update();
     stage.render();

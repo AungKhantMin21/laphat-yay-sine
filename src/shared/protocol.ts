@@ -1,7 +1,7 @@
 // Worker message protocol. See docs/ARCHITECTURE.md §2.
 // Bump PROTOCOL_VERSION whenever a message shape or the frame layout in diff.ts changes.
 import type { Phase } from './day';
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 /** Sim tick rate. */
 export const TICK_HZ = 10;
@@ -144,6 +144,8 @@ export interface PlayerState {
   deliveries: GoodsLine[];
   /** Building materials in tiles, per material id. */
   materials: number[];
+  /** Bit per neighbourhood shop id whose keeper is behind the counter (M4). */
+  keepers: number;
 }
 
 /** `qty` units of an item (shared/market.ts ITEM kind + id). */

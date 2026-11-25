@@ -62,6 +62,8 @@ export class Game {
   readonly market: Market;
   /** The named neighbours (M4). */
   readonly residents: Residents;
+  /** Keepers mask last sent in PlayerState. */
+  private keepers = -1;
 
   constructor(
     readonly sim: Sim,
@@ -86,6 +88,16 @@ export class Game {
     this.residents.hooks = { teaVisit: (_r, from, drink, look) => this.npcs.spawnResident(_r, from, drink, look) };
     this.npcs.onResidentGone = (r) => this.residents.backFromTea(r);
     this.residents.settle(sim.day, sim.gameMinute);
+    this.residents.near = this.npcs.near;
+  }
+
+  /**
+   * The main thread's view in tiles (M4 LOD): only customers and residents in it (plus a margin) are
+   * streamed. Workers (the player, staff) are always streamed. Nothing in the simulation reads it.
+   */
+  setViewport(x0: number, y0: number, x1: number, y1: number): void {
+    if (![x0, y0, x1, y1].every(Number.isFinite)) return;
+    this.npcs.near.set(x0, y0, x1, y1);
   }
 
   /** Purchases land here: ingredients on the kitchen shelf, objects in the inventory, materials in the store. */
@@ -537,6 +549,7 @@ export class Game {
       carryLoad: this.market.load(),
       deliveries: this.market.deliveries.map((g) => ({ kind: g.kind, id: g.id, qty: g.qty })),
       materials: Array.from(this.builder.materials),
+      keepers: this.residents.keepersMask(),
     };
   }
 
@@ -574,6 +587,11 @@ export class Game {
     res.nowMinute = minute;
     res.tick(this.sim.day, minute, day.phase === PHASE.open && minuteOfDay(minute) < SHOP.close);
     this.npcs.tick(this.sim.tick);
+    const km = res.keepersMask();
+    if (km !== this.keepers) {
+      this.keepers = km;
+      this.day.changed = true;
+    }
     this.workers.tick(this.sim.tick);
     this.market.refresh(this.sim.day);
     this.goods(false);

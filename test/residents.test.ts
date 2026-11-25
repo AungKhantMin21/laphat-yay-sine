@@ -73,7 +73,7 @@ describe('residents on the street', () => {
       if (!d) continue;
       const site = d.keeper >= 0 ? NEIGHBOURHOOD.shops[d.keeper]! : null;
       // 06:00: the wet market opened at 05:00; the other stalls open later.
-      if (site && site.key === 'market') expect(res.state[r]).toBe(RS.standing);
+      if (site && site.key === 'market') expect(res.state[r]).toBe(RS.atStall);
       else expect(res.state[r]).toBe(RS.inside);
     }
   });

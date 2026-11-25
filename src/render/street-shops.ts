@@ -14,6 +14,9 @@ const wy = (u: number, v: number): number => (u + v) * HALF_H;
 export class StreetShops {
   /** Keeper feet in world px, by shop id (tap targets and the visit marker). */
   readonly keeperAt: { x: number; y: number }[] = [];
+  /** Keeper sprites by shop id: shown while the keeper is behind the counter (M4 residents). */
+  private readonly keeper: Sprite[] = [];
+  private mask = -1;
 
   constructor(atlas: Atlas, layer: Container) {
     for (const shop of NEIGHBOURHOOD.shops) this.build(shop, atlas, layer);
@@ -49,7 +52,15 @@ export class StreetShops {
     k.position.set(Math.round(wx(kx, ky)), Math.round(wy(kx, ky)));
     k.zIndex = (Math.floor(kx) + Math.floor(ky)) * 16 + 4;
     layer.addChild(k);
+    this.keeper[s.id] = k;
     this.keeperAt[s.id] = { x: k.x, y: k.y };
+  }
+
+  /** PlayerState.keepers: which keepers are at their stalls (they walk there from home). */
+  setKeepers(mask: number): void {
+    if (mask === this.mask) return;
+    this.mask = mask;
+    this.keeper.forEach((k, id) => (k.visible = (mask & (1 << id)) !== 0));
   }
 
   /** The shop whose stall is under world point (x, y) (counter, keeper or awning), or −1. */

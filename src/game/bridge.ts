@@ -56,6 +56,11 @@ export class SimBridge {
     this.send({ t: 'tier', tier });
   }
 
+  /** The tiles the camera shows (M4 Near LOD): the worker streams only NPCs around them. */
+  setViewport(x0: number, y0: number, x1: number, y1: number): void {
+    this.send({ t: 'viewport', area: 0, x0, y0, x1, y1 });
+  }
+
   /** Sends a player action; resolves when the worker accepts or refuses it. */
   act(a: Action): Promise<AckResult> {
     const seq = ++this.seq;

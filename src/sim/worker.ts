@@ -254,6 +254,7 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
     case 'tier':
       return; // M4: LOD caps
     case 'viewport':
-      return; // M3/M4
+      game?.setViewport(msg.x0, msg.y0, msg.x1, msg.y1);
+      return;
   }
 };

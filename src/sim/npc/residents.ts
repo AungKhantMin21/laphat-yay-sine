@@ -16,16 +16,22 @@ import { ACCESS } from '../../shared/rules/access';
 import type { PathFinder } from '../path/pathfinder';
 import type { WalkGrid } from '../path/walk-grid';
 import { ARRIVED, FAILED, drop, walkStep, type WalkerSoA } from './walker';
+import { NearRect } from './near';
 
 /** Resident states. */
 export const RS = {
   /** Indoors (home, or at work off the map): hidden. */
   inside: 0,
   walking: 1,
-  /** Standing on the street: behind their stall's counter, or at a market stall. */
+  /** Standing on the street at a market stall (shopping). */
   standing: 2,
   /** In your tea shop as a customer (drawn by the customer layer). */
   visiting: 3,
+  /**
+   * Behind their own stall's counter (keepers): off the NPC wire; the stall draws its keeper
+   * (PlayerState.keepers). Their tile is the stall's visit tile, where they step out.
+   */
+  atStall: 4,
 } as const;
 
 /** Where a walk ends. */
@@ -70,8 +76,10 @@ export class Residents implements WalkerSoA {
   private readonly stuck: number;
   private readonly W: number;
   private readonly dirty: Uint8Array;
-  private readonly spawned: Uint16Array;
-  private spawnedN = 0;
+  /** On the main thread's mirror (shown and in the Near rect). */
+  private readonly sent: Uint8Array;
+  /** The Near LOD rect, shared with Game. */
+  near = new NearRect();
   private readonly despawned: Uint32Array;
   private despawnedN = 0;
   /** Market spots: pavement tiles along the wet market's front (not the counter tile itself). */
@@ -105,7 +113,7 @@ export class Residents implements WalkerSoA {
     this.visits = new Uint16Array(n);
     this.next = new Int32Array(n);
     this.dirty = new Uint8Array(n);
-    this.spawned = new Uint16Array(n * 2);
+    this.sent = new Uint8Array(n);
     this.despawned = new Uint32Array(n * 2);
     this.W = walk.w;
     this.speed = rules.walkSpeed / TICK_HZ;
@@ -227,10 +235,7 @@ export class Residents implements WalkerSoA {
         break;
       case RE.home:
         if (s === RS.visiting) return;
-        if (s === RS.standing && this.dest[r] === DEST.stall) {
-          const site = this.hood.shops[d.keeper]!;
-          this.show(r, site.visitY * this.W + site.visitX);
-        } else if (s === RS.inside && !atHome) this.show(r, this.tile[r]!);
+        if ((s === RS.inside || s === RS.atStall) && !atHome) this.show(r, this.tile[r]!);
         if (!(s === RS.inside && atHome)) this.walkTo(r, this.home[r]!, DEST.home);
         break;
       case RE.tea: {
@@ -315,13 +320,19 @@ export class Residents implements WalkerSoA {
   }
 
   private standAtStall(r: number, d: ResidentDef): void {
-    const site = this.hood.shops[d.keeper]!;
-    if (!this.shown[r]) this.show(r, site.keeperY * this.W + site.keeperX);
-    else this.setTile(r, site.keeperY * this.W + site.keeperX);
-    this.state[r] = RS.standing;
+    this.placeInside(r, this.stallTile(d));
+    this.state[r] = RS.atStall;
     this.dest[r] = DEST.stall;
-    this.dir[r] = site.edge === 'n' ? DIR.south : DIR.east;
-    this.setAnim(r, ANIM.stand);
+  }
+
+  /** Bit per shop id whose keeper is behind the counter now. */
+  keepersMask(): number {
+    let m = 0;
+    for (let r = 0; r < this.capacity; r++) {
+      const d = this.who[r];
+      if (d && d.keeper >= 0 && this.state[r] === RS.atStall) m |= 1 << d.keeper;
+    }
+    return m;
   }
 
   private placeInside(r: number, t: number): void {
@@ -356,15 +367,14 @@ export class Residents implements WalkerSoA {
 
   private show(r: number, t: number): void {
     this.setTile(r, t);
-    if (this.shown[r]) return;
     this.shown[r] = 1;
-    if (this.spawnedN < this.spawned.length) this.spawned[this.spawnedN++] = r;
   }
 
   private hide(r: number): void {
     if (!this.shown[r]) return;
     this.shown[r] = 0;
-    if (this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(r);
+    if (this.sent[r] && this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(r);
+    this.sent[r] = 0;
     this.gen[r] = (this.gen[r]! + 1) & 0xffff;
   }
 
@@ -380,26 +390,33 @@ export class Residents implements WalkerSoA {
   writeChanges(w: FrameWriter): void {
     for (let k = 0; k < this.despawnedN; k++) w.npcDespawn(this.despawned[k]!);
     this.despawnedN = 0;
-    for (let k = 0; k < this.spawnedN; k++) {
-      const r = this.spawned[k]!;
-      if (this.shown[r]) this.writeSpawn(w, r);
-    }
-    this.spawnedN = 0;
+    const near = this.near;
     for (let r = 0; r < this.capacity; r++) {
-      if (!this.dirty[r]) continue;
+      const dirty = this.dirty[r];
       this.dirty[r] = 0;
-      if (this.shown[r]) this.writeState(w, r);
+      if (!this.shown[r]) continue;
+      const inView = near.has(this.x[r]!, this.y[r]!);
+      if (inView && !this.sent[r]) {
+        this.sent[r] = 1;
+        this.writeSpawn(w, r);
+        this.writeState(w, r);
+      } else if (!inView && this.sent[r]) {
+        this.sent[r] = 0;
+        w.npcDespawn(this.handle(r));
+      } else if (dirty && this.sent[r]) this.writeState(w, r);
     }
   }
 
   writeSnapshot(w: FrameWriter): void {
     for (let r = 0; r < this.capacity; r++) {
       this.dirty[r] = 0;
-      if (!this.shown[r]) continue;
+      this.sent[r] = 0;
+      if (!this.shown[r] || !this.near.has(this.x[r]!, this.y[r]!)) continue;
+      this.sent[r] = 1;
       this.writeSpawn(w, r);
       this.writeState(w, r);
     }
-    this.spawnedN = this.despawnedN = 0;
+    this.despawnedN = 0;
   }
 
   private writeSpawn(w: FrameWriter, r: number): void {

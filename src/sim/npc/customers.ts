@@ -20,6 +20,7 @@ import { ACCESS } from '../../shared/rules/access';
 import { ARRIVED, FAILED, WALKING, drop, walkStep } from './walker';
 import { DX, DY, type WalkGrid } from '../path/walk-grid';
 import type { SimWorld } from '../world';
+import { NearRect } from './near';
 
 /** Customer state machine. */
 export const CS = {
@@ -89,6 +90,10 @@ export class Customers {
   readonly seatRes: Uint16Array;
   /** The resident this customer is (M4), or −1 for a passer-by. */
   readonly resident: Int16Array;
+  /** The Near LOD rect (M4): only customers inside it are on the wire. Shared with Game. */
+  near = new NearRect();
+  /** On the main thread's mirror now. */
+  private readonly sent: Uint8Array;
   /** A resident's visit ended (they walked home, or everyone went home at Sleep). */
   onResidentGone: (r: number) => void = () => {};
 
@@ -97,8 +102,6 @@ export class Customers {
   private live = 0;
   private readonly stateDirty: IndexQueue;
   private readonly orderDirty: IndexQueue;
-  private readonly spawned: Uint32Array;
-  private spawnedN = 0;
   private readonly despawned: Uint32Array;
   private despawnedN = 0;
 
@@ -164,12 +167,12 @@ export class Customers {
     this.dir = new Uint8Array(n);
     this.anim = new Uint8Array(n);
     this.resident = new Int16Array(n).fill(-1);
+    this.sent = new Uint8Array(n);
     this.free = new Uint16Array(n);
     // The top slots belong to residents and workers (shared/layout.ts RESIDENT_SLOT0, WORKER_SLOT0).
     for (let i = RESIDENT_SLOT0 - 1; i >= 1; i--) this.free[this.freeTop++] = i;
     this.stateDirty = new IndexQueue(n);
     this.orderDirty = new IndexQueue(n);
-    this.spawned = new Uint32Array(n * 2);
     this.despawned = new Uint32Array(n * 2);
     const tiles = walk.w * walk.h;
     this.seatRes = new Uint16Array(tiles);
@@ -318,7 +321,6 @@ export class Customers {
     this.state[i] = CS.free;
     this.choose(i);
     const h = this.handle(i);
-    if (this.spawnedN < this.spawned.length) this.spawned[this.spawnedN++] = h;
     this.stateDirty.push(i);
     return h;
   }
@@ -617,7 +619,8 @@ export class Customers {
     if (this.order[i] !== ORDER.none && this.order[i] !== ORDER.served) this.hooks.gone(i);
     this.releaseSeat(i);
     this.dropPath(i);
-    if (this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(i);
+    if (this.sent[i] && this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(i);
+    this.sent[i] = 0;
     this.alive[i] = 0;
     this.state[i] = CS.free;
     const res = this.resident[i]!;
@@ -659,41 +662,53 @@ export class Customers {
 
   // ---- frames ----
 
-  /** Changes since the last call: despawns, spawns, moved/animated customers, order bubbles. */
+  /**
+   * Changes since the last call, for customers in the Near rect only: despawns (gone, or walked out
+   * of view), spawns (new, or walked into view: with their state and bubble), moves, order bubbles.
+   */
   writeChanges(w: FrameWriter): void {
     for (let k = 0; k < this.despawnedN; k++) w.npcDespawn(this.despawned[k]!);
     this.despawnedN = 0;
-    for (let k = 0; k < this.spawnedN; k++) {
-      const h = this.spawned[k]!;
-      const i = this.indexOf(h);
-      if (i) this.writeSpawn(w, i);
+    const near = this.near;
+    for (let i = 1; i < this.capacity; i++) {
+      if (!this.alive[i]) continue;
+      const inView = near.has(this.x[i]!, this.y[i]!);
+      if (inView && !this.sent[i]) this.writeFull(w, i);
+      else if (!inView && this.sent[i]) {
+        this.sent[i] = 0;
+        w.npcDespawn(this.handle(i));
+      }
     }
-    this.spawnedN = 0;
     const q = this.stateDirty;
     for (let k = 0; k < q.length; k++) {
       const i = q.list[k]!;
-      if (this.alive[i]) this.writeState(w, i);
+      if (this.alive[i] && this.sent[i]) this.writeState(w, i);
     }
     q.clear();
     const o = this.orderDirty;
     for (let k = 0; k < o.length; k++) {
       const i = o.list[k]!;
-      if (this.alive[i]) w.npcOrder(this.handle(i), this.drink[i]!, this.order[i]!);
+      if (this.alive[i] && this.sent[i]) w.npcOrder(this.handle(i), this.drink[i]!, this.order[i]!);
     }
     o.clear();
   }
 
-  /** Every customer, for a new mirror. */
+  /** Every customer in the Near rect, for a new mirror. */
   writeSnapshot(w: FrameWriter): void {
+    this.sent.fill(0);
     for (let i = 1; i < this.capacity; i++) {
-      if (!this.alive[i]) continue;
-      this.writeSpawn(w, i);
-      this.writeState(w, i);
-      if (this.order[i] !== ORDER.none) w.npcOrder(this.handle(i), this.drink[i]!, this.order[i]!);
+      if (this.alive[i] && this.near.has(this.x[i]!, this.y[i]!)) this.writeFull(w, i);
     }
-    this.spawnedN = this.despawnedN = 0;
+    this.despawnedN = 0;
     this.stateDirty.clear();
     this.orderDirty.clear();
+  }
+
+  private writeFull(w: FrameWriter, i: number): void {
+    this.sent[i] = 1;
+    this.writeSpawn(w, i);
+    this.writeState(w, i);
+    if (this.order[i] !== ORDER.none) w.npcOrder(this.handle(i), this.drink[i]!, this.order[i]!);
   }
 
   private writeSpawn(w: FrameWriter, i: number): void {
