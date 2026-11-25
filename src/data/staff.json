@@ -8,7 +8,7 @@
       "jobs": { "order": 1.2, "serve": 1.5, "clear": 0.8 },
       "look": 1
     },
-    { "key": "helper", "hireable": false, "wage": 2000, "unlock": { "savings": 150000, "seats": 10 }, "jobs": { "wash": 1, "clear": 0.8 }, "look": 1 },
+    { "key": "helper", "hireable": true, "wage": 2000, "unlock": { "savings": 150000, "seats": 10 }, "jobs": { "wash": 1, "clear": 0.8 }, "look": 2 },
     { "key": "tea_sayar", "hireable": false, "wage": 5000, "unlock": { "savings": 300000, "seats": 12 }, "jobs": { "brew": 1.5 }, "look": 1 },
     { "key": "cook", "hireable": false, "wage": 4000, "unlock": { "savings": 300000, "seats": 12 }, "jobs": { "cook": 1.5 }, "look": 1 }
   ],

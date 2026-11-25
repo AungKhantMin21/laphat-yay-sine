@@ -30,6 +30,8 @@ export const WS = {
   acting: 2,
   /** The player at the counter with the pour minigame open (waits for the `serve` action). */
   brewing: 3,
+  /** Staff walking to work in the morning or home in the evening (M4): no jobs. */
+  commuting: 4,
 } as const;
 
 export const ROLE = { player: 0, waiter: 1 } as const;
@@ -70,6 +72,8 @@ export class Workers {
   readonly exact: Uint8Array;
   /** The player state (queue, brewing) changed: Game sends a new PlayerState. */
   changed = false;
+  /** Commuting home (despawn on arrival) rather than to work. */
+  private readonly leaving: Uint8Array;
   /** Staff role of each worker (null for the player). */
   private readonly staffRole: (RoleDef | null)[];
   /** Current sim tick (set by tick()): how long jobs have waited. */
@@ -116,6 +120,7 @@ export class Workers {
     this.qLen = new Uint8Array(n);
     this.brewFor = new Uint32Array(n);
     this.exact = new Uint8Array(n);
+    this.leaving = new Uint8Array(n);
     this.dirty = new IndexQueue(n);
     this.spawned = new Uint8Array(n);
     this.despawned = new Uint32Array(n * 2);
@@ -159,6 +164,20 @@ export class Workers {
     if (this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(w);
     this.alive[w] = 0;
     this.gen[w] = (this.gen[w]! + 1) & 0xffff;
+  }
+
+  /**
+   * Staff walk to work (M4): from `from` (a street end) to `to` (beside the counter), taking no jobs
+   * until they arrive. With `leaving`, they drop what they hold, walk to `to` and are gone.
+   */
+  commute(w: number, to: number, leaving: boolean): void {
+    if (!this.alive[w] || w === PLAYER) return;
+    this.clearQueue(w);
+    this.leaving[w] = leaving ? 1 : 0;
+    this.goal[w] = to;
+    this.walkT[w] = 0;
+    this.state[w] = WS.commuting;
+    this.setAnim(w, ANIM.walk);
   }
 
   /** Standing place next to the counter (where the day starts), or −1 if there's no counter. */
@@ -295,6 +314,20 @@ export class Workers {
         case WS.acting:
           if (this.actT[w]! > 0 && --this.actT[w]! === 0) this.done(w);
           break;
+        case WS.commuting: {
+          const r = walkStep(this, w, this.paths, this.walk.w, this.speed, this.stuck, ACCESS.staff, false);
+          this.dirty.push(w);
+          if (r === ARRIVED || r === FAILED) {
+            if (this.leaving[w]) this.despawn(w);
+            else {
+              if (r === FAILED) this.place(w, this.goal[w]!); // calm: never stranded
+              drop(this, w, this.paths);
+              this.state[w] = WS.idle;
+              this.setAnim(w, ANIM.stand);
+            }
+          }
+          break;
+        }
         default:
           break; // brewing: waits for the player's pour
       }
@@ -660,7 +693,7 @@ export class Workers {
 
   private writeSpawn(out: FrameWriter, w: number): void {
     const def = this.role[w] === ROLE.player ? NPC_DEF_PLAYER : NPC_DEF_WAITER;
-    out.npcSpawn(this.handle(w), def, 0, this.role[w]!, Math.round(this.x[w]! * POS_SCALE), Math.round(this.y[w]! * POS_SCALE));
+    out.npcSpawn(this.handle(w), def, 0, this.staffRole[w]?.look ?? 0, Math.round(this.x[w]! * POS_SCALE), Math.round(this.y[w]! * POS_SCALE));
   }
 
   private writeState(out: FrameWriter, w: number): void {

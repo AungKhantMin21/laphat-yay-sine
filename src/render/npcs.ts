@@ -37,6 +37,7 @@ export class NpcLayer {
   private readonly askBubble: Texture;
   /** Worker poses by role, same layout as customer looks. */
   private readonly workerPoses: Texture[] = [];
+  private readonly workerSets: number;
   /** Customers drawn last frame (perf overlay). */
   visible = 0;
   animated = 0;
@@ -55,7 +56,11 @@ export class NpcLayer {
     for (const d of DRINKS.defs) this.drinkBubble.push(atlas.get(`ui/bubble_${d.key}`) ?? Texture.EMPTY);
     this.pourBubble = atlas.get('ui/bubble_pour') ?? Texture.EMPTY;
     this.askBubble = atlas.get('ui/bubble_ask') ?? Texture.EMPTY;
-    for (let r = 0; r < 2; r++) {
+    // Worker looks: 0 the player, then one per staff role look (staff.json); missing ones reuse the waiter's.
+    let sets = 0;
+    while (sets < 8 && atlas.get(workerFrameName(sets, 0, 0))) sets++;
+    this.workerSets = Math.max(1, sets);
+    for (let r = 0; r < this.workerSets; r++) {
       for (let v = 0; v < VIEWS.length; v++) for (let p = 0; p < POSES.length; p++) this.workerPoses.push(atlas.get(workerFrameName(r, v, p)) ?? Texture.EMPTY);
     }
   }
@@ -115,7 +120,7 @@ export class NpcLayer {
       sp.texture =
         v.npcDef[i] === NPC_DEF_CUSTOMER || v.npcDef[i] === NPC_DEF_RESIDENT
           ? (this.poses[poseIndex(v.npcLook[i]! % this.looks, dir, anim, step)] ?? Texture.EMPTY)
-          : (this.workerPoses[poseIndex(v.npcLook[i]! & 1, dir, anim, step)] ?? Texture.EMPTY);
+          : (this.workerPoses[poseIndex(v.npcLook[i]! < this.workerSets ? v.npcLook[i]! : 1 % this.workerSets, dir, anim, step)] ?? Texture.EMPTY);
       sp.scale.x = poseFlipped(dir) ? -1 : 1;
       sp.position.set(sx, sy);
       sp.visible = true;

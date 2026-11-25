@@ -49,7 +49,7 @@ describe('staff data', () => {
     expect(bad((d) => (d.roles[0]!.jobs = { juggle: 1 }))).toThrow(/unknown job/);
     expect(bad((d) => (d.roles[0]!.jobs = {}))).toThrow(/at least one/);
     expect(bad((d) => (d.roles[0]!.wage = -5))).toThrow(/wage/);
-    expect(STAFF.roles.filter((r) => r.hireable).map((r) => r.key)).toEqual(['waiter']);
+    expect(STAFF.roles.filter((r) => r.hireable).map((r) => r.key)).toEqual(['waiter', 'helper']);
   });
 
   it('unlocks by savings and seats', () => {
@@ -200,5 +200,90 @@ describe('the waiter at work', () => {
     const solo = day(false);
     const withHelp = day(true);
     expect(withHelp).toBeLessThan(solo);
+  });
+});
+
+// M4 S4: staff schedules and the helper.
+describe('staff schedules (M4)', () => {
+  const HELPER_W = 3;
+  /** A game with a waiter and a helper hired last night (money and seats waved through). */
+  function withBoth(seed: number): Game {
+    const g = Game.create(seed);
+    toEvening(g);
+    g.builder.money = 1e6;
+    g.staff.push({ role: 'waiter', hiredDay: g.sim.day, dayOff: true }, { role: 'helper', hiredDay: g.sim.day, dayOff: true });
+    return g;
+  }
+
+  it('after Sleep staff walk in from a street end and take no jobs until they reach the counter', () => {
+    const g = withBoth(31);
+    const before = g.builder.money;
+    g.act({ k: 'sleep' });
+    expect(before - g.builder.money).toBe(WAITER.wage + STAFF.byKey.get('helper')!.wage);
+    const w = g.workers;
+    expect(w.state[WAITER_W]).toBe(WS.commuting);
+    expect(w.state[HELPER_W]).toBe(WS.commuting);
+    expect(w.tile[WAITER_W]).not.toBe(w.homeTile());
+    g.act({ k: 'openShop' }); // Open before they arrive: they simply start late
+    const h = g.npcs.spawn();
+    let claimedWhileCommuting = false;
+    let k = 0;
+    for (; k < 3000 && (w.state[WAITER_W] === WS.commuting || w.state[HELPER_W] === WS.commuting); k++) {
+      steps(g, 1);
+      const b = g.service.board;
+      for (let i = 1; i < b.capacity; i++) {
+        const c = b.claimedBy[i]!;
+        if (b.live[i] && (c === WAITER_W || c === HELPER_W) && w.state[c] === WS.commuting) claimedWhileCommuting = true;
+      }
+    }
+    expect(k).toBeLessThan(3000);
+    expect(claimedWhileCommuting).toBe(false);
+    expect(g.npcs.indexOf(h)).not.toBe(0);
+  });
+
+  it('the helper only washes and clears; in the evening staff walk home and are gone', () => {
+    const g = withBoth(32);
+    g.act({ k: 'sleep' });
+    g.act({ k: 'openShop' });
+    const kinds = new Set<number>();
+    const w = g.workers;
+    for (let k = 0; k < 24 * 60 * 10 && g.day.phase !== PHASE.evening; k++) {
+      // The player brews every cup (instantly) so the day's cups get cleared and washed.
+      if (w.state[PLAYER] === WS.brewing) {
+        const ch = w.brewFor[PLAYER]!;
+        g.act({ k: 'serve', id: ch, tea: 0.5, milk: 0.4 });
+      } else if (w.qLen[PLAYER] === 0) {
+        const b = g.service.board;
+        for (let i = 1; i < b.capacity; i++) if (b.live[i] && b.kind[i] === TASK.brew && b.claimedBy[i] === 0) g.act({ k: 'queueTask', task: b.handle(i) });
+      }
+      steps(g, 1);
+      if (w.alive[HELPER_W] && w.task[HELPER_W]) kinds.add(g.service.board.kind[g.service.board.indexOf(w.task[HELPER_W]!)]!);
+    }
+    kinds.delete(0);
+    expect(kinds.size).toBeGreaterThan(0);
+    for (const k of kinds) expect([TASK.wash, TASK.clear]).toContain(k);
+    expect(g.day.phase).toBe(PHASE.evening);
+    for (let k = 0; k < 3000 && (w.alive[WAITER_W] || w.alive[HELPER_W]); k++) steps(g, 1);
+    expect(w.alive[WAITER_W]).toBe(0);
+    expect(w.alive[HELPER_W]).toBe(0);
+  });
+
+  it('a day with a waiter and a helper is deterministic', () => {
+    const run = (): number[] => {
+      const g = withBoth(33);
+      g.act({ k: 'sleep' });
+      g.act({ k: 'openShop' });
+      const w = g.workers;
+      for (let k = 0; k < 24 * 60 * 10 && g.day.phase !== PHASE.evening; k++) {
+        if (w.state[PLAYER] === WS.brewing) g.act({ k: 'serve', id: w.brewFor[PLAYER]!, tea: 0.5, milk: 0.4 });
+        else if (w.qLen[PLAYER] === 0) {
+          const b = g.service.board;
+          for (let i = 1; i < b.capacity; i++) if (b.live[i] && b.kind[i] === TASK.brew && b.claimedBy[i] === 0) g.act({ k: 'queueTask', task: b.handle(i) });
+        }
+        steps(g, 1);
+      }
+      return [g.builder.money, g.day.today.served, g.sim.tick, w.tile[WAITER_W]!, w.tile[HELPER_W]!];
+    };
+    expect(run()).toEqual(run());
   });
 });

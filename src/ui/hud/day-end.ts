@@ -42,13 +42,29 @@ export function installDayEnd(deps: DayEndDeps): DayEndUi {
   const sleepBtn = document.createElement('button');
   sleepBtn.className = 'hud-btn primary evening-sleep';
   sleepBtn.textContent = t('day.sleep');
-  // Staff (M2.5): one row per hireable role — locked / hire / hired with wage and dismiss.
-  const staffRow = div('evening-staff');
-  const staffText = div('evening-line');
-  const staffBtn = document.createElement('button');
-  staffBtn.className = 'hud-btn evening-staff-btn';
-  staffRow.append(staffText, staffBtn);
-  panel.append(title, lines, staffRow, sleepBtn);
+  // Staff (M2.5; one row per hireable role from M4) — locked / hire / hired with wage and dismiss.
+  const staffRows = STAFF.roles.filter((r) => r.hireable).map((role) => {
+    const row = div('evening-staff');
+    const text = div('evening-line');
+    const btn = document.createElement('button');
+    btn.className = 'hud-btn evening-staff-btn';
+    row.append(text, btn);
+    const r = { role, row, text, btn, action: null as (() => Promise<string>) | null, shown: '' };
+    btn.addEventListener('click', async () => {
+      if (busy || !r.action) return;
+      busy = true;
+      btn.disabled = true;
+      try {
+        const reason = await r.action();
+        if (reason) text.textContent = t(reason);
+      } finally {
+        busy = false;
+        btn.disabled = false;
+      }
+    });
+    return r;
+  });
+  panel.append(title, lines, ...staffRows.map((r) => r.row), sleepBtn);
 
   const screen = div('sleep-screen hidden');
   const moon = div('sleep-moon');
@@ -80,50 +96,33 @@ export function installDayEnd(deps: DayEndDeps): DayEndUi {
     lines.replaceChildren(...rows.map((r) => div('evening-line', r)));
   }
 
-  let staffAction: (() => Promise<string>) | null = null;
-  let staffShown = '';
   function staffLine(p: PlayerState): void {
-    const role = STAFF.roles.find((r) => r.hireable);
-    if (!role) {
-      staffRow.classList.add('hidden');
-      return;
+    for (const r of staffRows) {
+      const role = r.role;
+      const name = t(`staff.${role.key}`);
+      const hired = p.staff.find((m) => m.role === role.key);
+      let text: string;
+      let btn = '';
+      if (hired) {
+        text = t('staff.wage', { role: name, n: role.wage }) + (hired.dayOff ? ` · ${t('staff.off')}` : '');
+        btn = 'staff.dismiss';
+        r.action = () => deps.dismiss(role.key);
+      } else if (hireBlock(role, p.money, p.seats)) {
+        text = t('staff.locked', { role: name, savings: role.unlock.savings, seats: role.unlock.seats });
+        r.action = null;
+      } else {
+        text = t('staff.wage', { role: name, n: role.wage });
+        btn = 'staff.hire';
+        r.action = () => deps.hire(role.key);
+      }
+      const key = text + btn;
+      if (key === r.shown) continue;
+      r.shown = key;
+      r.text.textContent = text;
+      r.btn.textContent = btn ? t(btn) : '';
+      r.btn.classList.toggle('hidden', !btn);
     }
-    const name = t(`staff.${role.key}`);
-    const hired = p.staff.find((m) => m.role === role.key);
-    let text: string;
-    let btn = '';
-    if (hired) {
-      text = t('staff.wage', { role: name, n: role.wage }) + (hired.dayOff ? ` · ${t('staff.off')}` : '');
-      btn = 'staff.dismiss';
-      staffAction = () => deps.dismiss(role.key);
-    } else if (hireBlock(role, p.money, p.seats)) {
-      text = t('staff.locked', { role: name, savings: role.unlock.savings, seats: role.unlock.seats });
-      staffAction = null;
-    } else {
-      text = t('staff.wage', { role: name, n: role.wage });
-      btn = 'staff.hire';
-      staffAction = () => deps.hire(role.key);
-    }
-    const key = text + btn;
-    if (key === staffShown) return;
-    staffShown = key;
-    staffText.textContent = text;
-    staffBtn.textContent = btn ? t(btn) : '';
-    staffBtn.classList.toggle('hidden', !btn);
-    staffRow.classList.remove('hidden');
   }
-  staffBtn.addEventListener('click', async () => {
-    if (busy || !staffAction) return;
-    busy = true;
-    staffBtn.disabled = true;
-    try {
-      const reason = await staffAction();
-      if (reason) staffText.textContent = t(reason);
-    } finally {
-      busy = false;
-      staffBtn.disabled = false;
-    }
-  });
 
   function refresh(): void {
     const p = deps.player();

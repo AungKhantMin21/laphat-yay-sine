@@ -1,5 +1,5 @@
 // Staff rules from src/data/staff.json (M2.5): roles, wages, unlocks and how much each role likes
-// each kind of job. Validated once at load. Only the waiter can be hired in M2.5; helper (M4),
+// each kind of job. Validated once at load. The waiter (M2.5) and the helper (M4) can be hired;
 // tea sayar and cook (M5) are defined so the data shape is settled.
 import raw from '../data/staff.json';
 

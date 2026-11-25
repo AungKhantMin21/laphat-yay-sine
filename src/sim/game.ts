@@ -221,21 +221,39 @@ export class Game {
     b.changed = true;
     this.day.changed = true;
     this.events.push({ k: 'wages', paid, dayOff: off, total: b.money });
-    this.spawnStaff();
   }
 
-  /** Workers 2… follow the roster: present unless on a day off. */
-  spawnStaff(): void {
+  /** The street end staff member w comes from and goes home to (M4). */
+  private staffEnd(w: number): number {
+    const ends = NEIGHBOURHOOD.ends;
+    const e = ends[(w - 2) % ends.length]!;
+    return e.y * this.walkStaff.w + e.x;
+  }
+
+  /**
+   * Workers 2… follow the roster: present unless on a day off, and not in the evening (they've gone
+   * home). With `arrive`, newcomers walk in from their street end (the morning); otherwise they're
+   * placed beside the counter (a load mid-day). Anyone no longer wanted goes at once.
+   */
+  spawnStaff(arrive = false): void {
     const home = this.workers.homeTile();
+    const here = home >= 0 ? home : this.workers.tile[PLAYER]!;
+    const evening = this.day.phase === PHASE.evening;
     for (let w = 2; w < this.workers.capacity; w++) {
       const m = this.staff[w - 2];
-      const want = m !== undefined && !m.dayOff;
+      const want = m !== undefined && !m.dayOff && !evening;
       if (want && !this.workers.alive[w]) {
-        this.workers.spawn(w, ROLE.waiter, home >= 0 ? home : this.workers.tile[PLAYER]!, STAFF.byKey.get(m.role)!);
+        this.workers.spawn(w, ROLE.waiter, arrive ? this.staffEnd(w) : here, STAFF.byKey.get(m.role)!);
+        if (arrive) this.workers.commute(w, here, false);
       } else if (!want && this.workers.alive[w]) {
         this.workers.despawn(w);
       }
     }
+  }
+
+  /** Evening: staff stop work and walk home (M4). */
+  private staffHome(): void {
+    for (let w = 2; w < this.workers.capacity; w++) if (this.workers.alive[w]) this.workers.commute(w, this.staffEnd(w), true);
   }
 
   /** Rebuilds walk costs around build changes (searches in flight restart). */
@@ -486,6 +504,7 @@ export class Game {
         this.service.endOfDay(); // cups washed overnight, no jobs left
         this.payWages();
         this.workers.reset(); // everyone back beside the counter
+        this.spawnStaff(true); // staff walk in from home
         // Overnight: goods in hand are put away and every delivery arrives.
         const carried = this.market.putAway(this);
         if (carried) this.events.push({ k: 'putAway', goods: carried });
@@ -596,6 +615,7 @@ export class Game {
     this.market.refresh(this.sim.day);
     this.goods(false);
     if (day.phase === PHASE.closing && this.lastPhase !== PHASE.closing) this.npcs.closing();
+    if (day.phase === PHASE.evening && this.lastPhase !== PHASE.evening && this.lastPhase !== -1) this.staffHome();
     this.lastPhase = day.phase;
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
