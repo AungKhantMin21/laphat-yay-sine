@@ -78,7 +78,7 @@ describe('shop day cycle', () => {
     w.begin(new ArrayBuffer(4096), 0, 0);
     g.step(w);
     let day = -1;
-    readFrame(w.finish(), { header() {}, npcDespawn() {}, npcState() {}, task() {}, cup() {}, world: (_a: number, _b: number, d: number) => (day = d) } as unknown as FrameHandler);
+    readFrame(w.finish(), { header() {}, npcSpawn() {}, npcDespawn() {}, npcState() {}, task() {}, cup() {}, world: (_a: number, _b: number, d: number) => (day = d) } as unknown as FrameHandler);
     expect(day).toBe(1);
   });
 

@@ -1,5 +1,6 @@
 {
   "walkSpeed": 1.6,
+  "residentShare": 0.3,
   "looks": 4,
   "milkShift": [-0.06, 0.06],
   "noiseTaste": [-1, 1],

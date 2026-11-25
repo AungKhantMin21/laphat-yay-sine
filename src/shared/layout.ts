@@ -9,6 +9,12 @@ export const MAX_NPCS = 256;
  */
 export const MAX_WORKERS = 8;
 export const WORKER_SLOT0 = MAX_NPCS - MAX_WORKERS;
+/**
+ * Residents (M4) own the NPC slots just below the workers: resident r ↔ slot RESIDENT_SLOT0 + r.
+ * Customers use slots 1 … RESIDENT_SLOT0 − 1.
+ */
+export const MAX_RESIDENTS = 40;
+export const RESIDENT_SLOT0 = WORKER_SLOT0 - MAX_RESIDENTS;
 /** Task board slots and the most cups a shop can have (mirrored on the main thread). */
 export const MAX_TASKS = 128;
 export const MAX_CUPS = 64;

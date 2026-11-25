@@ -7,7 +7,7 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import { CATALOG } from '../shared/catalog';
 import { DRINKS } from '../shared/drinks';
 import { HALF_H, HALF_W } from '../shared/iso';
-import { ANIM, NPC_DEF_CUSTOMER, ORDER } from '../shared/npc';
+import { ANIM, NPC_DEF_CUSTOMER, NPC_DEF_RESIDENT, ORDER } from '../shared/npc';
 import { MAX_NPCS } from '../shared/layout';
 import { handleIndex } from '../shared/ids';
 import { TICK_MS } from '../shared/protocol';
@@ -113,7 +113,7 @@ export class NpcLayer {
       }
       const dir = v.npcDir[i]!;
       sp.texture =
-        v.npcDef[i] === NPC_DEF_CUSTOMER
+        v.npcDef[i] === NPC_DEF_CUSTOMER || v.npcDef[i] === NPC_DEF_RESIDENT
           ? (this.poses[poseIndex(v.npcLook[i]! % this.looks, dir, anim, step)] ?? Texture.EMPTY)
           : (this.workerPoses[poseIndex(v.npcLook[i]! & 1, dir, anim, step)] ?? Texture.EMPTY);
       sp.scale.x = poseFlipped(dir) ? -1 : 1;

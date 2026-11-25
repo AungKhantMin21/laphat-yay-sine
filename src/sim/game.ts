@@ -23,6 +23,7 @@ import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
 import { Customers } from './npc/customers';
+import { Residents } from './npc/residents';
 import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
 import { SimWorld } from './world';
@@ -59,6 +60,8 @@ export class Game {
   private lastPhase = -1;
   /** The neighbourhood shops: today's stock, goods in hand, deliveries (M3). */
   readonly market: Market;
+  /** The named neighbours (M4). */
+  readonly residents: Residents;
 
   constructor(
     readonly sim: Sim,
@@ -79,6 +82,10 @@ export class Game {
     this.workers.spawn(PLAYER, ROLE.player, home >= 0 ? home : SEATING.y0 * this.walk.w + SEATING.x0);
     this.market = new Market(sim.seed);
     this.market.refresh(sim.day);
+    this.residents = new Residents(this.walk, this.paths, sim.seed);
+    this.residents.hooks = { teaVisit: (_r, from, drink, look) => this.npcs.spawnResident(_r, from, drink, look) };
+    this.npcs.onResidentGone = (r) => this.residents.backFromTea(r);
+    this.residents.settle(sim.day, sim.gameMinute);
   }
 
   /** Purchases land here: ingredients on the kitchen shelf, objects in the inventory, materials in the store. */
@@ -144,6 +151,9 @@ export class Game {
     t.earned += price + tip;
     t.tips += tip;
     this.day.changed = true;
+    const ci = this.npcs.indexOf(id);
+    const res = ci ? this.npcs.resident[ci]! : -1;
+    if (res >= 0) this.residents.visits[res] = Math.min(0xffff, this.residents.visits[res]! + 1);
     const reaction = reactionFor(score);
     this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction, wait: Math.round(wait) });
     this.events.push({ k: 'money', delta: price + tip, total: b.money });
@@ -460,6 +470,7 @@ export class Game {
           if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
         }
         this.npcs.clear(); // the last passers-by go home too
+        this.residents.settle(this.sim.day, this.sim.gameMinute); // tomorrow: everyone where the plan has them
         this.service.endOfDay(); // cups washed overnight, no jobs left
         this.payWages();
         this.workers.reset(); // everyone back beside the counter
@@ -559,6 +570,9 @@ export class Game {
       }
     }
     this.service.tick(this.sim.tick);
+    const res = this.residents;
+    res.nowMinute = minute;
+    res.tick(this.sim.day, minute, day.phase === PHASE.open && minuteOfDay(minute) < SHOP.close);
     this.npcs.tick(this.sim.tick);
     this.workers.tick(this.sim.tick);
     this.market.refresh(this.sim.day);
@@ -568,6 +582,7 @@ export class Game {
     day.update(this.sim.gameMinute, this.customers());
     this.world.writeChanges(w);
     this.npcs.writeChanges(w);
+    this.residents.writeChanges(w);
     this.workers.writeChanges(w);
     this.service.writeChanges(w, this.workers);
   }
@@ -576,6 +591,7 @@ export class Game {
   writeSnapshot(w: FrameWriter): void {
     this.world.writeSnapshot(w);
     this.npcs.writeSnapshot(w);
+    this.residents.writeSnapshot(w);
     this.workers.writeSnapshot(w);
     this.service.writeSnapshot(w, this.workers);
   }

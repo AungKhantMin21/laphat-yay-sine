@@ -15,6 +15,8 @@ export interface CustomerRules {
   /** Order weight per drink id (DRINKS.defs order); sums to `orderTotal`. */
   orderWeight: number[];
   orderTotal: number;
+  /** Share of the usual arrivals that named residents bring (M4): generic arrivals are scaled by 1 − this. */
+  residentShare: number;
 }
 
 export interface RawCustomers {
@@ -23,6 +25,7 @@ export interface RawCustomers {
   milkShift: [number, number];
   noiseTaste: [number, number];
   orders: Record<string, number>;
+  residentShare?: number;
 }
 
 function range(r: [number, number], where: string, lo: number, hi: number): [number, number] {
@@ -43,6 +46,8 @@ export function buildCustomers(d: RawCustomers, drinks: Drinks = DRINKS): Custom
     orderTotal += w;
   }
   if (orderTotal <= 0) throw new Error('orders: at least one drink needs a weight');
+  const residentShare = d.residentShare ?? 0;
+  if (!(residentShare >= 0 && residentShare < 1)) throw new Error('residentShare: must be 0…<1');
   return {
     walkSpeed: d.walkSpeed,
     looks: d.looks,
@@ -50,6 +55,7 @@ export function buildCustomers(d: RawCustomers, drinks: Drinks = DRINKS): Custom
     noiseTaste: range(d.noiseTaste, 'noiseTaste', -1, 1),
     orderWeight,
     orderTotal,
+    residentShare,
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { NEIGHBOURHOOD } from '../src/shared/neighbourhood';
-import { WORKER_SLOT0 } from '../src/shared/layout';
+import { RESIDENT_SLOT0, WORKER_SLOT0 } from '../src/shared/layout';
 import atlasJson from '../assets/atlas/atlas-0.json';
 import { Game } from '../src/sim/game';
 import { WorldView } from '../src/game/view';
@@ -102,7 +102,7 @@ describe('NPC mirror', () => {
     const v = new WorldView();
     v.setArea(0, NEIGHBOURHOOD.w, NEIGHBOURHOOD.h);
     readFrame(w.finish(), v);
-    expect(Array.from(v.npcLive.subarray(0, WORKER_SLOT0)).filter(Boolean)).toHaveLength(1);
+    expect(Array.from(v.npcLive.subarray(0, RESIDENT_SLOT0)).filter(Boolean)).toHaveLength(1);
     expect(v.npcLive[WORKER_SLOT0]).toBe(1); // the player (worker 1)
   });
 });

@@ -10,7 +10,7 @@ import { CATALOG, LAYER, footH, footW } from '../../shared/catalog';
 import { CUSTOMERS, pickOrder, type CustomerRules } from '../../shared/customers';
 import { POS_SCALE, type FrameWriter } from '../../shared/diff';
 import { IndexQueue, NONE, handleGen, handleIndex, makeHandle } from '../../shared/ids';
-import { LEVEL, MAX_NPCS, PROP, WORKER_SLOT0 } from '../../shared/layout';
+import { LEVEL, MAX_NPCS, PROP, RESIDENT_SLOT0 } from '../../shared/layout';
 import { ANIM, DIR, NPC_DEF_CUSTOMER, ORDER } from '../../shared/npc';
 import { TICK_HZ } from '../../shared/protocol';
 import type { Rng } from '../../shared/rng';
@@ -87,6 +87,10 @@ export class Customers {
   readonly anim: Uint8Array;
   /** Customer index holding each tile as a seat (0 = free). */
   readonly seatRes: Uint16Array;
+  /** The resident this customer is (M4), or −1 for a passer-by. */
+  readonly resident: Int16Array;
+  /** A resident's visit ended (they walked home, or everyone went home at Sleep). */
+  onResidentGone: (r: number) => void = () => {};
 
   private readonly free: Uint16Array;
   private freeTop = 0;
@@ -159,9 +163,10 @@ export class Customers {
     this.look = new Uint8Array(n);
     this.dir = new Uint8Array(n);
     this.anim = new Uint8Array(n);
+    this.resident = new Int16Array(n).fill(-1);
     this.free = new Uint16Array(n);
-    // The top MAX_WORKERS slots belong to workers (shared/layout.ts WORKER_SLOT0).
-    for (let i = WORKER_SLOT0 - 1; i >= 1; i--) this.free[this.freeTop++] = i;
+    // The top slots belong to residents and workers (shared/layout.ts RESIDENT_SLOT0, WORKER_SLOT0).
+    for (let i = RESIDENT_SLOT0 - 1; i >= 1; i--) this.free[this.freeTop++] = i;
     this.stateDirty = new IndexQueue(n);
     this.orderDirty = new IndexQueue(n);
     this.spawned = new Uint32Array(n * 2);
@@ -258,7 +263,7 @@ export class Customers {
    * and `extraAppeal` come from tomorrow's teaser. Returns their handle or NONE.
    */
   arrivalRoll(minuteOfDay: number, extraRate = 0, extraAppeal = 0): number {
-    const p = ((arrivalRate(minuteOfDay, this.rules) + extraRate) * (this.appeal() + extraAppeal)) / 60;
+    const p = ((arrivalRate(minuteOfDay, this.rules) * (1 - this.cust.residentShare) + extraRate) * (this.appeal() + extraAppeal)) / 60;
     if (!this.decide.chance(p)) return NONE;
     return this.spawn();
   }
@@ -267,17 +272,31 @@ export class Customers {
   spawn(order = -1): number {
     if (this.freeTop === 0) return NONE;
     const r = this.decide;
-    const W = this.walk.w;
     const from = this.pickEntry(r.next());
     const to = this.pickEntry(r.next());
     const rolled = pickOrder(r.next(), this.cust);
-    const drink = order >= 0 ? order : rolled;
+    return this.arrive(from, to, order >= 0 ? order : rolled, -1, this.cosmetic.int(this.cust.looks));
+  }
+
+  /**
+   * A resident comes for tea (M4): out of their door `from`, back to it after, ordering their usual
+   * `drink`, drawn with their own look. Returns the customer handle, or NONE when the shop is full.
+   */
+  spawnResident(r: number, from: number, drink: number, look: number): number {
+    if (this.freeTop === 0) return NONE;
+    return this.arrive(from, from, drink, r, look);
+  }
+
+  private arrive(from: number, to: number, drink: number, resident: number, look: number): number {
+    const r = this.decide;
+    const W = this.walk.w;
     const ms = this.cust.milkShift;
     const nt = this.cust.noiseTaste;
     const milkShift = ms[0] + (ms[1] - ms[0]) * r.next();
     const noiseTaste = nt[0] + (nt[1] - nt[0]) * r.next();
 
     const i = this.free[--this.freeTop]!;
+    this.resident[i] = resident;
     this.live++;
     this.alive[i] = 1;
     const x0 = from % W;
@@ -292,7 +311,7 @@ export class Customers {
     this.askedAt[i] = 0;
     this.milkShift[i] = milkShift;
     this.noiseTaste[i] = noiseTaste;
-    this.look[i] = this.cosmetic.int(this.cust.looks);
+    this.look[i] = look;
     this.seat[i] = -1;
     this.seatObj[i] = NONE;
     this.path[i] = NONE;
@@ -601,6 +620,9 @@ export class Customers {
     if (this.despawnedN < this.despawned.length) this.despawned[this.despawnedN++] = this.handle(i);
     this.alive[i] = 0;
     this.state[i] = CS.free;
+    const res = this.resident[i]!;
+    this.resident[i] = -1;
+    if (res >= 0) this.onResidentGone(res);
     this.order[i] = ORDER.none;
     this.gen[i] = (this.gen[i]! + 1) & 0xffff;
     this.free[this.freeTop++] = i;

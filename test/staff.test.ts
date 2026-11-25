@@ -157,8 +157,9 @@ describe('the waiter at work', () => {
     const h = g.npcs.spawn();
     const i = g.npcs.indexOf(h);
     for (let k = 0; k < 3000 && g.npcs.state[i] !== CS.asking; k++) steps(g, 1);
-    steps(g, 1);
     const t = g.service.board.find(TASK.order, h);
+    // The waiter may be busy with another early customer (a resident) first.
+    for (let k = 0; k < 3000 && g.service.board.claimedBy[g.service.board.indexOf(t)] !== WAITER_W; k++) steps(g, 1);
     expect(g.service.board.claimedBy[g.service.board.indexOf(t)]).toBe(WAITER_W);
     expect(g.act({ k: 'queueTask', task: t }).ok).toBe(true);
     expect(g.service.board.claimedBy[g.service.board.indexOf(t)]).toBe(PLAYER);

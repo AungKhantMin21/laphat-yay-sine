@@ -23,3 +23,5 @@ export const NPC_DEF_CUSTOMER = 0;
 /** NPC_SPAWN def ids for workers (M2.5). */
 export const NPC_DEF_PLAYER = 1;
 export const NPC_DEF_WAITER = 2;
+/** A named neighbour walking the street (M4); drawn with the customer looks. */
+export const NPC_DEF_RESIDENT = 3;

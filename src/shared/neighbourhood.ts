@@ -68,6 +68,10 @@ export interface Neighbourhood {
   shops: ShopSite[];
   /** Street entry points plus the doors of `entry` buildings. */
   entries: Entry[];
+  /** The street ends (map edges) only: where people come from and go to off the map (M4). */
+  ends: { x: number; y: number }[];
+  /** Door tiles (on the pavement) of the `entry` buildings, in building order: where residents live (M4). */
+  doors: { x: number; y: number; building: number }[];
 }
 
 interface RawSpan {
@@ -173,10 +177,14 @@ export function buildNeighbourhood(d: RawNeighbourhood): Neighbourhood {
     return { x, y, weight: e.weight };
   });
   if (!(d.entryDoorWeight > 0)) throw new Error('neighbourhood: entryDoorWeight must be > 0');
-  for (const b of buildings) {
-    if (!b.entry) continue;
-    entries.push({ ...spanTile(b, b.from + doorOffset(b.to - b.from)), weight: d.entryDoorWeight });
-  }
+  const ends = entries.map((e) => ({ x: e.x, y: e.y }));
+  const doors: Neighbourhood['doors'] = [];
+  buildings.forEach((b, building) => {
+    if (!b.entry) return;
+    const t = spanTile(b, b.from + doorOffset(b.to - b.from));
+    entries.push({ ...t, weight: d.entryDoorWeight });
+    doors.push({ ...t, building });
+  });
   if (entries.length === 0) throw new Error('neighbourhood: needs at least one entry');
 
   const [ox0, ox1] = d.shopOpening as [number, number];
@@ -185,7 +193,7 @@ export function buildNeighbourhood(d: RawNeighbourhood): Neighbourhood {
   if (!(ox0 >= shop.x0 && ox1 <= shop.x1 && ox1 > ox0)) throw new Error('neighbourhood: shopOpening must be inside the shop front');
   if (!inX(kx) || !inY(ky)) throw new Error('neighbourhood: bad kitchenDoor');
 
-  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries };
+  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries, ends, doors };
 }
 
 export const NEIGHBOURHOOD: Neighbourhood = buildNeighbourhood(raw as RawNeighbourhood);
