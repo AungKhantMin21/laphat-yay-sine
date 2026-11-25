@@ -155,5 +155,5 @@ describe('walk zones', () => {
       g.events.length = 0;
     }
     expect(seen).toBeGreaterThan(1000);
-  });
+  }, 20000); // a whole morning with 600 customers: slow under a full parallel run
 });

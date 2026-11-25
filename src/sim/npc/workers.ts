@@ -18,7 +18,7 @@ import { DX, DY, type WalkGrid } from '../path/walk-grid';
 import { CUP } from '../service/cups';
 import type { Service } from '../service/service';
 import { TASK, isErrand } from '../service/task-board';
-import { NEIGHBOURHOOD } from '../../shared/neighbourhood';
+import { visitSite } from '../../shared/neighbourhood';
 import type { Customers } from './customers';
 import { ARRIVED, FAILED, drop, face, walkStep } from './walker';
 
@@ -234,7 +234,7 @@ export class Workers {
         if (i && b.kind[i] === TASK.go && !(this.task[w] === h && this.carrying(w))) this.release(w, h);
       }
     } else if (kind === TASK.visit) {
-      if (!NEIGHBOURHOOD.shops[target]) return 'serve.err.gone';
+      if (!visitSite(target)) return 'serve.err.gone';
       for (let k = 0; k < this.qLen[w]!; k++) {
         const i = b.indexOf(this.queue[w * QUEUE_MAX + k]!);
         if (i && b.kind[i] === TASK.visit && b.target[i] === target) return 'serve.err.queued';
@@ -376,8 +376,8 @@ export class Workers {
         goal = target;
         break;
       case TASK.visit: {
-        const shop = NEIGHBOURHOOD.shops[target];
-        goal = shop ? shop.visitY * this.walk.w + shop.visitX : -1;
+        const site = visitSite(target);
+        goal = site ? site.visitY * this.walk.w + site.visitX : -1;
         break;
       }
     }
@@ -399,11 +399,11 @@ export class Workers {
       // An errand: standing on the goal tile. A shop visit faces its counter and opens its panel.
       this.setAnim(w, ANIM.stand);
       if (i && b.kind[i] === TASK.visit) {
-        const shop = NEIGHBOURHOOD.shops[b.target[i]!];
-        if (shop) {
-          this.dir[w] = shop.edge === 'n' ? DIR.north : DIR.west;
+        const site = visitSite(b.target[i]!);
+        if (site) {
+          this.dir[w] = site.face === 'n' ? DIR.north : site.face === 'w' ? DIR.west : DIR.south;
           this.dirty.push(w);
-          this.emit({ k: 'atShop', shop: shop.id });
+          this.emit({ k: 'atShop', shop: site.id });
         }
       }
       return this.finish(w);
@@ -644,7 +644,7 @@ export class Workers {
     return -1;
   }
 
-  private place(w: number, tile: number): void {
+  place(w: number, tile: number): void {
     const W = this.walk.w;
     drop(this, w, this.paths);
     this.tile[w] = tile;

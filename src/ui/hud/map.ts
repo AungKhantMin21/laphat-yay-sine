@@ -72,6 +72,20 @@ export class NeighbourhoodMap {
       });
       this.box.append(b);
     }
+    // The notice board (M4).
+    const board = NEIGHBOURHOOD.board;
+    const bb = document.createElement('button');
+    bb.type = 'button';
+    bb.className = 'nmap-shop nmap-board';
+    bb.textContent = t('map.board');
+    const [bx, by] = this.pos(board.x + 0.5, board.y + 0.5);
+    bb.style.left = `${bx}%`;
+    bb.style.top = `${by}%`;
+    bb.addEventListener('click', () => {
+      this.hooks.visit(board.id);
+      this.close();
+    });
+    this.box.append(bb);
     panel.append(head, this.box);
     this.root.append(panel);
     parent.append(this.root);

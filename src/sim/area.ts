@@ -6,11 +6,17 @@ import { WZ } from '../shared/rules/access';
 import { AreaGrids } from '../shared/world-state';
 import { NEIGHBOURHOOD, spanTile } from '../shared/neighbourhood';
 import { KITCHEN, KITCHEN_DOOR, OPENING, SEATING, SHOP, facadeId, facadeKind } from '../shared/street';
+import type { Expansion } from '../shared/properties';
 
 export { CROSSING, ENTRIES, FAR_PAVEMENT, KITCHEN, KITCHEN_DOOR, OPENING, PAVEMENT, ROAD, SEATING, SHOP } from '../shared/street';
 export type { Rect } from '../shared/street';
 
-export function createArea(): AreaGrids {
+/**
+ * The neighbourhood grids, with `spaces` (M4: lots you bought or rented) joined to the shop: shop
+ * floor, interior zone, owned and roofed; a back wall, a low sill on the pavement side, its outer side
+ * wall, and the party wall opened over `opening` rows. The building front there goes.
+ */
+export function createArea(spaces: readonly Expansion[] = []): AreaGrids {
   const N = NEIGHBOURHOOD;
   const a = new AreaGrids(0, N.w, N.h);
   const w = a.w;
@@ -53,5 +59,34 @@ export function createArea(): AreaGrids {
     }
   }
   // The four shops' fronts are sprites (render); their counter row stays blocked filler.
+  for (const e of spaces) joinSpace(a, e);
   return a;
+}
+
+function joinSpace(a: AreaGrids, e: Expansion): void {
+  const w = a.w;
+  const { x0, y0, x1, y1 } = e.rect;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const t = y * w + x;
+      a.floor[t] = FLOOR.shopTile;
+      a.access[t] = WZ.interior;
+      a.zone[t] = ZONE.owned | ZONE.roof;
+    }
+  }
+  for (let x = x0; x < x1; x++) {
+    a.wall[y0 * w + x] = a.wall[y0 * w + x]! | WALL.n; // back wall
+    a.wall[y1 * w + x] = a.wall[y1 * w + x]! | WALL.lowN; // front sill on the pavement row
+    a.facade[y1 * w + x] = 0;
+  }
+  const [o0, o1] = e.opening;
+  if (e.join === 'w') {
+    // The space is east of the shop: the shop's east sill (on column x0) opens; its own east side is a sill.
+    for (let y = o0; y < o1; y++) a.wall[y * w + x0] = a.wall[y * w + x0]! & ~WALL.lowW;
+    for (let y = y0; y < y1; y++) a.wall[y * w + x1] = a.wall[y * w + x1]! | WALL.lowW;
+  } else {
+    // West of the shop: the shop's west back wall (on column x1) opens; its own west side is a back wall.
+    for (let y = o0; y < o1; y++) a.wall[y * w + x1] = a.wall[y * w + x1]! & ~WALL.w;
+    for (let y = y0; y < y1; y++) a.wall[y * w + x0] = a.wall[y * w + x0]! | WALL.w;
+  }
 }

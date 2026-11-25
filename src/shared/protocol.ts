@@ -39,6 +39,10 @@ export type Action =
   | { k: 'visit'; shop: number }
   /** Build mode paint tool (M3): lay material `material` (materials.json id) on tile (x, y). */
   | { k: 'paint'; x: number; y: number; material: number }
+  /** M4: buy or rent a listed space at the notice board (property key); give up a rented space (evening). */
+  | { k: 'buyProperty'; key: string }
+  | { k: 'rentProperty'; key: string }
+  | { k: 'endLease'; key: string }
   /** At a shop's counter (M3): buy `qty` units of today's row `item`; carried home, or delivered for a fee. */
   | { k: 'buy'; shop: number; item: number; qty: number; deliver?: boolean };
 
@@ -85,6 +89,10 @@ export type SimEvent =
   | { k: 'delivered'; goods: GoodsLine[] }
   /** The player reached shop `shop`'s counter (M3): open its panel. */
   | { k: 'atShop'; shop: number }
+  /** A space joined your shop (M4): bought, or rented (`rented`). */
+  | { k: 'propertyTaken'; key: string; rented: boolean; returned: number }
+  /** A rented space went back to its landlord (couldn't pay the rent, or you gave it up); `returned` objects went to the inventory. */
+  | { k: 'leaseEnded'; key: string; returned: number; unpaid: boolean }
   /** Tomorrow's teaser (sent on sleep after dayEnd): i18n `teaser.<key>`; `drink` = guest's drink id or -1. */
   | { k: 'teaser'; key: string; drink: number };
 

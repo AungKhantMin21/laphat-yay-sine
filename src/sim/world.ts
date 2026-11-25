@@ -30,6 +30,8 @@ export class SimWorld {
   private removedCount = 0;
   /** Painted tiles since the last frame (M3): one dirty rect per paint layer (floor, wall colour). */
   private readonly paintRect = new Int32Array(8);
+  /** A rect whose area layers all changed (M4: a space joined or left the shop); streamed next frame. */
+  private readonly areaRect = new Int32Array(4);
   /** Tiles whose floor-standing furniture changed (walk grid rebuild), inclusive-exclusive. */
   walkX0 = 0;
   walkY0 = 0;
@@ -153,7 +155,43 @@ export class SimWorld {
     }
     q.clear();
     this.writePaint(w);
+    this.writeArea(w);
     this.writeGrids(w);
+  }
+
+  /**
+   * Every area layer in the rect changed (M4: a space joined to or taken from the shop): stream them all
+   * next frame and rebuild walking there.
+   */
+  retile(x0: number, y0: number, x1: number, y1: number): void {
+    const r = this.areaRect;
+    if (r[2]! <= r[0]!) r.set([x0, y0, x1, y1]);
+    else r.set([Math.min(r[0]!, x0), Math.min(r[1]!, y0), Math.max(r[2]!, x1), Math.max(r[3]!, y1)]);
+    if (!this.walkDirty) {
+      this.walkX0 = x0;
+      this.walkY0 = y0;
+      this.walkX1 = x1;
+      this.walkY1 = y1;
+    } else {
+      this.walkX0 = Math.min(this.walkX0, x0);
+      this.walkY0 = Math.min(this.walkY0, y0);
+      this.walkX1 = Math.max(this.walkX1, x1);
+      this.walkY1 = Math.max(this.walkY1, y1);
+    }
+  }
+
+  private writeArea(w: FrameWriter): void {
+    const r = this.areaRect;
+    if (r[2]! <= r[0]!) return;
+    const a = this.state.area;
+    const [x0, y0, x1, y1] = [r[0]!, r[1]!, r[2]!, r[3]!];
+    w.tilePatch(TILE_LAYER.floor, x0, y0, x1 - x0, y1 - y0, a.floor, a.w);
+    w.tilePatch(TILE_LAYER.wall, x0, y0, x1 - x0, y1 - y0, a.wall, a.w);
+    w.tilePatch(TILE_LAYER.zone, x0, y0, x1 - x0, y1 - y0, a.zone, a.w);
+    w.tilePatch(TILE_LAYER.access, x0, y0, x1 - x0, y1 - y0, a.access, a.w);
+    w.tilePatch(TILE_LAYER.facade, x0, y0, x1 - x0, y1 - y0, a.facade, a.w);
+    w.tilePatch(TILE_LAYER.paint, x0, y0, x1 - x0, y1 - y0, a.paint, a.w);
+    r.fill(0);
   }
 
   /**
@@ -232,6 +270,7 @@ export class SimWorld {
     w.tilePatch(TILE_LAYER.facade, 0, 0, a.w, a.h, a.facade, a.w);
     w.tilePatch(TILE_LAYER.paint, 0, 0, a.w, a.h, a.paint, a.w);
     this.paintRect.fill(0);
+    this.areaRect.fill(0);
     const s = this.state.objects;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 1; i < s.capacity; i++) if (s.live[i] && (s.parent[i] === 0) === (pass === 0)) this.writeUpsert(w, i);

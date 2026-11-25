@@ -72,6 +72,25 @@ export interface Neighbourhood {
   ends: { x: number; y: number }[];
   /** Door tiles (on the pavement) of the `entry` buildings, in building order: where residents live (M4). */
   doors: { x: number; y: number; building: number }[];
+  /** The notice board (M4): it stands on `x, y` (filler) and is read from the pavement tile `visitX, visitY`. Site id = shops.length. */
+  board: { id: number; x: number; y: number; visitX: number; visitY: number };
+}
+
+/** A place the player can visit (a shop's counter or the notice board): where to stand and which way to face. */
+export interface VisitSite {
+  id: number;
+  visitX: number;
+  visitY: number;
+  /** Facing when there: the shops' counters are north (n) or west (w) of the visit tile; the board is south. */
+  face: 'n' | 'w' | 's';
+}
+
+/** The visit site with id `id` (shops 0…n−1, then the board), or null. */
+export function visitSite(id: number, hood: Neighbourhood = NEIGHBOURHOOD): VisitSite | null {
+  const s = hood.shops[id];
+  if (s) return { id, visitX: s.visitX, visitY: s.visitY, face: s.edge };
+  const b = hood.board;
+  return id === b.id ? { id, visitX: b.visitX, visitY: b.visitY, face: 's' } : null;
 }
 
 interface RawSpan {
@@ -90,6 +109,7 @@ export interface RawNeighbourhood {
   shops: (RawSpan & { key: string; visit: number; hours: string[] })[];
   entries: { tile: number[]; weight: number }[];
   entryDoorWeight: number;
+  board: { tile: number[]; visit: number[] };
 }
 
 /** Tile on the pavement side of span position p. */
@@ -193,7 +213,11 @@ export function buildNeighbourhood(d: RawNeighbourhood): Neighbourhood {
   if (!(ox0 >= shop.x0 && ox1 <= shop.x1 && ox1 > ox0)) throw new Error('neighbourhood: shopOpening must be inside the shop front');
   if (!inX(kx) || !inY(ky)) throw new Error('neighbourhood: bad kitchenDoor');
 
-  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries, ends, doors };
+  const [bx, by] = d.board.tile as [number, number];
+  const [bvx, bvy] = d.board.visit as [number, number];
+  if (!inX(bx) || !inY(by) || !inX(bvx) || !inY(bvy) || Math.abs(bx - bvx) + Math.abs(by - bvy) !== 1) throw new Error('neighbourhood: board.visit must be next to board.tile');
+  const board = { id: shops.length, x: bx, y: by, visitX: bvx, visitY: bvy };
+  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries, ends, doors, board };
 }
 
 export const NEIGHBOURHOOD: Neighbourhood = buildNeighbourhood(raw as RawNeighbourhood);

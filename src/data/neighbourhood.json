@@ -65,5 +65,6 @@
     { "tile": [74, 71], "weight": 1 },
     { "tile": [111, 51], "weight": 1 }
   ],
-  "entryDoorWeight": 2
+  "entryDoorWeight": 2,
+  "board": { "tile": [63, 31], "visit": [63, 30] }
 }

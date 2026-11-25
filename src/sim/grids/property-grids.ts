@@ -82,6 +82,24 @@ export class PropertyGrids {
     this.markDirty(x0, y0, x1, y1, mask);
   }
 
+  /**
+   * Tile t's roof changed (M4: a space joined to or taken from the shop): swaps its area base.
+   * Call clampAll(rect) after a batch.
+   */
+  rebase(t: number, wasRoof: boolean, isRoof: boolean): void {
+    if (wasRoof === isRoof) return;
+    const { roof, open } = CATALOG.base;
+    const from = wasRoof ? roof : open;
+    const to = isRoof ? roof : open;
+    for (let p = 0; p < PROP_COUNT; p++) this.accum[p]![t] = this.accum[p]![t]! + (to[p]! - from[p]!) * LEVEL;
+  }
+
+  /** Re-clamps and marks a rect after rebase(). */
+  refresh(x0: number, y0: number, x1: number, y1: number): void {
+    this.clampRect(x0, y0, x1, y1);
+    this.markDirty(x0, y0, x1, y1, (1 << PROP_COUNT) - 1);
+  }
+
   clearDirty(): void {
     this.dx0 = this.dy0 = this.dx1 = this.dy1 = 0;
     this.dirtyMask = 0;

@@ -1,6 +1,6 @@
 // One running game: clock, world, economy and build commands. Plain TS (tested headless);
 // worker.ts only adds messaging and timing around it.
-import { CATALOG, SERVICE } from '../shared/catalog';
+import { CATALOG, LAYER, SERVICE, footH, footW } from '../shared/catalog';
 import type { FrameWriter } from '../shared/diff';
 import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
@@ -18,14 +18,14 @@ import { isShopZone } from '../shared/rules/access';
 import { PAINT_LAYER, checkPaint } from '../shared/rules/placement';
 import { PLAYER, ROLE, WS, Workers } from './npc/workers';
 import { STAFF, hireBlock } from '../shared/staff';
-import { FLOOR, MAX_WORKERS, WALL_COLOURS } from '../shared/layout';
+import { FLOOR, MAX_WORKERS, WALL_COLOURS, ZONE } from '../shared/layout';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
 import { SHOP } from '../shared/shop';
 import { Customers } from './npc/customers';
 import { Residents } from './npc/residents';
 import { PropertyMarket, type NewsItem } from './world/property-market';
-import { PROPERTIES, PS, type PropertyDef } from '../shared/properties';
+import { LISTING, PROPERTIES, PS, type Expansion, type PropertyDef } from '../shared/properties';
 import { RESIDENTS } from '../shared/residents';
 import { Builder, type Result } from './build/builder';
 import { Sim } from './sim';
@@ -120,6 +120,135 @@ export class Game {
     res.moveIn(r, def, p.door);
     this.spares.push(owner);
     return [owner, came];
+  }
+
+  // ---- growing the shop (M4) ----
+
+  /** The lots joined to the shop now (bought or rented). */
+  spaces(): Expansion[] {
+    return spacesOf(PROPERTIES.defs.map((def, i) => ({ key: def.key, state: this.properties.props[i]!.state })));
+  }
+
+  /** The player stands at the notice board (and isn't walking). */
+  private atBoard(): boolean {
+    const b = NEIGHBOURHOOD.board;
+    const w = this.workers;
+    return w.tile[PLAYER] === b.visitY * this.walkStaff.w + b.visitX && w.state[PLAYER] !== WS.walking;
+  }
+
+  /** Buys (or rents) a listed lot that joins the shop, at the notice board. Rent is paid at Sleep. */
+  private takeProperty(key: string, rent: boolean): Result {
+    const def = PROPERTIES.byKey.get(key);
+    if (!def || !def.expand) return { ok: false, reason: 'board.err.notForYou' };
+    const p = this.properties.props[def.id]!;
+    if (p.state !== PS.listed || !(p.listing & (rent ? LISTING.rent : LISTING.sale))) return { ok: false, reason: 'board.err.gone' };
+    if (!this.atBoard()) return { ok: false, reason: 'board.err.notHere' };
+    const b = this.builder;
+    const cost = rent ? def.rent : p.price;
+    if (b.money < cost) return { ok: false, reason: 'board.err.money' };
+    if (!rent) {
+      b.money -= cost;
+      b.changed = true;
+      this.events.push({ k: 'money', delta: -cost, total: b.money });
+    }
+    this.properties.take(def, rent, this.sim.day);
+    const returned = this.clearForArea(def.expand, false);
+    this.applySpaces();
+    this.events.push({ k: 'propertyTaken', key, rented: rent, returned });
+    return { ok: true };
+  }
+
+  /** A rented lot goes back to its landlord: whatever stands there goes into the inventory. */
+  private endLease(def: PropertyDef, unpaid: boolean): void {
+    const returned = this.clearForArea(def.expand!, true);
+    this.properties.endLease(def, this.sim.day);
+    this.applySpaces();
+    // Nobody stands where the shop no longer is.
+    const home = this.workers.homeTile();
+    const a = this.world.state.area;
+    for (let w = 1; w < this.workers.capacity; w++) {
+      const t = this.workers.tile[w]!;
+      if (this.workers.alive[w] && home >= 0 && (a.zone[t]! & ZONE.owned) === 0 && !this.walkStaff.passable(t)) this.workers.place(w, home);
+    }
+    this.builder.clearHistory(); // history may name objects that just went into the inventory
+    this.builder.changed = true;
+    this.events.push({ k: 'leaseEnded', key: def.key, returned, unpaid });
+  }
+
+  /**
+   * Objects that would no longer fit when lot `e` joins (party-wall items where the wall opens) or
+   * leaves (`leaving`: everything inside it) go into the inventory. Returns how many.
+   */
+  private clearForArea(e: Expansion, leaving: boolean): number {
+    const s = this.world.objects;
+    const { x0, y0, x1, y1 } = e.rect;
+    const party = e.join === 'w' ? x0 : x1;
+    const out: number[] = [];
+    for (let i = 1; i < s.capacity; i++) {
+      if (!s.live[i]) continue;
+      const def = CATALOG.defs[s.type[i]!]!;
+      const ox = s.x[i]!;
+      const oy = s.y[i]!;
+      const ow = footW(def, s.rot[i]!);
+      const oh = footH(def, s.rot[i]!);
+      const inside = ox < x1 && ox + ow > x0 && oy < y1 && oy + oh > y0;
+      const onParty = s.layer[i] === LAYER.wall && ox === party && oy >= e.opening[0] && oy < e.opening[1];
+      if ((leaving && inside) || onParty) out.push(i);
+    }
+    // Items standing on a surface go with it.
+    for (let i = 1; i < s.capacity; i++) if (s.live[i] && s.parent[i] && out.includes(s.parent[i]!) && !out.includes(i)) out.push(i);
+    out.sort((a, b) => Number(s.parent[b] !== 0) - Number(s.parent[a] !== 0)); // children first
+    for (const i of out) {
+      this.builder.give(s.type[i]!, 1);
+      this.world.remove(i);
+    }
+    if (out.length) this.builder.clearHistory();
+    return out.length;
+  }
+
+  /** Rebuilds the tiles around every lot from the neighbourhood with today's spaces joined. */
+  private applySpaces(): void {
+    const next = createArea(this.spaces());
+    const a = this.world.state.area;
+    const W = a.w;
+    for (const def of PROPERTIES.defs) {
+      if (!def.expand) continue;
+      const r = def.expand.rect;
+      const x0 = Math.max(0, r.x0 - 1);
+      const y0 = Math.max(0, r.y0 - 1);
+      const x1 = Math.min(W, r.x1 + 1);
+      const y1 = Math.min(a.h, r.y1 + 1);
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const t = y * W + x;
+          const was = a.zone[t]!;
+          // Floors change only where the tile joins or leaves the shop (painted shop floors stay).
+          if ((was & ZONE.owned) !== (next.zone[t]! & ZONE.owned)) a.floor[t] = next.floor[t]!;
+          a.wall[t] = next.wall[t]!;
+          a.zone[t] = next.zone[t]!;
+          a.access[t] = next.access[t]!;
+          a.facade[t] = next.facade[t]!;
+          if (a.wall[t] === 0 || (next.zone[t]! & ZONE.owned) === 0) a.paint[t] = 0;
+          this.world.grids.rebase(t, (was & ZONE.roof) !== 0, (a.zone[t]! & ZONE.roof) !== 0);
+        }
+      }
+      this.world.grids.refresh(x0, y0, x1, y1);
+      this.world.retile(x0, y0, x1, y1);
+    }
+    this.syncWalk();
+  }
+
+  /** Sleep: rent for each rented lot comes out of the tin; if it can't, that lease ends calmly. */
+  private payRent(): void {
+    const b = this.builder;
+    PROPERTIES.defs.forEach((def, i) => {
+      if (this.properties.props[i]!.state !== PS.rented) return;
+      if (b.money >= def.rent) {
+        b.money -= def.rent;
+        b.changed = true;
+        this.events.push({ k: 'money', delta: -def.rent, total: b.money });
+      } else this.endLease(def, true);
+    });
   }
 
   /** The once-a-day world step (M4): the property market rolls for `day`. Sleep and catch-up both use it. */
@@ -465,7 +594,13 @@ export class Game {
   /** Tiles that differ from the neighbourhood as built (floors laid or walls coloured with the paint tool). */
   private painted(): SavedPaint[] {
     const a = this.world.state.area;
-    const base = (Game.baseArea ??= createArea());
+    const spaces = this.spaces();
+    const sig = spaces.map((e) => `${e.rect.x0},${e.rect.y0}`).join('|');
+    if (!Game.baseArea || Game.baseSig !== sig) {
+      Game.baseArea = createArea(spaces);
+      Game.baseSig = sig;
+    }
+    const base = Game.baseArea;
     const out: SavedPaint[] = [];
     for (let t = 0; t < a.w * a.h; t++) {
       const x = t % a.w;
@@ -476,6 +611,7 @@ export class Game {
     return out;
   }
   private static baseArea: ReturnType<typeof createArea> | undefined;
+  private static baseSig = '';
 
   /** Restores the neighbourhood part of a save; items whose key no longer exists are skipped. */
   private loadHood(h: SaveNeighbourhood): void {
@@ -526,7 +662,8 @@ export class Game {
     sim.tick = d.tick;
     sim.clock = d.clock;
     [sim.rng.market.state, sim.rng.npcDecide.state, sim.rng.events.state, sim.rng.cosmetic.state] = d.rng;
-    const world = new SimWorld(createArea());
+    // Lots joined to the shop (M4) are part of the area before anything is placed.
+    const world = new SimWorld(createArea(spacesOf(d.world.props)));
     const inv = new Uint16Array(CATALOG.defs.length);
     for (const [key, n] of Object.entries(d.inventory)) {
       const def = CATALOG.byKey.get(key);
@@ -608,6 +745,7 @@ export class Game {
         this.residents.settle(this.sim.day, this.sim.gameMinute); // tomorrow: everyone where the plan has them
         this.service.endOfDay(); // cups washed overnight, no jobs left
         this.payWages();
+        this.payRent();
         this.workers.reset(); // everyone back beside the counter
         this.spawnStaff(true); // staff walk in from home
         // Overnight: goods in hand are put away and every delivery arrives.
@@ -637,6 +775,17 @@ export class Game {
         return this.buy(a.shop, a.item, a.qty, !!a.deliver);
       case 'paint':
         return b.paint(a.x, a.y, a.material);
+      case 'buyProperty':
+        return this.takeProperty(a.key, false);
+      case 'rentProperty':
+        return this.takeProperty(a.key, true);
+      case 'endLease': {
+        const def = PROPERTIES.byKey.get(a.key);
+        if (!def || this.properties.props[def.id]?.state !== PS.rented) return { ok: false, reason: 'board.err.notRented' };
+        if (this.day.phase !== PHASE.evening) return { ok: false, reason: 'day.err.notNow' };
+        this.endLease(def, false);
+        return { ok: true };
+      }
       // The player's pour at the counter (the worker opened it with a brewReady event).
       case 'cancelPour':
         return res(this.workers.cancelBrew(PLAYER, a.id));
@@ -806,4 +955,14 @@ function addMissingFixtures(world: SimWorld, inv: Uint16Array): number {
 /** A news item as the main thread sees it (PlayerState.news). */
 function newsLine(n: NewsItem): PlayerState['news'][number] {
   return { id: n.id, day: n.day, kind: n.kind, prop: n.prop, a: n.a, b: n.b, heard: n.heard };
+}
+
+/** The lots joined to the shop, from property states by key (bought or rented). */
+function spacesOf(props: readonly { key: string; state: number }[]): Expansion[] {
+  const out: Expansion[] = [];
+  for (const p of props) {
+    const def = PROPERTIES.byKey.get(p.key);
+    if (def?.expand && (p.state === PS.owned || p.state === PS.rented)) out.push(def.expand);
+  }
+  return out;
 }

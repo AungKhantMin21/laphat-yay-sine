@@ -25,6 +25,7 @@ import { HeatLayer } from './render/heat';
 import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys, installWalkKeys } from './input/keyboard';
+import { BoardPanel } from './ui/board/panel';
 import { NeighbourhoodMap } from './ui/hud/map';
 import { NEIGHBOURHOOD } from './shared/neighbourhood';
 import { ShopPanel } from './ui/shop/panel';
@@ -100,6 +101,7 @@ const bridge: SimBridge = new SimBridge(view, {
     view.playerCarry = bridge.player?.carryLoad ?? 0;
     dayEnd.refresh();
     shopPanel.refresh();
+    boardPanel.refresh();
   },
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
@@ -113,12 +115,15 @@ const bridge: SimBridge = new SimBridge(view, {
           queueUi.toast('stock.freeTea');
         }
       } else if (e.k === 'atShop') {
-        shopPanel.open(e.shop);
+        if (e.shop === NEIGHBOURHOOD.board.id) boardPanel.open();
+        else shopPanel.open(e.shop);
         // The panel sits on the left: keep the player in view on the right (inside the follow dead zone).
         const body = npcs.bodyOf(WORKER_SLOT0);
         if (body) camera.centreOn(body.x - stage.size.w * 0.18, body.y - 12);
       }
       else if (e.k === 'putAway') queueUi.toast('market.putAway');
+      else if (e.k === 'propertyTaken') queueUi.toast(e.returned > 0 ? 'board.takenReturned' : 'board.taken');
+      else if (e.k === 'leaseEnded') queueUi.toast(e.unpaid ? 'board.leaseEnded' : 'board.leaseGivenUp');
       else if (e.k === 'delivered') queueUi.toast('market.delivered');
       else if (e.k === 'text') queueUi.toast(e.key);
       else if (e.k === 'money') tin.paid(e.delta, e.total);
@@ -346,6 +351,17 @@ const shopPanel = new ShopPanel(document.getElementById('ui')!, {
     const f = def && atlas.frames.get(spriteFrame(def, 0));
     return f ? { url: atlas.url, x: f[0], y: f[1], w: f[2], h: f[3] } : null;
   },
+});
+
+const boardPanel = new BoardPanel(document.getElementById('ui')!, {
+  player: () => bridge.player,
+  atBoard: () => {
+    const b = NEIGHBOURHOOD.board;
+    const p = playerTile();
+    return !!p && p[0] === b.visitX && p[1] === b.visitY;
+  },
+  act: (a) => bridge.act(a),
+  toast: (k) => queueUi.toast(k),
 });
 
 /** The player's tile from their sprite, or null. */
