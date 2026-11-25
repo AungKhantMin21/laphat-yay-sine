@@ -62,6 +62,8 @@ export type ToSim =
   | { t: 'jump'; minute: number }
   /** Debug (perf gate): `n` customers arrive at once. */
   | { t: 'crowd'; n: number }
+  /** Debug (M4): run `n` days of offline catch-up now, as if away that long. */
+  | { t: 'skipDays'; n: number }
   | { t: 'exportSave' }
   | { t: 'importSave'; code: string };
 

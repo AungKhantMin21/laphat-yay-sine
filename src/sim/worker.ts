@@ -249,6 +249,16 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
       dirtyAt ||= performance.now();
       postStateIfChanged();
       return;
+    case 'skipDays': {
+      if (!game || catching) return;
+      const n = Math.max(1, Math.min(7, Math.floor(msg.n)));
+      const was = running;
+      stop();
+      void catchUp(n, n * 86_400_000).then(() => {
+        if (was) start();
+      });
+      return;
+    }
     case 'jump':
       game?.sim.jumpTo(msg.minute);
       return;

@@ -91,6 +91,11 @@ export class SimBridge {
   }
 
   /** Debug: move the game clock forward to `minute`. */
+  /** Debug (M4): `n` days of offline catch-up, as if away (the away card follows). */
+  skipDays(n: number): void {
+    this.send({ t: 'skipDays', n });
+  }
+
   jump(minute: number): void {
     this.send({ t: 'jump', minute });
   }
