@@ -41,6 +41,24 @@ export class ShopDay {
     return { ok: true };
   }
 
+  /**
+   * Catch-up (M4): the day ends whatever its phase, with `stats`, exactly like sleep otherwise (the
+   * same two teaser draws, the clock to the next opening).
+   */
+  endAbstract(sim: Sim, stats: DayStats): { day: number; stats: DayStats } {
+    const ended = { day: sim.day, stats };
+    const e = sim.rng.events;
+    const u1 = e.next();
+    const u2 = e.next();
+    this.teaser = pickTeaser(stats, u1, u2);
+    this.today = emptyDayStats();
+    this.shuttersOpen = false;
+    sim.jumpTo(nextMorning(sim.gameMinute));
+    this.update(sim.gameMinute, 0);
+    this.changed = true;
+    return ended;
+  }
+
   /** Ends the day: returns its stats, picks tomorrow's teaser, resets the stats and moves the clock to the next opening time. */
   sleep(sim: Sim, customers: number): DayResult {
     if (this.update(sim.gameMinute, customers) !== PHASE.evening) return { ok: false, reason: 'day.err.notNow' };

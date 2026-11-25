@@ -25,6 +25,7 @@ import { HeatLayer } from './render/heat';
 import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys, installWalkKeys } from './input/keyboard';
+import { AwayCard } from './ui/hud/away';
 import { BoardPanel } from './ui/board/panel';
 import { GossipLine } from './ui/news/gossip';
 import { NeighbourhoodMap } from './ui/hud/map';
@@ -92,6 +93,7 @@ const pickMusic = (): void =>
 
 let booted = false;
 let freeTeaToastAt = -1e9;
+const away = new AwayCard(document.getElementById('ui')!);
 const bridge: SimBridge = new SimBridge(view, {
   onState: () => {
     buildUi.refresh();
@@ -104,6 +106,8 @@ const bridge: SimBridge = new SimBridge(view, {
     shopPanel.refresh();
     boardPanel.refresh();
   },
+  onCatchup: (done, total) => away.progress(done, total),
+  onAway: (summary) => away.show(summary),
   onEvents: (list) => {
     // M2.8 shows the evening summary and sleep screen; for now, log the day for debugging.
     for (const e of list) {

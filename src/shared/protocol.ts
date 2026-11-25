@@ -115,10 +115,19 @@ export function emptyDayStats(): DayStats {
   return { served: 0, poured: 0, earned: 0, tips: 0, best: 0 };
 }
 
+/** While you were away (M4 catch-up): what the caught-up days added up to. */
 export interface AwaySummary {
   realMs: number;
   days: number;
-  events: SimEvent[];
+  /** Cups staff sold, and what they earned (staff-served rate, no tips). */
+  cups: number;
+  earned: number;
+  wages: number;
+  rent: number;
+  /** Rented spaces given back because the tin was short. */
+  leases: number;
+  /** Street news from those days (oldest first; sim/world NEWS kinds). */
+  news: { kind: number; prop: string; a: string; b: string }[];
 }
 
 /** Player economy and build history, sent whenever it changes. */

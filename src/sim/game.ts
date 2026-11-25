@@ -8,6 +8,8 @@ import { INGREDIENTS } from '../shared/ingredients';
 import { createArea, ENTRIES, SEATING } from './area';
 import { ACCESS } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
+import { pickOrder } from '../shared/customers';
+import catchupData from '../data/catchup.json';
 import { Service } from './service/service';
 import { TASK } from './service/task-board';
 import { Market, type Goods } from './market/market';
@@ -21,7 +23,7 @@ import { STAFF, hireBlock } from '../shared/staff';
 import { FLOOR, MAX_WORKERS, WALL_COLOURS, ZONE } from '../shared/layout';
 import { PHASE, minuteOfDay } from '../shared/day';
 import { teaserAppeal, teaserGuest, teaserRate } from '../shared/teasers';
-import { SHOP } from '../shared/shop';
+import { SHOP, arrivalRate } from '../shared/shop';
 import { Customers } from './npc/customers';
 import { Residents } from './npc/residents';
 import { PropertyMarket, type NewsItem } from './world/property-market';
@@ -35,6 +37,21 @@ import { WalkGrid } from './path/walk-grid';
 import { PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
 import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type SavedPaint, type SaveWorld, type StaffMember } from './save/format';
+
+/** Catch-up rules (src/data/catchup.json): staff share of a usual day's customers, and the rate they're paid at. */
+const CATCHUP: { perStaff: number; maxShare: number; pay: number } = catchupData;
+
+/** One caught-up day (Game.abstractDay). */
+export interface AwayDay {
+  cups: number;
+  earned: number;
+  wages: number;
+  rent: number;
+  /** Leases that ended (the tin was short). */
+  leases: number;
+  /** First news id posted that night. */
+  newsFrom: number;
+}
 
 const res = (err: string): Result => (err ? { ok: false, reason: err } : { ok: true });
 
@@ -249,6 +266,85 @@ export class Game {
         this.events.push({ k: 'money', delta: -def.rent, total: b.money });
       } else this.endLease(def, true);
     });
+  }
+
+  /** After a day ends (Sleep, or a caught-up day): the night, and everyone where tomorrow begins. */
+  private overnight(): void {
+    this.npcs.clear(); // the last passers-by go home too
+    this.worldDay(this.sim.day); // the street moves on overnight
+    this.residents.settle(this.sim.day, this.sim.gameMinute); // tomorrow: everyone where the plan has them
+    this.service.endOfDay(); // cups washed overnight, no jobs left
+    this.payWages();
+    this.payRent();
+    this.workers.reset(); // everyone back beside the counter
+    this.spawnStaff(true); // staff walk in from home
+    // Overnight: goods in hand are put away and every delivery arrives.
+    const carried = this.market.putAway(this);
+    if (carried) this.events.push({ k: 'putAway', goods: carried });
+    const arrived = this.market.deliverAll(this);
+    if (arrived) this.events.push({ k: 'delivered', goods: arrived });
+    this.market.refresh(this.sim.day);
+  }
+
+  /**
+   * One day while you were away (M4, abstract LOD): the day you left ends; if staff were working, the
+   * shop sold cups — a usual day's arrivals × appeal × a staff share (catchup.json), as far as the
+   * shelf allowed, each at the staff-served rate with no tip; then the night as after Sleep (the
+   * street moves on, wages and rent, deliveries). Nothing goes below zero. Events are folded into the
+   * returned summary instead of being sent.
+   */
+  abstractDay(): AwayDay {
+    const before = this.events.length;
+    const w = this.workers;
+    // Whatever was going on stops: everyone home, nothing half-done.
+    this.npcs.clear();
+    this.service.endOfDay();
+    const carried = this.market.putAway(this);
+    if (carried) this.events.push({ k: 'putAway', goods: carried });
+    const working = this.staff.filter((m) => !m.dayOff).length;
+    let cups = 0;
+    let earned = 0;
+    if (working > 0 && this.service.hasFixture(SERVICE.counter)) {
+      const share = Math.min(CATCHUP.maxShare, CATCHUP.perStaff * working);
+      const appeal = this.npcs.appeal();
+      let expect = 0;
+      for (let m = SHOP.open; m < SHOP.close; m++) expect += (arrivalRate(m) * appeal) / 60;
+      const want = Math.floor(expect * share);
+      const st = this.service.stock;
+      for (let k = 0; k < want; k++) {
+        let d = DRINKS.defs[pickOrder((k + 0.5) / want)]!;
+        if (!st.canMake(d)) {
+          const alt = st.firstMakeable();
+          if (alt < 0) break; // the shelf is empty: the rest of the day is plain tea, free
+          d = DRINKS.defs[alt]!;
+        }
+        st.reserve(d);
+        st.consume(d);
+        cups++;
+        earned += Math.round((pouredPrice(d) * CATCHUP.pay) / 50) * 50;
+      }
+    }
+    const b = this.builder;
+    b.money += earned;
+    b.changed = true;
+    const stats = { ...this.day.today };
+    stats.served += cups;
+    stats.earned += earned;
+    this.day.endAbstract(this.sim, stats);
+    const money0 = b.money;
+    const newsFrom = this.properties.nextNews;
+    this.overnight();
+    w.changed = true;
+    // Fold the night's events into the summary.
+    const night = this.events.splice(before);
+    let wages = 0;
+    let leases = 0;
+    for (const e of night) {
+      if (e.k === 'wages') wages += e.paid;
+      if (e.k === 'leaseEnded') leases++;
+    }
+    const rent = money0 - b.money - wages;
+    return { cups, earned, wages, rent: Math.max(0, rent), leases, newsFrom };
   }
 
   /** The once-a-day world step (M4): the property market rolls for `day`. Sleep and catch-up both use it. */
@@ -746,20 +842,7 @@ export class Game {
           const t = this.day.teaser;
           if (t.key) this.events.push({ k: 'teaser', key: t.key, drink: DRINKS.byKey.get(t.arg)?.id ?? -1 });
         }
-        this.npcs.clear(); // the last passers-by go home too
-        this.worldDay(this.sim.day); // the street moves on overnight
-        this.residents.settle(this.sim.day, this.sim.gameMinute); // tomorrow: everyone where the plan has them
-        this.service.endOfDay(); // cups washed overnight, no jobs left
-        this.payWages();
-        this.payRent();
-        this.workers.reset(); // everyone back beside the counter
-        this.spawnStaff(true); // staff walk in from home
-        // Overnight: goods in hand are put away and every delivery arrives.
-        const carried = this.market.putAway(this);
-        if (carried) this.events.push({ k: 'putAway', goods: carried });
-        const arrived = this.market.deliverAll(this);
-        if (arrived) this.events.push({ k: 'delivered', goods: arrived });
-        this.market.refresh(this.sim.day);
+        this.overnight();
         return { ok: true };
       }
       case 'hire':

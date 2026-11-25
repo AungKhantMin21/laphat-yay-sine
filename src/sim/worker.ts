@@ -1,6 +1,6 @@
 // Worker entry: messaging, timing and saving. The game itself lives in game.ts.
 import { FrameWriter } from '../shared/diff';
-import { PROTOCOL_VERSION, TICK_MS, type FromSim, type ToSim } from '../shared/protocol';
+import { PROTOCOL_VERSION, TICK_MS, type AwaySummary, type FromSim, type ToSim } from '../shared/protocol';
 import { Game } from './game';
 import { catchupDays } from './catchup';
 import { fromCode, loadSlot, saveSlot, toCode } from './save/store';
@@ -133,10 +133,42 @@ function newSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0]!;
 }
 
+/**
+ * Offline catch-up (M4): `days` missed days at abstract LOD, one per slice (progress posted after each),
+ * then the summary, a fresh mirror (the shop may have changed) and a save.
+ */
+let catching = false;
+async function catchUp(days: number, realMs: number): Promise<void> {
+  const g = game;
+  if (!g) return;
+  catching = true;
+  const sum: AwaySummary = { realMs, days, cups: 0, earned: 0, wages: 0, rent: 0, leases: 0, news: [] };
+  let newsFrom = Infinity;
+  for (let d = 1; d <= days; d++) {
+    const r = g.abstractDay();
+    sum.cups += r.cups;
+    sum.earned += r.earned;
+    sum.wages += r.wages;
+    sum.rent += r.rent;
+    sum.leases += r.leases;
+    newsFrom = Math.min(newsFrom, r.newsFrom);
+    post({ t: 'catchup', done: d, total: days });
+    await new Promise((res) => setTimeout(res, 0));
+  }
+  sum.news = g.properties.news.filter((n) => n.id >= newsFrom).map((n) => ({ kind: n.kind, prop: n.prop, a: n.a, b: n.b }));
+  g.events.length = 0;
+  sendSnapshot();
+  post({ t: 'away', summary: sum });
+  postStateIfChanged();
+  save('catchup');
+  catching = false;
+}
+
 async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
   slot = msg.saveSlot;
   let fresh = true;
   let awayDays = 0;
+  let loadedAt: number | undefined;
   let skipped = 0;
   let returned = 0;
   if (msg.seed === undefined) {
@@ -149,6 +181,7 @@ async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
         returned = loaded.returned;
         fresh = false;
         awayDays = catchupDays(msg.nowMs - r.data.savedAt);
+        loadedAt = r.data.savedAt;
       } else if (r.kind === 'broken') {
         post({ t: 'error', msg: `save could not be read (kept aside): ${r.error}` });
       }
@@ -161,11 +194,7 @@ async function boot(msg: Extract<ToSim, { t: 'init' }>): Promise<void> {
   for (let i = pool.length; i < 4; i++) pool.push(new ArrayBuffer(FRAME_BYTES));
   sendSnapshot();
   post({ t: 'loaded', fresh, awayDays, skipped, returned });
-  if (awayDays > 0) {
-    // M4 runs the abstract simulation here, one game day per slice.
-    for (let d = 1; d <= awayDays; d++) post({ t: 'catchup', done: d, total: awayDays });
-    post({ t: 'away', summary: { realMs: 0, days: awayDays, events: [] } });
-  }
+  if (awayDays > 0) await catchUp(awayDays, msg.nowMs - (loadedAt ?? msg.nowMs));
   if (fresh) save('new');
   lastHour = Math.floor(game.sim.gameMinute / 60);
   start();
@@ -187,14 +216,13 @@ ctx.onmessage = (e: MessageEvent<ToSim>): void => {
         stop();
         return;
       }
-      if (running || !game) return;
+      if (running || !game || catching) return;
       const away = pausedAtMs ? msg.nowMs - pausedAtMs : 0;
       pausedAtMs = 0;
       const days = catchupDays(away);
       if (days > 0) {
-        // M4 runs the abstract simulation here, one game day per slice.
-        for (let d = 1; d <= days; d++) post({ t: 'catchup', done: d, total: days });
-        post({ t: 'away', summary: { realMs: away, days, events: [] } });
+        void catchUp(days, away).then(start);
+        return;
       }
       start();
       return;
