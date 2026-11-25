@@ -2,7 +2,8 @@
 // Use with tools/dev/probe.mjs on the dev server; import the code in a production build for perf gates.
 (async () => {
   const g = __game;
-  const K = ['stool', 'chair', 'bench', 'table', 'table_long', 'counter', 'shelf', 'rug', 'radio', 'pot_plant', 'teapot', 'wall_clock', 'poster', 'ceiling_fan', 'hanging_lamp'];
+  // Catalog order (objects.json): ids are indexes.
+  const K = ['stool', 'chair', 'bench', 'table', 'table_long', 'counter', 'shelf', 'rug', 'radio', 'pot_plant', 'book_stack', 'news_rack', 'teapot', 'wall_clock', 'poster', 'ceiling_fan', 'hanging_lamp'];
   const T = Object.fromEntries(K.map((k, i) => [k, i]));
   for (const k of K) g.bridge.give(T[k], 200);
   let ok = 0;

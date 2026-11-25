@@ -1,6 +1,6 @@
 # Status — start here
 
-Last updated 24 Nov 2026. Read this first in a new session, then CLAUDE.md, then DESIGN.md and docs/ARCHITECTURE.md as needed.
+Last updated 25 Nov 2026. Read this first in a new session, then CLAUDE.md, then DESIGN.md and docs/ARCHITECTURE.md as needed.
 
 ## Where we are
 
@@ -10,8 +10,9 @@ Last updated 24 Nov 2026. Read this first in a new session, then CLAUDE.md, then
 | M1 Build mode | ✅ done, deployed | docs/M1.md |
 | M2 Shop day | ✅ done, deployed | docs/M2.md (steps, progress, gate table) |
 | M2.5 Shop, service and street | ✅ done, deployed | docs/M2_5.md (steps, progress, gate table) |
-| **M3 Neighbourhood** | **in progress — plan approved 24 Nov 2026** | docs/M3.md (decisions 1–10, steps S1–S9, progress) |
-| M4–M6 | not started | DESIGN.md §11 |
+| M3 Neighbourhood | ✅ done, deployed | docs/M3.md (decisions, steps, changes found, gate table) |
+| **M4 Living world** | **next — plan mode first** | DESIGN.md §11 |
+| M5–M6 | not started | DESIGN.md §11 |
 
 Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` for the perf overlay, music switcher and font sample; it also exposes `window.__debug.bridge` for the perf gate).
 
@@ -47,8 +48,9 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 
 ## Code map (what exists now)
 
-- `src/shared/` — protocol (v8), customers (`customers.ts`, `npc.ts`), shop day (`day.ts`, `shop.ts`, `drinks.ts`, `teasers.ts`), binary frame codec (`diff.ts`), catalog (`objects.json` → defs), world state (area grids, object store with slots/generations/uids, occupancy), placement rules, RNG streams, IndexedDB helper, base64url, iso math.
-- `src/sim/` (worker) — `worker.ts` (timing, saving, messages), `game.ts` (Sim + world + builder, toSave/fromSave), `world.ts` (change tracking, grid streaming), `build/builder.ts` (commands + undo), `day/shop-day.ts`, `path/` (walk grid + A*), `npc/customers.ts` (arrivals, seat utility, serve/pay), `grids/property-grids.ts`, `save/` (format v1 + migrations, IDB store, save codes), `area.ts` (M1 street + shop), `catchup.ts`.
+- M3 added: `shared/neighbourhood.ts` (map data), `shared/market.ts`, `shared/ingredients.ts`, `shared/materials.ts`, `sim/market/market.ts`, `sim/service/stock.ts`, `render/street-shops.ts`, `ui/hud/{nav,map,stock}.ts`, `ui/shop/panel.ts`; paint in `rules/placement.ts` + `build/builder.ts`; save v4. See ARCHITECTURE "Neighbourhood and errands".
+- `src/shared/` — protocol (v10), customers (`customers.ts`, `npc.ts`), shop day (`day.ts`, `shop.ts`, `drinks.ts`, `teasers.ts`), binary frame codec (`diff.ts`), catalog (`objects.json` → defs), world state (area grids, object store with slots/generations/uids, occupancy), placement rules, RNG streams, IndexedDB helper, base64url, iso math.
+- `src/sim/` (worker) — `worker.ts` (timing, saving, messages), `game.ts` (Sim + world + builder, toSave/fromSave), `world.ts` (change tracking, grid streaming), `build/builder.ts` (commands + undo), `day/shop-day.ts`, `path/` (walk grid + A*), `npc/customers.ts` (arrivals, seat utility, serve/pay), `grids/property-grids.ts`, `save/` (format v1 + migrations, IDB store, save codes), `area.ts` (the neighbourhood from data), `catchup.ts`.
 - `src/game/` — `bridge.ts` (only Worker contact; promise acks), `view.ts` (mirror), `loop.ts`, `build-mode.ts` (build state machine + ghost logic).
 - `src/render/` — pixel stage, chunks (floors + back walls), objects (depth, picking), npcs (customers, order bubbles, `pickOrder`), recolour atlas, ghost, heat overlay, camera, atlas loader, gl-stats.
 - `src/ui/` — i18n (Myanmar digits, `{args}`), build HUD, savings tin (`ui/hud/tin.ts`), evening panel + sleep screen (`ui/hud/day-end.ts`), pour minigame + reaction bubbles (`ui/pour/`), settings (save code), perf overlay, title card, music debug.
@@ -68,21 +70,24 @@ Live: https://aungkhantmin21.github.io/games/laphat-yay-sine/ (add `?debug=1` fo
 - Customers are not saved: a mid-day reload reopens the shop empty (money, phase and stats are kept). Fine for M2; revisit when named regulars arrive (M5).
 - **Burmese strings to review** (all of `src/ui/i18n/my.json` at the end; the ones added in M2): drink and reaction names (M2.1), `day.*` (M2.2), `pour.holdTea`, `pour.holdMilk`, `pour.tea`, `pour.milk`, `pour.cancel`, `pour.paid`, `tin.label`, `teaser.friends|praise|asked|early`, `evening.title|served|poured|earned|tips|best`, `sleep.title`, `sleep.wake`.
 
-## Next step: M3 Neighbourhood — S2 (neighbourhood map)
+## Next step: M4 Living world — plan mode first
 
-The plan is approved; read docs/M3.md (decisions at the top, progress table at the end). S1 (docs) is done: DESIGN.md and ARCHITECTURE.md describe the M3 target (protocol v10 and save v4 are marked planned).
+DESIGN.md §11 M4: sim worker schedules (incl. staff), LOD, property market, gossip, offline catch-up (incl. staff and wages), vehicles on the road, helper role. Hooks M3 left for it:
+- The road is `WZ.road` (people never step on it): vehicles can own it. Building fronts with `entry: true` are where residents could live; the residential lane / property listings have no data yet.
+- Shop keepers are static sprites (`render/street-shops.ts`); NPC shoppers at the stalls are BACKLOG/M4.
+- Offline catch-up doesn't know about deliveries or stock: `catchup.ts` days should consume ingredients and deliver everything (calm: never run the shelf below zero).
+- Workers aren't saved (the player wakes beside the counter after a reload; carried goods are put away).
 
-Older pre-plan notes:
-
-DESIGN.md §11: 3 streets (reuse the M2.5 walk zones, access classes and `shared/street.ts` pattern; real areas from `src/data`), walking the neighbourhood (the player worker already walks with A*), 4 shops with daily stock (`rng.market` is unused so far), carrying and delivery (the tray/cup carrying in `sim/npc/workers.ts` is a model). Neighbouring building fronts are decor (`BUILDINGS`); M3 turns some into real shops.
-
-M2.5 open items:
-- **Re-run the perf gate fps columns on an idle machine** (23 Nov the machine was busy: Spotlight at 100 % CPU; an A/B with the M2 build dropped the same way). Frame time, draws, texture and heap all passed with wide margins.
-- New Burmese strings from M2.5 for the end review: `build.err.walkway|seatOutside|blocksWay|fixed|kitchenOnly`, `obj.kettle|sink|stove`, `serve.err.*` (8), `queue.cancel`, `staff.*` (17), changed `evening.poured`; `react.auto` removed.
-- Hiring is in the evening panel; only the waiter in M2.5 (helper M4, tea sayar and cook M5).
-- The autoplayer's pours score "ok" (Space timing); fine for checks, not a balance signal.
+M3 open items:
+- **Re-run the perf-gate fps columns on an idle machine** (both M2.5 and M3 runs were on a memory-starved machine; frame time, draws, texture and heap pass with wide margins). `tools/dev/gate.mjs` now has `GATE_WALK=1`.
+- New Burmese strings from M3 for the end review: `nav.*`, `map.*`, `shop.*` (4), `walk.err.cantGo`, `ingredient.*` (3), `stock.*`, `teaser.lowStock`, `obj.book_stack|news_rack`, `material.*` (8), `market.*` (16), `build.tiles|paintHint|done`, `build.err.paintOutside|noWall|samePaint|noMaterial`.
+- Balancing to look at when playing: pack sizes/prices (`ingredients.json`, `market.json`), delivery fee, carry 4, shop hours.
 
 (Older notes below.)
+
+### M3 how-to
+
+- Browser checks: `tools/dev/errand.js` (prefix `window.__quick=1;` to skip the 2-minute delivery wait), `tools/dev/paint.js`, `node tools/dev/errand-reload.mjs <dev-url>`; `furnish150.js` lists catalog keys in catalog order (ids are indexes — update it when objects.json changes).
 
 ### M2.5 — S2 notes
 

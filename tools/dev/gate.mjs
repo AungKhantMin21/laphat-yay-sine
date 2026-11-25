@@ -3,6 +3,8 @@
 // Usage: node tools/dev/gate.mjs http://localhost:4173/games/laphat-yay-sine/ code.txt [shotDir] [crowd]
 // `crowd` > 0 opens the shop and makes that many customers arrive at once (debug `crowd`), then waits
 // for them to walk in and sit before measuring.
+// GATE_WALK=1 (M3): instead of panning, the player walks to the farthest shop (the hardware stall)
+// while the camera follows, and the overlay is read during the walk.
 import { readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright-core';
 
@@ -50,14 +52,22 @@ async function run(label, ctxOpts, cpu, q, buildMode) {
     await p.selectOption('.heat select', '1');
   }
   await p.waitForTimeout(1500);
-  const vw = ctxOpts.viewport?.width ?? 900;
-  await p.mouse.move(vw / 2, 250);
-  await p.mouse.down();
-  for (let i = 0; i < 70; i++) {
-    await p.mouse.move(vw / 2 - (i % 35) * 6, 250 - (i % 35) * 3);
-    await p.waitForTimeout(45);
+  if (process.env.GATE_WALK && !buildMode) {
+    await p.evaluate(() => {
+      window.__autoplay?.stop?.();
+      void window.__debug.bridge.act({ k: 'visit', shop: 3 });
+    });
+    await p.waitForTimeout(12000); // mid-walk: new chunks stream in as the camera follows
+  } else {
+    const vw = ctxOpts.viewport?.width ?? 900;
+    await p.mouse.move(vw / 2, 250);
+    await p.mouse.down();
+    for (let i = 0; i < 70; i++) {
+      await p.mouse.move(vw / 2 - (i % 35) * 6, 250 - (i % 35) * 3);
+      await p.waitForTimeout(45);
+    }
+    await p.mouse.up();
   }
-  await p.mouse.up();
   const txt = await p.evaluate(() => document.getElementById('perf')?.textContent ?? 'no overlay');
   console.log(`--- ${label} (cpu ${cpu}x)${buildMode ? ' [build + overlay]' : ''}\n${txt}${errs.length ? '\nERRORS: ' + errs.join('; ') : ''}`);
   if (shotDir && shotDir !== '-') await p.screenshot({ path: `${shotDir}/gate-${label.replace(/\W+/g, '_')}${buildMode ? '_build' : ''}.png` });

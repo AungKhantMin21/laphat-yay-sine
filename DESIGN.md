@@ -110,7 +110,7 @@ The shop: an open front with roll-up shutters facing the pavement, a signboard w
 - The walk is part of the calm: street sounds, weather, light changing through the day.
 - Purchases are carried home, or delivered later the same day for a small fee.
 
-**The neighbourhood (M3)** is one 128×96 map: the tea shop street, a market street and a quiet lane, joined at a junction. The shop keeps its place and keeps running while you walk.
+**The neighbourhood (M3)** is one map (112×72 tiles): the tea shop street, a market street and a quiet lane, joined at a junction. The shop keeps its place and keeps running while you walk.
 
 | Shop | Street | Sells | Hours |
 | --- | --- | --- | --- |
@@ -122,6 +122,7 @@ The shop: an open front with roll-up shutters facing the pavement, a signboard w
 - Shops are fronts with a counter and a keeper. Tap the keeper (or a shop on the map) to walk there; the shop panel opens on arrival.
 - Daily stock: each morning every shop picks its items, quantities and a price factor (0.85–1.15) from the save's seed and the day, so it is the same after a reload. Sold-out items come back another day.
 - Carrying: up to 4 load (an ingredient pack is 1, furniture is its footprint). Goods are put away as soon as you step into your shop. Delivery costs 10 % (min 500 kyat) and arrives 2 game hours later, or at the next opening if bought in the evening.
+- At closing time, customers still on their way to a seat turn home (they haven't ordered); seated ones are served as usual.
 - Ingredients never stall service: they are reserved when an order is taken. If a customer's drink can't be made they pick one that can; if nothing can be made they get free ရေနွေးကြမ်း and leave content without paying.
 - A small map (button in the HUD) shows the streets, the shops and you; tap a shop to walk there.
 
@@ -217,7 +218,7 @@ All dialogue lives in JSON, written in Myanmar first (Unicode), English added la
 - **Drink model:** tea strength, condensed milk, evaporated milk, sugar, temperature, toppings. Each recipe maps to taste axes: sweet, strong, creamy.
 - **Taste matching:** each customer has a preferred point on those axes; satisfaction falls off with distance.
 - **Classic presets** (pon man, cho seint, kya seint) unlocked from the start.
-- **Ingredients (M3):** each preset uses tea leaves plus condensed and/or evaporated milk from the kitchen stock, bought at the wet market. A new game starts with about 2 days of stock; the HUD shelf shows how many cups are left.
+- **Ingredients (M3):** each preset uses tea leaves plus condensed and/or evaporated milk from the kitchen stock, bought at the wet market. A new game starts with about 2 days of stock; one morning trip (packs of 40–50 portions, a load of 4) covers a day. The HUD shelf shows how many cups are left.
 - **Snacks:** paratha, samosa, e kya kwe, mohinga (later), each with a simple prep minigame.
 - **Tea sayar** (M5): brews for you at a steady, better-than-average quality; the pour minigame stays for the player's own cups.
 - **Cook** (M5): needs the snack recipes; the stove in the back kitchen is placed from the start and waits for them.
@@ -366,7 +367,7 @@ Build in Claude Code, one milestone at a time: plan mode first, performance chec
 | M1 | Build mode | place, rotate, stack, recolour, undo/redo, property grids, IndexedDB save/load | 2 weeks |
 | M2 | Shop day | customers arrive, choose seats by utility, pour minigame, savings tin, day end and teaser | 2 weeks |
 | M2.5 | Shop, service and street | walkable zones and a walled shop with front, counter and back kitchen; player character with tap-to-queue service (order → brew → tray → serve → clear → wash); task board; the waiter; starting layout, readable sprites with shadows, default zoom; building fronts; debug UI only with `?debug=1` | 2 weeks |
-| M3 | Neighbourhood | 3 streets on one 128×96 map (reusing M2.5 zones), walking the neighbourhood with a map, 4 shops with daily stock, real ingredients, carrying and delivery, floor and wall painting | 2 weeks |
+| M3 | Neighbourhood | 3 streets on one map (reusing M2.5 zones), walking the neighbourhood with a map, 4 shops with daily stock, real ingredients, carrying and delivery, floor and wall painting | 2 weeks |
 | M4 | Living world | sim worker, schedules (incl. staff), LOD, property market, gossip, offline catch-up (incl. staff and wages), vehicles on the road, helper role | 3 weeks |
 | M5 | Story and kitchen | 3 regulars with full arcs, story-driven needs, seasons, drink mixing, tea sayar and cook roles, snacks | 2 weeks |
 | M6 | Ship v0.1 | generated ambience, PWA install, share codes, device-matrix pass, published | 2 weeks |
