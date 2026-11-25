@@ -20,7 +20,7 @@ p.on('console', (m) => {
   if (m.type() === 'error' && !/404/.test(m.text())) errs.push(m.text());
 });
 await p.goto(url);
-await p.waitForFunction(() => window.__game?.bridge?.player, null, { timeout: 20000 });
+await p.waitForFunction(() => (window.__game ?? window.__debug)?.bridge?.player, null, { timeout: 30000 });
 await p.waitForTimeout(800);
 if (expr) console.log(await p.evaluate(expr));
 if (shot) await p.screenshot({ path: shot });
