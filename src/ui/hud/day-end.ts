@@ -1,6 +1,7 @@
 // Evening panel and sleep screen (M2.8). Once the last customer leaves, a small panel shows the
 // day (served, cups the player poured, earnings, tips, the best reaction) with a Sleep button. Sleeping
 // saves (worker) and shows the sleep screen with one teaser line; "morning" closes it.
+import { newsText, newsWorthTelling } from '../news/news';
 import './day-end.css';
 import { DRINKS, REACTION_NAMES, reactionFor } from '../../shared/drinks';
 import { PHASE } from '../../shared/day';
@@ -64,7 +65,9 @@ export function installDayEnd(deps: DayEndDeps): DayEndUi {
     });
     return r;
   });
-  panel.append(title, lines, ...staffRows.map((r) => r.row), sleepBtn);
+  // Today's street news (M4): what happened overnight and during the day.
+  const news = div('evening-news');
+  panel.append(title, lines, news, ...staffRows.map((r) => r.row), sleepBtn);
 
   const screen = div('sleep-screen hidden');
   const moon = div('sleep-moon');
@@ -124,12 +127,22 @@ export function installDayEnd(deps: DayEndDeps): DayEndUi {
     }
   }
 
+  let newsShown = '';
+  function newsLines(p: PlayerState): void {
+    const today = p.news.filter((n) => n.day === p.day && newsWorthTelling(n)).slice(-4).map(newsText).filter(Boolean);
+    const key = today.join('|');
+    if (key === newsShown) return;
+    newsShown = key;
+    news.replaceChildren(...(today.length ? [div('evening-news-title', t('evening.news')), ...today.map((l) => div('evening-line', l))] : []));
+  }
+
   function refresh(): void {
     const p = deps.player();
     const evening = !!p && p.phase === PHASE.evening && !sleeping;
     panel.classList.toggle('hidden', !evening);
     if (evening) {
       statLines(p);
+      newsLines(p);
       staffLine(p);
     }
   }

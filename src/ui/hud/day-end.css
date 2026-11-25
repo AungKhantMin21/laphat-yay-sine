@@ -94,3 +94,13 @@ body.building .evening {
 .evening-staff-btn.hidden {
   display: none;
 }
+
+/* Today's street news (M4). */
+.evening-news:empty {
+  display: none;
+}
+.evening-news-title {
+  font-size: 12px;
+  color: #f2c879;
+  margin-top: 4px;
+}

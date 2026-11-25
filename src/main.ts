@@ -26,6 +26,7 @@ import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys, installWalkKeys } from './input/keyboard';
 import { BoardPanel } from './ui/board/panel';
+import { GossipLine } from './ui/news/gossip';
 import { NeighbourhoodMap } from './ui/hud/map';
 import { NEIGHBOURHOOD } from './shared/neighbourhood';
 import { ShopPanel } from './ui/shop/panel';
@@ -122,6 +123,7 @@ const bridge: SimBridge = new SimBridge(view, {
         if (body) camera.centreOn(body.x - stage.size.w * 0.18, body.y - 12);
       }
       else if (e.k === 'putAway') queueUi.toast('market.putAway');
+      else if (e.k === 'gossip') gossip.tell(e.who, e.news);
       else if (e.k === 'propertyTaken') queueUi.toast(e.returned > 0 ? 'board.takenReturned' : 'board.taken');
       else if (e.k === 'leaseEnded') queueUi.toast(e.unpaid ? 'board.leaseEnded' : 'board.leaseGivenUp');
       else if (e.k === 'delivered') queueUi.toast('market.delivered');
@@ -353,6 +355,7 @@ const shopPanel = new ShopPanel(document.getElementById('ui')!, {
   },
 });
 
+const gossip = new GossipLine(document.getElementById('ui')!, () => pour.isOpen);
 const boardPanel = new BoardPanel(document.getElementById('ui')!, {
   player: () => bridge.player,
   atBoard: () => {

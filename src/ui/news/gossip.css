@@ -1,0 +1,27 @@
+/* The gossip line (M4): top centre, inside the safe area, under the HUD row; never takes taps. */
+.gossip {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--safe-t) + 10px);
+  transform: translateX(-50%);
+  max-width: min(560px, 60vw);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  background: #2a1d18e6;
+  border: 2px solid #c8a46e;
+  border-radius: 10px;
+  color: #fff8ea;
+  font-size: 15px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 7;
+}
+.gossip.hidden {
+  display: none;
+}
+.gossip-name {
+  font-size: 12px;
+  color: #f2c879;
+}

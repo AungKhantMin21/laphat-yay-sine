@@ -172,3 +172,21 @@ export const PROPERTIES: Properties = buildProperties(raw as unknown as RawPrope
 
 /** Building flags in PlayerState.buildings (M4): what its front shows. */
 export const BUILDING_FLAG = { forSale: 1, forRent: 2, shut: 4, yours: 8 } as const;
+
+/** News kinds (gossip, the notice board, the away summary). */
+export const NEWS = {
+  /** a = listing kind (sale/rent/both), b = 'urgent' or ''. */
+  listed: 1,
+  /** Sold to a neighbour; a = the old owner, b = the new one ('' = an outsider). */
+  sold: 2,
+  /** A business shut its doors (it will be listed for rent). */
+  closed: 3,
+  /** A closed business was taken by a new tenant and opened again. */
+  reopened: 4,
+  /** a = who moved away, b = who moved in. */
+  moved: 5,
+  /** A listing came off the board unsold. */
+  withdrawn: 6,
+  /** You bought / rented a space (a = 'buy' | 'rent'), or a lease ended (a = 'ended'). */
+  yours: 7,
+} as const;

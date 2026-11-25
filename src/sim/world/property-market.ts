@@ -3,26 +3,10 @@
 // urgent sales. The roll for day d uses its own stream seeded from (save seed, d), so it is the same
 // whether the day was played or caught up, and nothing else the sim draws can shift it.
 // Small plain tables (< 64 rows): runs once a day, never per tick.
-import { LISTING, PROPERTIES, PROPERTY_KIND, PS, BUILDING_FLAG, type Properties, type PropertyDef } from '../../shared/properties';
+import { LISTING, NEWS, PROPERTIES, PROPERTY_KIND, PS, BUILDING_FLAG, type Properties, type PropertyDef } from '../../shared/properties';
 import { Rng, STREAM, mixSeed } from '../../shared/rng';
 
-/** News kinds (gossip, the notice board, the away summary). */
-export const NEWS = {
-  /** a = listing kind (sale/rent/both), b = 'urgent' or ''. */
-  listed: 1,
-  /** Sold to a neighbour; a = the old owner, b = the new one ('' = an outsider). */
-  sold: 2,
-  /** A business shut its doors (it will be listed for rent). */
-  closed: 3,
-  /** A closed business was taken by a new tenant and opened again. */
-  reopened: 4,
-  /** a = who moved away, b = who moved in. */
-  moved: 5,
-  /** A listing came off the board unsold. */
-  withdrawn: 6,
-  /** You bought / rented a space (a = 'buy' | 'rent'), or a lease ended (a = 'ended'). */
-  yours: 7,
-} as const;
+export { NEWS } from '../../shared/properties';
 
 export interface NewsItem {
   id: number;
@@ -217,6 +201,22 @@ export class PropertyMarket {
     this.changed = true;
   }
 
+  /**
+   * The newest piece of news the player hasn't heard, marked heard (gossip). News about your own
+   * doings and withdrawn listings aren't worth telling: they're simply marked heard.
+   */
+  tell(): NewsItem | null {
+    for (let k = this.news.length - 1; k >= 0; k--) {
+      const n = this.news[k]!;
+      if (n.heard) continue;
+      n.heard = true;
+      this.changed = true;
+      if (n.kind === NEWS.yours || n.kind === NEWS.withdrawn) continue;
+      return n;
+    }
+    return null;
+  }
+
   /** Property `key` became yours (bought or rented). */
   take(def: PropertyDef, rented: boolean, day: number): void {
     const p = this.props[def.id]!;
@@ -224,6 +224,7 @@ export class PropertyMarket {
     p.state = rented ? PS.rented : PS.owned;
     p.owner = '';
     this.post(day, NEWS.yours, def.key, rented ? 'rent' : 'buy', '');
+    this.news[this.news.length - 1]!.heard = true; // you were there
   }
 
   /** A lease you couldn't pay ended: the space goes back to its landlord and comes up again later. */

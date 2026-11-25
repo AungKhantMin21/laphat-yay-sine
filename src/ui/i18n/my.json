@@ -249,5 +249,20 @@
   "property.barber": "ဆံပင်ညှပ်ဆိုင်",
   "property.house_e": "လမ်းကြား အိမ်",
   "property.photo_studio": "ဓာတ်ပုံ စတူဒီယို",
-  "property.printer": "ပုံနှိပ်တိုက်"
+  "property.printer": "ပုံနှိပ်တိုက်",
+  "gossip.says": "{name} ပြောတာ",
+  "news.someone": "တစ်ယောက်",
+  "news.listedSale": "{place} ကို ရောင်းမယ်တဲ့",
+  "news.listedRent": "{place} ကို ငှားမယ်တဲ့",
+  "news.listedBoth": "{place} ကို ရောင်းလည်း ရောင်းမယ်၊ ငှားလည်း ငှားမယ်တဲ့",
+  "news.urgent": "{place} ကို အမြန် ရောင်းချင်လို့ ဈေးချိုတယ်တဲ့",
+  "news.sold": "{place} ကို တစ်ယောက် ဝယ်သွားပြီတဲ့",
+  "news.closed": "{place} ပိတ်လိုက်ပြီတဲ့",
+  "news.reopened": "{place} ပြန်ဖွင့်ပြီတဲ့",
+  "news.moved": "{a} ပြောင်းသွားပြီ၊ {b} ပြောင်းလာတယ်တဲ့",
+  "news.withdrawn": "{place} ကြော်ငြာ ပြန်ဖြုတ်လိုက်ပြီ",
+  "news.youBought": "{place} ကို ဝယ်လိုက်တယ်",
+  "news.youRented": "{place} ကို ငှားလိုက်တယ်",
+  "news.youGaveUp": "{place} ကို ပြန်အပ်လိုက်တယ်",
+  "evening.news": "ဒီနေ့ လမ်းထဲက သတင်း"
 }

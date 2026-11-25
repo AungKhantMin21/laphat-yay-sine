@@ -330,7 +330,13 @@ export class Game {
     this.day.changed = true;
     const ci = this.npcs.indexOf(id);
     const res = ci ? this.npcs.resident[ci]! : -1;
-    if (res >= 0) this.residents.visits[res] = Math.min(0xffff, this.residents.visits[res]! + 1);
+    if (res >= 0) {
+      this.residents.visits[res] = Math.min(0xffff, this.residents.visits[res]! + 1);
+      // A neighbour passes on the street's news (M4): the newest thing you haven't heard.
+      const n = this.properties.tell();
+      const who = this.residents.who[res];
+      if (n && who) this.events.push({ k: 'gossip', id, who: who.key, news: { kind: n.kind, prop: n.prop, a: n.a, b: n.b } });
+    }
     const reaction = reactionFor(score);
     this.events.push({ k: 'served', id, drink: drinkId, poured, price, tip, reaction, wait: Math.round(wait) });
     this.events.push({ k: 'money', delta: price + tip, total: b.money });

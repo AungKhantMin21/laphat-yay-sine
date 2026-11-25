@@ -89,6 +89,8 @@ export type SimEvent =
   | { k: 'delivered'; goods: GoodsLine[] }
   /** The player reached shop `shop`'s counter (M3): open its panel. */
   | { k: 'atShop'; shop: number }
+  /** A resident you served passed on a piece of street news (M4); `who` = resident key, `id` = customer handle. */
+  | { k: 'gossip'; id: number; who: string; news: { kind: number; prop: string; a: string; b: string } }
   /** A space joined your shop (M4): bought, or rented (`rented`). */
   | { k: 'propertyTaken'; key: string; rented: boolean; returned: number }
   /** A rented space went back to its landlord (couldn't pay the rent, or you gave it up); `returned` objects went to the inventory. */
