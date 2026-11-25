@@ -423,3 +423,99 @@ export function drawStalls(): Array<[string, IsoImage]> {
   }
   return out;
 }
+
+/**
+ * The living street (M4): the notice board (`street/board`, standing on a tile, facing +v), a
+ * for-sale and a for-rent sign and roll-down shutters for building fronts (`street/sign_sale`,
+ * `street/sign_rent`, `street/shut_t`, `street/shut_l`: on the n wall plane of a pavement tile, like
+ * the facades; mirrored for −x fronts), and vehicles on the road (`vehicle/<kind>_<x|y>`: moving along
+ * x or along y; footprint 2×1 / 1×2 for cars, 1×1 for trishaws and bicycles).
+ */
+export function drawStreet(): Array<[string, IsoImage]> {
+  const out: Array<[string, IsoImage]> = [];
+  const WOOD: [string, string, string] = ['a98258', '8a6644', '6e4e36'];
+  // Notice board: two posts, a board with papers, a little roof.
+  const board = new IsoImage(1, 1, 40);
+  board.box(0.15, 0.45, 0.25, 0.55, 0, 30, WOOD);
+  board.box(0.75, 0.45, 0.85, 0.55, 0, 30, WOOD);
+  board.box(0.08, 0.48, 0.92, 0.56, 12, 32, ['8a6644', '523a2c', '6e4e36']);
+  const P = (u: number, v: number, z: number) => board.at(u, v, z);
+  board.poly([P(0.12, 0.57, 30), P(0.88, 0.57, 30), P(0.88, 0.57, 14), P(0.12, 0.57, 14)], '6e4e36');
+  for (const [u0, z0, hex] of [[0.16, 20, 'fff8ea'], [0.4, 22, 'f6ead0'], [0.62, 18, 'fff8ea'], [0.3, 15, 'ecd3a5']] as const) {
+    board.poly([P(u0, 0.58, z0 + 8), P(u0 + 0.2, 0.58, z0 + 8), P(u0 + 0.2, 0.58, z0), P(u0, 0.58, z0)], hex);
+  }
+  board.box(0.02, 0.4, 0.98, 0.62, 32, 34, ['c85a44', '9a3a30', '6a2a26']);
+  board.shadow(0.5, 0.55, 0.5, 0.2, '523a2c', true);
+  out.push(['street/board', board]);
+  // Signs hung on a front (n wall plane, near the ground floor's top).
+  for (const [key, hex] of [['sale', 'c85a44'], ['rent', '3c6e6a']] as const) {
+    const s = new IsoImage(1, 1, 30);
+    s.wallQuad('n', 0.15, 0.85, 14, 24, '2a1d18');
+    s.wallQuad('n', 0.2, 0.8, 15, 23, 'fff8ea');
+    s.wallQuad('n', 0.25, 0.75, 19, 21, hex);
+    s.wallQuad('n', 0.3, 0.6, 16, 17, hex);
+    out.push([`street/sign_${key}`, s]);
+  }
+  // Roll-down shutters over a closed front's ground floor (tall and low fronts).
+  for (const [key, h] of [['t', 22], ['l', 20]] as const) {
+    const s = new IsoImage(1, 1, h + 2);
+    s.wallQuad('n', 0, 1, 0, h, '6a7884');
+    for (let z = 2; z < h; z += 3) s.wallQuad('n', 0, 1, z, z + 1, '44505c');
+    s.wallQuad('n', 0, 1, h - 2, h, '44505c');
+    out.push([`street/shut_${key}`, s]);
+  }
+  // Vehicles. Along x the long side runs on u; along y, on v.
+  const CARS: Array<[string, [string, string, string]]> = [
+    ['car0', ['5e9a8e', '3c6e6a', '2c3440']],
+    ['car1', ['e98a5e', 'c85a44', '9a3a30']],
+    ['car2', ['f6ead0', 'ecd3a5', 'c8a46e']],
+  ];
+  const GLASS: [string, string, string] = ['9aa6ae', '6a7884', '44505c'];
+  const TYRE: [string, string, string] = ['3a3232', '2a1d18', '1b1411'];
+  for (const [name, paint] of CARS) {
+    for (const along of ['x', 'y'] as const) {
+      const fw = along === 'x' ? 2 : 1;
+      const fh = along === 'x' ? 1 : 2;
+      const img = new IsoImage(fw, fh, 18);
+      const B = (u0: number, v0: number, u1: number, v1: number, z0: number, z1: number, r: [string, string, string]) =>
+        along === 'x' ? img.box(u0, v0, u1, v1, z0, z1, r) : img.box(v0, u0, v1, u1, z0, z1, r);
+      for (const a of [0.35, 1.45]) {
+        B(a, 0.2, a + 0.25, 0.3, 0, 4, TYRE);
+        B(a, 0.7, a + 0.25, 0.8, 0, 4, TYRE);
+      }
+      B(0.1, 0.25, 1.9, 0.75, 3, 9, paint);
+      B(0.55, 0.3, 1.45, 0.7, 9, 15, GLASS);
+      B(0.6, 0.32, 1.4, 0.68, 15, 16, paint);
+      img.shadow(fw / 2, fh / 2, fw / 2 - 0.05, fh / 2 - 0.15, '3a3232', true);
+      out.push([`vehicle/${name}_${along}`, img]);
+    }
+  }
+  const RIDER_SHIRT: [string, string, string] = ['fff8ea', 'ecd3a5', 'c8a46e'];
+  const SKIN: [string, string, string] = ['d9a05b', 'a98258', '8a6644'];
+  for (const along of ['x', 'y'] as const) {
+    // Trishaw: a bicycle with a side car under a small hood.
+    const t = new IsoImage(1, 1, 28);
+    const T = (u0: number, v0: number, u1: number, v1: number, z0: number, z1: number, r: [string, string, string]) =>
+      along === 'x' ? t.box(u0, v0, u1, v1, z0, z1, r) : t.box(v0, u0, v1, u1, z0, z1, r);
+    T(0.15, 0.45, 0.25, 0.5, 0, 6, TYRE);
+    T(0.75, 0.45, 0.85, 0.5, 0, 6, TYRE);
+    T(0.3, 0.6, 0.7, 0.95, 2, 9, ['5e9a8e', '3c6e6a', '2c3440']); // side car
+    T(0.3, 0.6, 0.7, 0.95, 9, 16, ['f0c060', 'd9a05b', 'a98258']); // hood
+    T(0.4, 0.42, 0.6, 0.52, 6, 14, RIDER_SHIRT);
+    T(0.42, 0.44, 0.58, 0.5, 14, 18, SKIN);
+    t.shadow(0.5, 0.6, 0.45, 0.3, '3a3232', true);
+    out.push([`vehicle/trishaw_${along}`, t]);
+    // Bicycle with a rider.
+    const b = new IsoImage(1, 1, 26);
+    const Bb = (u0: number, v0: number, u1: number, v1: number, z0: number, z1: number, r: [string, string, string]) =>
+      along === 'x' ? b.box(u0, v0, u1, v1, z0, z1, r) : b.box(v0, u0, v1, u1, z0, z1, r);
+    Bb(0.12, 0.47, 0.22, 0.53, 0, 6, TYRE);
+    Bb(0.78, 0.47, 0.88, 0.53, 0, 6, TYRE);
+    Bb(0.2, 0.48, 0.8, 0.52, 5, 6, ['c85a44', '9a3a30', '6a2a26']);
+    Bb(0.4, 0.44, 0.6, 0.56, 6, 14, ['94b37a', '6b8f5a', '46573a']);
+    Bb(0.42, 0.46, 0.58, 0.54, 14, 18, SKIN);
+    b.shadow(0.5, 0.5, 0.45, 0.15, '3a3232', true);
+    out.push([`vehicle/bike_${along}`, b]);
+  }
+  return out;
+}

@@ -549,7 +549,7 @@ export class Customers {
 
   /** One tick of walking toward goal[i] (sim/npc/walker.ts). */
   private walkStep(i: number): number {
-    const r = walkStep(this, i, this.paths, this.walk.w, this.speed, this.t.stuck, ACCESS.people, false);
+    const r = walkStep(this, i, this.paths, this.walk.w, this.speed, this.t.stuck, ACCESS.people, false, i % 3);
     this.stateDirty.push(i);
     return r;
   }

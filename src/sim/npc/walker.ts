@@ -3,7 +3,7 @@
 // fields are passed in, so nothing is allocated per tick.
 import { NONE } from '../../shared/ids';
 import { DIR } from '../../shared/npc';
-import { PATH, type PathFinder } from '../path/pathfinder';
+import { NO_LANE, PATH, type PathFinder } from '../path/pathfinder';
 
 export const WALKING = 0;
 export const ARRIVED = 1;
@@ -28,13 +28,13 @@ export interface WalkerSoA {
  * ends on the tile beside the goal (goals are usually furniture: a seat, the counter, the sink).
  * Returns WALKING, ARRIVED or FAILED.
  */
-export function walkStep(s: WalkerSoA, i: number, paths: PathFinder, w: number, speed: number, stuck: number, cls: number, stopNextTo: boolean): number {
+export function walkStep(s: WalkerSoA, i: number, paths: PathFinder, w: number, speed: number, stuck: number, cls: number, stopNextTo: boolean, lane = NO_LANE): number {
   if (++s.walkT[i]! >= stuck) return FAILED;
   let h = s.path[i]!;
   const goal = s.goal[i]!;
   if (h === NONE) {
     if (s.tile[i] === goal) return ARRIVED;
-    h = paths.request(s.tile[i]!, goal, cls);
+    h = paths.request(s.tile[i]!, goal, cls, lane);
     if (h === NONE) return WALKING; // pool full: try again next tick
     s.path[i] = h;
     s.pathStep[i] = 0;

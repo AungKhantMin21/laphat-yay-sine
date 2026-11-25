@@ -228,7 +228,7 @@ export class Residents implements WalkerSoA {
       this.decide(r, d, md, teaOpen);
       const s = this.state[r];
       if (s === RS.walking) {
-        const res = walkStep(this, r, this.paths, this.W, this.speed, this.stuck, ACCESS.people, false);
+        const res = walkStep(this, r, this.paths, this.W, this.speed, this.stuck, ACCESS.people, false, r % 3);
         this.dirty[r] = 1;
         if (res === ARRIVED) this.arrive(r, d);
         else if (res === FAILED) {

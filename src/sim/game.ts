@@ -6,7 +6,7 @@ import type { Action, PlayerState, SimEvent } from '../shared/protocol';
 import start from '../data/start.json';
 import { INGREDIENTS } from '../shared/ingredients';
 import { createArea, ENTRIES, SEATING } from './area';
-import { ACCESS } from '../shared/rules/access';
+import { ACCESS, WZ } from '../shared/rules/access';
 import { DRINKS, pourScore, pouredPrice, reactionFor, tipFor } from '../shared/drinks';
 import { pickOrder } from '../shared/customers';
 import catchupData from '../data/catchup.json';
@@ -34,7 +34,7 @@ import { Sim } from './sim';
 import { SimWorld } from './world';
 import { ShopDay } from './day/shop-day';
 import { WalkGrid } from './path/walk-grid';
-import { PathFinder } from './path/pathfinder';
+import { NO_LANE, PathFinder } from './path/pathfinder';
 import { checkPlacement, newPlaceResult } from '../shared/rules/placement';
 import { SAVE_SCHEMA, type SaveData, type SavedObject, type SaveNeighbourhood, type SavedPaint, type SaveWorld, type StaffMember } from './save/format';
 
@@ -100,6 +100,7 @@ export class Game {
     this.walk = new WalkGrid(world.state.area, world.state.occ, ACCESS.people);
     this.walkStaff = new WalkGrid(world.state.area, world.state.occ, ACCESS.staff);
     this.paths = new PathFinder([this.walk, this.walkStaff]);
+    this.paths.setLanes(pavementRows(world.state.area.access, world.state.area.w));
     this.npcs = new Customers(world, this.walk, this.paths, sim.rng.npcDecide, sim.rng.cosmetic, { entries: ENTRIES });
     this.service = new Service(world, this.npcs, (h, drink, score, wait, poured) => this.pay(h, drink, score, wait, poured));
     this.service.onFreeTea = (h) => this.events.push({ k: 'freeTea', id: h });
@@ -1054,4 +1055,25 @@ function spacesOf(props: readonly { key: string; state: number }[]): Expansion[]
     if (def?.expand && (p.state === PS.owned || p.state === PS.rented)) out.push(def.expand);
   }
   return out;
+}
+
+/**
+ * The row (0–2) of every pavement tile across its pavement (M4): along the street for pavements
+ * that run along x, across the columns for those that run along y; NO_LANE elsewhere. Walkers prefer
+ * one row, so people heading the same way don't walk in single file.
+ */
+function pavementRows(access: Uint8Array, w: number): Uint8Array {
+  const rows = new Uint8Array(access.length).fill(NO_LANE);
+  for (const p of NEIGHBOURHOOD.paint) {
+    if (p.zone !== WZ.pavement) continue;
+    const r = p.rect;
+    const alongX = r.x1 - r.x0 >= r.y1 - r.y0;
+    for (let y = r.y0; y < r.y1; y++) {
+      for (let x = r.x0; x < r.x1; x++) {
+        const t = y * w + x;
+        if (access[t] === WZ.pavement) rows[t] = (alongX ? y - r.y0 : x - r.x0) % 3;
+      }
+    }
+  }
+  return rows;
 }

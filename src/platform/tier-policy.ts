@@ -12,6 +12,8 @@ export interface TierSettings {
   /** Fraction of devicePixelRatio to render at (CSS upscales the rest, pixelated). */
   maxDevPerCss: number;
   maxAnimatedNpcs: number;
+  /** Vehicles on the road at once (M4, decoration). */
+  maxVehicles: number;
   particles: boolean;
   weatherFx: boolean;
   lighting: boolean;
@@ -22,9 +24,9 @@ export interface TierSettings {
 }
 
 export const TIER_SETTINGS: Record<Tier, TierSettings> = {
-  0: { maxFps: 30, maxDevPerCss: 2, maxAnimatedNpcs: 12, particles: false, weatherFx: false, lighting: false, chunkTextures: 32, audioSampleRate: 22050 },
-  1: { maxFps: 60, maxDevPerCss: 3, maxAnimatedNpcs: 25, particles: true, weatherFx: true, lighting: false, chunkTextures: 48, audioSampleRate: null },
-  2: { maxFps: 60, maxDevPerCss: 4, maxAnimatedNpcs: 40, particles: true, weatherFx: true, lighting: true, chunkTextures: 64, audioSampleRate: null },
+  0: { maxFps: 30, maxDevPerCss: 2, maxAnimatedNpcs: 12, maxVehicles: 3, particles: false, weatherFx: false, lighting: false, chunkTextures: 32, audioSampleRate: 22050 },
+  1: { maxFps: 60, maxDevPerCss: 3, maxAnimatedNpcs: 25, maxVehicles: 6, particles: true, weatherFx: true, lighting: false, chunkTextures: 48, audioSampleRate: null },
+  2: { maxFps: 60, maxDevPerCss: 4, maxAnimatedNpcs: 40, maxVehicles: 6, particles: true, weatherFx: true, lighting: true, chunkTextures: 64, audioSampleRate: null },
 };
 
 export interface DeviceHints {

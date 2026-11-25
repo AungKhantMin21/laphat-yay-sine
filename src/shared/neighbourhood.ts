@@ -74,6 +74,8 @@ export interface Neighbourhood {
   doors: { x: number; y: number; building: number }[];
   /** The notice board (M4): it stands on `x, y` (filler) and is read from the pavement tile `visitX, visitY`. Site id = shops.length. */
   board: { id: number; x: number; y: number; visitX: number; visitY: number };
+  /** Vehicle lanes on the roads (M4, decoration only): polylines of axis-aligned segments, in tiles. */
+  lanes: { path: [number, number][] }[];
 }
 
 /** A place the player can visit (a shop's counter or the notice board): where to stand and which way to face. */
@@ -110,6 +112,7 @@ export interface RawNeighbourhood {
   entries: { tile: number[]; weight: number }[];
   entryDoorWeight: number;
   board: { tile: number[]; visit: number[] };
+  lanes?: { path: number[][] }[];
 }
 
 /** Tile on the pavement side of span position p. */
@@ -217,7 +220,17 @@ export function buildNeighbourhood(d: RawNeighbourhood): Neighbourhood {
   const [bvx, bvy] = d.board.visit as [number, number];
   if (!inX(bx) || !inY(by) || !inX(bvx) || !inY(bvy) || Math.abs(bx - bvx) + Math.abs(by - bvy) !== 1) throw new Error('neighbourhood: board.visit must be next to board.tile');
   const board = { id: shops.length, x: bx, y: by, visitX: bvx, visitY: bvy };
-  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries, ends, doors, board };
+  const lanes = (d.lanes ?? []).map((l, i) => {
+    const path = l.path.map((p) => [p[0]!, p[1]!] as [number, number]);
+    if (path.length < 2) throw new Error(`neighbourhood lane ${i}: needs two points`);
+    for (let k = 1; k < path.length; k++) {
+      const [ax, ay] = path[k - 1]!;
+      const [bx, by] = path[k]!;
+      if (ax !== bx && ay !== by) throw new Error(`neighbourhood lane ${i}: segments must run along x or y`);
+    }
+    return { path };
+  });
+  return { w, h, rects, paint, opening: { x0: ox0, x1: ox1 }, kitchenDoor: { x: kx, y: ky }, buildings, shops, entries, ends, doors, board, lanes };
 }
 
 export const NEIGHBOURHOOD: Neighbourhood = buildNeighbourhood(raw as RawNeighbourhood);

@@ -19,6 +19,10 @@ export type PathStatus = (typeof PATH)[keyof typeof PATH];
 
 /** Diagonal steps cost this many tenths of an orthogonal step. */
 const DIAG = 14;
+/** Extra cost of a pavement tile outside the walker's preferred row (M4: people spread over the pavement). */
+const LANE_PENALTY = 3;
+/** No lane preference. */
+export const NO_LANE = 255;
 
 export class PathFinder {
   private readonly slots: SlotAllocator;
@@ -28,6 +32,9 @@ export class PathFinder {
   private readonly len: Uint16Array;
   /** Access class per request: which walk grid it searches. */
   private readonly cls: Uint8Array;
+  /** Preferred pavement row per request (NO_LANE = none), and the row of every pavement tile. */
+  private readonly lane: Uint8Array;
+  private laneOf: Uint8Array | null = null;
   /** Path tiles: slot i owns [i * stride, i * stride + len[i]). */
   readonly tiles: Uint16Array;
   readonly stride: number;
@@ -74,6 +81,7 @@ export class PathFinder {
     this.to = new Int32Array(slots);
     this.len = new Uint16Array(slots);
     this.cls = new Uint8Array(slots);
+    this.lane = new Uint8Array(slots).fill(NO_LANE);
     this.stride = config.maxPathLen;
     this.tiles = new Uint16Array(slots * this.stride);
     this.queue = new Uint16Array(slots);
@@ -101,12 +109,21 @@ export class PathFinder {
    * Queues a search from tile index `from` to `to` for access class `cls`.
    * Returns a handle, or NONE if the pool is full.
    */
-  request(from: number, to: number, cls = 0): number {
+  /**
+   * Pavement rows (M4): `rows[t]` = which of 3 rows tile t belongs to across its pavement (NO_LANE for
+   * any other tile). Requests with a lane pay a little more off their row, so walkers spread out.
+   */
+  setLanes(rows: Uint8Array): void {
+    this.laneOf = rows;
+  }
+
+  request(from: number, to: number, cls = 0, lane = NO_LANE): number {
     if (!this.grids[cls]) throw new Error(`no walk grid for access class ${cls}`);
     const h = this.slots.alloc();
     if (h === NONE) return NONE;
     const i = handleIndex(h);
     this.cls[i] = cls;
+    this.lane[i] = lane;
     this.from[i] = from;
     this.to[i] = to;
     this.len[i] = 0;
@@ -224,6 +241,8 @@ export class PathFinder {
     const off = this.off;
     const t = this.to[i]!;
     const sid = this.sid;
+    const lane = this.lane[i]!;
+    const rows = lane === NO_LANE ? null : this.laneOf;
     let left = budget;
     while (this.heapLen > 0) {
       if (left <= 0) return 0;
@@ -246,7 +265,11 @@ export class PathFinder {
           if (!walk.stepAllowed(cx, (cur - cx) / w, DX[d]!, DY[d]!, true)) continue;
         }
         if (this.closed[nt] === sid) continue;
-        const c = cost[nt] === BLOCKED ? MIN_COST : cost[nt]!; // only the goal can be blocked here
+        let c = cost[nt] === BLOCKED ? MIN_COST : cost[nt]!; // only the goal can be blocked here
+        if (rows !== null) {
+          const r = rows[nt]!;
+          if (r !== NO_LANE && r !== lane) c += LANE_PENALTY;
+        }
         const ng = gc + (d >= 4 ? ((c * DIAG + 5) / 10) | 0 : c);
         if (this.seen[nt] !== sid) {
           this.seen[nt] = sid;

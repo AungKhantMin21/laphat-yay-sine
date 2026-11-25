@@ -36,6 +36,8 @@ interface Look {
 const WORKERS: Look[] = [
   { shirt: 'f0c060', longyi: '2c3440', check: '44505c', skin: 'd9a05b', hair: '1b1411', apron: 'fff8ea' },
   { shirt: '5e9a8e', longyi: '4a3a5a', check: '6a7884', skin: 'c8a46e', hair: '2a1d18', apron: 'ecd3a5' },
+  // 2 = the helper (M4): washing-up blue.
+  { shirt: '9aa6ae', longyi: '2c3440', check: '44505c', skin: 'd9a05b', hair: '1b1411', apron: '3c6e6a' },
 ];
 
 /** Shopkeepers (M3): npc/s<shop>_f, standing behind their counters. Order = neighbourhood.json shops. */
@@ -51,6 +53,11 @@ const LOOKS: Look[] = [
   { shirt: '5e9a8e', longyi: '4a3a5a', check: '6a7884', skin: 'c8a46e', hair: '2a1d18' },
   { shirt: 'e98a5e', longyi: '6e4e36', check: 'a98258', skin: 'a98258', hair: '1b1411' },
   { shirt: '94b37a', longyi: '2c3440', check: '44505c', skin: 'd9a05b', hair: '9aa6ae' },
+  // M4: more neighbours.
+  { shirt: 'f0c060', longyi: '523a2c', check: '8a6644', skin: 'c8a46e', hair: '1b1411' },
+  { shirt: 'c85a44', longyi: '2c3440', check: '6a7884', skin: 'a98258', hair: '2a1d18' },
+  { shirt: 'ecd3a5', longyi: '6b8f5a', check: '94b37a', skin: 'd9a05b', hair: '1b1411' },
+  { shirt: '4a3a5a', longyi: '6e4e36', check: 'a98258', skin: 'c8a46e', hair: '9aa6ae' },
 ];
 
 class Canvas implements Raw {

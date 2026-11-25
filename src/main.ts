@@ -26,6 +26,7 @@ import { BuildController } from './game/build-mode';
 import { installBuildUi } from './ui/build/build-ui';
 import { installBuildKeys, installWalkKeys } from './input/keyboard';
 import { AwayCard } from './ui/hud/away';
+import { Vehicles } from './render/vehicles';
 import { BoardPanel } from './ui/board/panel';
 import { GossipLine } from './ui/news/gossip';
 import { NeighbourhoodMap } from './ui/hud/map';
@@ -81,6 +82,7 @@ const heat = new HeatLayer(view);
 const npcs = new NpcLayer(view, atlas, objects.layer);
 const shopFront = new ShopFront(atlas, objects.layer);
 const streetShops = new StreetShops(atlas, objects.layer);
+const vehicles = new Vehicles(atlas, objects.layer, view);
 const serviceProps = new ServiceLayer(view, atlas, objects.layer, npcs);
 stage.world.addChild(objects.floorLayer, heat.g, ghost.marks, objects.layer, npcs.bubbles);
 // Music starts after the first frame and the first tap; the sample rate follows the tier then.
@@ -289,7 +291,7 @@ const queueUi = installQueue({
         queueAt.y = isoY(tx + 0.5, ty + 0.5) - 2;
         ok = true;
       } else if (kind === TASK_KIND.visit) {
-        const k = streetShops.keeperAt[target];
+        const k = target === NEIGHBOURHOOD.board.id ? streetShops.boardAt() : streetShops.keeperAt[target];
         if (k) {
           queueAt.x = k.x;
           queueAt.y = k.y - 26;
@@ -462,8 +464,10 @@ const loop = new FrameLoop({
     sendViewport(v.x0, v.y0, v.x1, v.y1);
     chunks.update(v.x0, v.y0, v.x1, v.y1);
     npcs.update(now, TIER_SETTINGS[device.tier].maxAnimatedNpcs, v.x0, v.y0, v.x1, v.y1);
+    vehicles.update(now, TIER_SETTINGS[device.tier].maxVehicles, v.x0, v.y0, v.x1, v.y1);
     shopFront.update(bridge.player?.phase ?? 0);
     streetShops.setKeepers(bridge.player?.keepers ?? 0);
+    if (bridge.player) streetShops.setBuildings(bridge.player.buildings);
     serviceProps.update(now, bridge.player?.phase ?? 0);
     queueUi.update();
     stage.render();
@@ -534,4 +538,4 @@ if (debug) {
 
 // ?debug=1 in a production build: just enough for tools/dev/gate.mjs (open the shop, fill it, play).
 if (debug) Object.assign(window, { __debug: { bridge, view, pour } });
-if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi, streetShops } });
+if (import.meta.env.DEV) Object.assign(window, { __game: { view, bridge, loop, stage, camera, chunks, device, music, objects, npcs, build, pour, dayEnd, serviceProps, queueUi, streetShops, vehicles } });

@@ -4,7 +4,8 @@
 // shared/neighbourhood.ts; fronts on a −x edge use the same frames mirrored. Nothing per frame.
 import { Sprite, Texture, type Container } from 'pixi.js';
 import { HALF_H, HALF_W } from '../shared/iso';
-import { NEIGHBOURHOOD, type ShopSite } from '../shared/neighbourhood';
+import { NEIGHBOURHOOD, doorOffset, spanTile, type ShopSite } from '../shared/neighbourhood';
+import { BUILDING_FLAG } from '../shared/properties';
 import type { Atlas } from './atlas';
 
 /** World point of tile-space (u, v) (fractional tiles). */
@@ -18,8 +19,72 @@ export class StreetShops {
   private readonly keeper: Sprite[] = [];
   private mask = -1;
 
-  constructor(atlas: Atlas, layer: Container) {
+  /** Per building: a sign and shutter sprites, made the first time they're needed (M4). */
+  private readonly fronts: ({ sign: Sprite; shut: Sprite[] } | null)[] = [];
+  private flagsShown: readonly number[] = [];
+
+  constructor(
+    private readonly atlas: Atlas,
+    private readonly layer: Container,
+  ) {
     for (const shop of NEIGHBOURHOOD.shops) this.build(shop, atlas, layer);
+    // The notice board (M4) stands on its tile beside the junction.
+    const b = NEIGHBOURHOOD.board;
+    const t = atlas.get('street/board') ?? Texture.EMPTY;
+    const sp = new Sprite(t);
+    sp.roundPixels = true;
+    sp.position.set(wx(b.x, b.y) - HALF_W, wy(b.x, b.y) + 2 * HALF_H - t.height);
+    sp.zIndex = (b.x + b.y) * 16 + 8;
+    layer.addChild(sp);
+  }
+
+  /** The board's feet in world px (tap target). */
+  boardAt(): { x: number; y: number } {
+    const b = NEIGHBOURHOOD.board;
+    return { x: wx(b.x + 0.5, b.y + 0.5), y: wy(b.x + 0.5, b.y + 0.5) };
+  }
+
+  /**
+   * PlayerState.buildings (M4): a for-sale / for-rent sign beside the door, and shutters down over
+   * a closed business's ground floor. Changes only when a flag does.
+   */
+  setBuildings(flags: readonly number[]): void {
+    if (flags === this.flagsShown) return;
+    this.flagsShown = flags;
+    for (let i = 0; i < NEIGHBOURHOOD.buildings.length; i++) {
+      const f = flags[i] ?? 0;
+      let fr = this.fronts[i];
+      if (!fr && f === 0) continue;
+      if (!fr) fr = this.fronts[i] = this.makeFront(i);
+      const sale = (f & BUILDING_FLAG.forSale) !== 0;
+      const rent = (f & BUILDING_FLAG.forRent) !== 0;
+      fr.sign.visible = sale || rent;
+      if (fr.sign.visible) fr.sign.texture = this.atlas.get(sale ? 'street/sign_sale' : 'street/sign_rent') ?? Texture.EMPTY;
+      for (const s of fr.shut) s.visible = (f & BUILDING_FLAG.shut) !== 0;
+    }
+  }
+
+  private makeFront(i: number): { sign: Sprite; shut: Sprite[] } {
+    const b = NEIGHBOURHOOD.buildings[i]!;
+    const west = b.edge === 'w';
+    const place = (t: Texture, p: number, bias: number): Sprite => {
+      const { x, y } = spanTile(b, p);
+      const sp = new Sprite(t);
+      sp.roundPixels = true;
+      sp.scale.x = west ? -1 : 1;
+      sp.position.set(wx(x, y) - HALF_W + (west ? t.width : 0), wy(x, y) + 2 * HALF_H - t.height);
+      sp.zIndex = (x + y) * 16 + bias;
+      sp.visible = false;
+      this.layer.addChild(sp);
+      return sp;
+    };
+    const n = b.to - b.from;
+    const door = b.from + doorOffset(n);
+    const shutTex = this.atlas.get(b.tall ? 'street/shut_t' : 'street/shut_l') ?? Texture.EMPTY;
+    const shut: Sprite[] = [];
+    for (let p = b.from + 1; p < b.to - 1; p++) shut.push(place(shutTex, p, 1));
+    const sign = place(this.atlas.get('street/sign_sale') ?? Texture.EMPTY, Math.min(b.to - 1, door + 1), 2);
+    return { sign, shut };
   }
 
   private build(s: ShopSite, atlas: Atlas, layer: Container): void {
@@ -63,8 +128,12 @@ export class StreetShops {
     this.keeper.forEach((k, id) => (k.visible = (mask & (1 << id)) !== 0));
   }
 
-  /** The shop whose stall is under world point (x, y) (counter, keeper or awning), or −1. */
+  /** The shop whose stall is under world point (x, y) (counter, keeper or awning), the board's site id, or −1. */
   pick(x: number, y: number): number {
+    const b = NEIGHBOURHOOD.board;
+    const bx = wx(b.x, b.y);
+    const by = wy(b.x, b.y);
+    if (x >= bx - HALF_W && x < bx + HALF_W && y >= by - 26 && y < by + 2 * HALF_H) return b.id;
     for (const s of NEIGHBOURHOOD.shops) {
       // Inside any counter tile's sprite box (32 wide, from the awning top down to the floor).
       for (let p = s.from; p < s.to; p++) {
